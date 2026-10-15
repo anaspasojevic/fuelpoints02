@@ -40,7 +40,7 @@ Datum plana: 2026-10-14.
 | §23, §26 API-07 | 7 | Account deletion. |
 | §11, NFR-04, NFR-05: ledger, transakcije, idempotencija | 3–7 | Nema business transakcija u i01. |
 | §21 notifikacije | 3, 8, 10 | — |
-| §25.2 … §25.9, §31, RULE-T01 … RULE-T11 | 8 | U i01 postoji samo default deny. |
+| §25.2 … §25.9, §31, RULE-T01 … RULE-T11 | 2–8, postepeno (odluka D-2): users i loyaltyAccounts u i02; purchases, notifications i loyaltyLedger u i03; vouchers, rewardDefinitions i rewardRequests u i04; redemptionRequests u i06; doslovna provjera §31 i 12/12 RULE testova u i08 | U i01 postoji samo default deny. |
 | §2.5 POS forme i mrežni pozivi | 11 | — |
 | Health/status ili bilo koji dodatni endpoint | nikad | §26: tačno 7 business endpointa. |
 | GitHub Actions, admin portal | nikad | Brief, tačka 3. |
@@ -241,7 +241,7 @@ Svi testovi koriste `node:test` + `node:assert/strict`. Test naslovi počinju ID
 |---|---|---|
 | I01-T01 | `test/jedinicni/katalogGresaka.test.js` | (1) Test sadrži sopstvenu tabelu 23 para `kod → HTTP`, prepisanu iz §27 normativnog .docx-a, i poredi je `deepStrictEqual` sa svim stavkama kataloga čiji je izvor `§27`. (2) Test parsira tabelu između naslova `# 27.` i `# 28.` u `docs/srs/FuelPoints_SRS_3_1.md` (samo čitanje) i provjerava da daje istih 23 para, čime otkriva drift kopije. (3) Dopuna O-1 je tačno `{ NOT_FOUND: 404, INVALID_REQUEST: 422 }`. (4) Ukupno 25 stavki; nema duplikata koda (katalog je definisan kao niz, pa provjera ima smisla). (5) Svaka stavka ima nepraznu poruku bez ćiriličnih znakova (srpski, latinica). (6) Katalog je zamrznut (`Object.isFrozen`). (7) Nijedan kod van tih 25 ne postoji. |
 | I01-T02 | `test/jedinicni/aplikacija.test.js` | `GET /api/v1/nepostojeca` → status 404, `Content-Type` JSON, tijelo je tačno `{ error: { code: 'NOT_FOUND', message: <iz kataloga>, correlationId: <UUID v4> } }`. Provjerava se da `Object.keys(body) = ['error']` i `Object.keys(body.error) = ['code','message','correlationId']`. Dodatno: `DELETE /api/v1` (nepodržan metod) → 404 NOT_FOUND; `GET /` → 404 NOT_FOUND. |
-| I01-T03 | isti fajl | `POST /api/v1/nepostojeca`, `Content-Type: application/json`, tijelo `{` → 422, `code: 'INVALID_REQUEST'`, tačno tri polja; poruka ne sadrži tekst greške JSON parsera (`JSON`, `position`, `Unexpected`). |
+| I01-T03 | isti fajl | `POST /api/v1/nepostojeca`, `Content-Type: application/json`, tijelo `{` → 422, `code: 'INVALID_REQUEST'`, tačno tri polja; poruka ne sadrži tekst greške JSON parsera (`JSON`, `position`, `Unexpected`). Dodatno (P-4): tijelo veće od limita parsera (100 kb) → 422 `INVALID_REQUEST`, tačno tri polja, bez teksta greške parsera. |
 | I01-T04 | isti fajl | Aplikacija iz `napraviAplikaciju({ dodajRute })` sa test rutama: (a) `GET /api/v1/test-greska` baca `new Error('interna tajna poruka C:\\tajno\\putanja\\fajl.js')`; (b) `GET /api/v1/test-greska-async` vraća odbijen promise sa istom porukom. Oba → 500, `code: 'INTERNAL_ERROR'`, tačno tri polja. Sirovi tekst odgovora NE sadrži: `stack`, `interna tajna poruka`, `C:\\`, `.js`, `    at `. Dopunska asercija (R2): zahtjev šalje `Authorization: Bearer SENTINEL_AUTH_123` i `X-POS-API-Key: SENTINEL_POS_456`; `console.error` je presretnut (`mock.method(console, 'error')`); log sadrži correlationId odgovora, a ne sadrži nijedan sentinel. Isti zahtjevi bez `dodajRute` daju 404, što pokazuje da test rute nisu u podrazumijevanoj aplikaciji. |
 | I01-T05 | isti fajl | Dva uzastopna `GET /api/v1/nepostojeca` → oba correlationId-a su UUID v4 i međusobno različiti. Zahtjev sa dolaznim zaglavljem `X-Correlation-Id: zadato` ne dobija tu vrijednost (R9). |
 | I01-T06 | `test/jedinicni/konfiguracija.test.js` | (a) `ucitajKonfiguraciju({})` baca `GreskaKonfiguracije` koja navodi `PORT` i `FIREBASE_PROJECT_ID`. (b) `ucitajKonfiguraciju({ PORT: 'TAJNA_VRIJEDNOST_PORT', FIREBASE_PROJECT_ID: 'demo-tajna-xyz' })` baca grešku za format PORT-a, a poruka ne sadrži `TAJNA_VRIJEDNOST_PORT`. (c) Ispravne vrijednosti → zamrznut objekat `{ port: 3000, projectId, host: '127.0.0.1' }`. (d) `child_process.spawnSync(process.execPath, ['src/pokreni.js'], { env: { PATH, SystemRoot, FIREBASE_PROJECT_ID: 'demo-tajna-xyz' } })` bez `PORT` → exit code ≠ 0 u roku od 10 s (proces ne sluša), stderr sadrži `PORT`, a stderr i stdout ne sadrže `demo-tajna-xyz` ni `    at `. |
@@ -271,7 +271,8 @@ Komanda: `cd backend; npm run test:emu`.
 
 | ID | Fajl | Šta tačno provjerava |
 |---|---|---|
-| RULE-T12 (preliminarno) | `firebase/tests/podrazumijevanaZabrana.test.js` | Dokumenti se pripreme kroz `withSecurityRulesDisabled`: `users/korisnikA`, `loyaltyLedger/dogadjaj1`, `nepoznataKolekcija/dok1`, `rewardRequests/kljuc1`, `redemptionRequests/kljuc1`. Za `unauthenticatedContext()` i `authenticatedContext('korisnikA')` (vlasnik `users/korisnikA`) se za svaki dokument radi `assertFails(getDoc)`, `assertFails(setDoc)` i `assertFails(deleteDoc)`. Uz to, `assertFails(getDocs(collection(...)))` za `users` i `nepoznataKolekcija`. Kolekcije `users`, `loyaltyLedger` i nepoznata kolekcija su iz brief-a; `rewardRequests` i `redemptionRequests` su dodate jer ih §30 RULE-T12 („internal/unknown collection”) eksplicitno pokriva. Vidi P-2. |
+| RULE-T12 (preliminarno) | `firebase/tests/podrazumijevanaZabrana.test.js` | Samo ono što §30 navodi (internal/unknown kolekcije, P-2). Dokumenti se pripreme kroz `withSecurityRulesDisabled`: `rewardRequests/kljuc1`, `redemptionRequests/kljuc1`, `nepoznataKolekcija/dok1`. Za `unauthenticatedContext()` i `authenticatedContext('korisnikA')` se za svaki dokument radi `assertFails(getDoc)`, `assertFails(setDoc)` i `assertFails(deleteDoc)`, a za svaku od te tri kolekcije `assertFails(getDocs(collection(...)))` (list). Konačan oblik u Iteraciji 8. |
+| I01-T10 | isti fajl | Default deny za kolekcije još bez pravila (P-2): `users/korisnikA` i `loyaltyLedger/dogadjaj1`, isti obim provjera kao RULE-T12 (unauthenticated i `authenticatedContext('korisnikA')`, vlasnik `users/korisnikA`; get, set, delete i list → DENY). Privremen: dio za `users` zamjenjuju RULE-T01–T05 u Iteraciji 2, a dio za `loyaltyLedger` RULE-T11 u Iteraciji 3. |
 
 Komanda: `cd firebase\tests; npm test`.
 
@@ -287,13 +288,13 @@ Iz brief-a (tačka 6), sa komandama (PowerShell, iz korijena repozitorijuma):
   `git grep -n -E "TODO|FIXME" -- backend firebase pos-simulator skripte android-app/app/src README.md` daje prazan izlaz.
 - [ ] `cd backend; npm ci; npm test; cd ..`: svi I01-T01 … I01-T06 PASS, exit 0.
 - [ ] `cd backend; npm run test:emu; cd ..`: I01-T07 … I01-T09 PASS kroz `firebase emulators:exec` (Firestore + Auth, demo-fuelpoints), exit 0.
-- [ ] `cd firebase\tests; npm ci; npm test; cd ..\..`: RULE-T12 (preliminarno) PASS.
+- [ ] `cd firebase\tests; npm ci; npm test; cd ..\..`: RULE-T12 (preliminarno) i I01-T10 PASS.
 - [ ] `cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\gradlew.bat assembleDebug; .\gradlew.bat testDebugUnitTest; cd ..`: oba BUILD SUCCESSFUL.
 - [ ] `npm start` (uz `.env` kopiran iz `.env.example`) podiže server na `127.0.0.1:<PORT>`; `Invoke-WebRequest http://127.0.0.1:<PORT>/api/v1/nepostojeca -UseBasicParsing` → 404 sa `NOT_FOUND` body-jem. `/api/v1` nema business ruta (inspekcija `src/aplikacija.js`). Isto automatski radi `provjera.ps1` (smoke korak).
 - [ ] Seed: I01-T08 (dvostruko pokretanje → tačno 2 dokumenta sa §12 vrijednostima) i I01-T09 (odbijanje bez emulatora / ne-demo projekat) PASS.
 - [ ] Error body tačno po §27 (samo `code`, `message`, `correlationId`), bez stack trace-a, correlationId jedinstven po zahtjevu: I01-T02 … I01-T05 PASS.
 - [ ] Katalog: 23 koda iz §27 + NOT_FOUND + INVALID_REQUEST sa tačnim HTTP statusima: I01-T01 PASS.
-- [ ] `firebase/firestore.rules` = samo default deny (inspekcija) i RULE-T12 zeleno.
+- [ ] `firebase/firestore.rules` = samo default deny (inspekcija) i RULE-T12 i I01-T10 zeleni.
 - [ ] NFR-07: `git ls-files | Select-String -Pattern '(^|/)\.env$|service-?account|google-services\.json'` daje prazan izlaz; `.env.example` sadrži samo ne-tajne vrijednosti i placeholder-e.
 - [ ] SRS nepromijenjen: `(Get-FileHash docs\srs\FuelPoints_SRS_3_1.docx -Algorithm SHA256).Hash` = `7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C60228`; `git diff main -- docs/srs` daje prazan izlaz.
 - [ ] `.\skripte\provjera.ps1` pokreće sve gore navedeno redom, a `$LASTEXITCODE` je 0 (i ≠ 0 na prvu grešku; Builder to jednom ručno demonstrira, npr. privremeno pogrešnim očekivanim hash-om u lokalnoj kopiji bez commit-a, i upiše u TEST_REPORT).
@@ -308,7 +309,7 @@ Iz brief-a (tačka 6), sa komandama (PowerShell, iz korijena repozitorijuma):
 
 | SRS | Komponenta | Test |
 |---|---|---|
-| §2.1, §34.1 | `android-app/`, `backend/`, `pos-simulator/`, `firebase.json`, `firebase/firestore.rules` | I01-T07 (Admin SDK nad Firestore/Auth emulatorom), Android build, RULE-T12; inspekcija strukture |
+| §2.1, §34.1 | `android-app/`, `backend/`, `pos-simulator/`, `firebase.json`, `firebase/firestore.rules` | I01-T07 (Admin SDK nad Firestore/Auth emulatorom), Android build, RULE-T12, I01-T10; inspekcija strukture |
 | §2.3 | `backend/package.json` (express, firebase-admin, engines node 24), `backend/src/pokreni.js`, `backend/src/firebase/inicijalizacija.js` | I01-T07; npm start smoke u `provjera.ps1` |
 | §2.4 | `firebase.json`, `.firebaserc`, `backend/test/pomocnici/emulator.js`, `backend/src/punjenje/zastitaEmulatora.js` | I01-T07, I01-T09 |
 | §2.5 | `pos-simulator/README.md`, `pos-simulator/index.html` | inspekcija |
@@ -318,7 +319,8 @@ Iz brief-a (tačka 6), sa komandama (PowerShell, iz korijena repozitorijuma):
 | §26 (base path) | `backend/src/aplikacija.js` | I01-T02 |
 | §27 | `backend/src/greske/katalogGresaka.js`, `GreskaApi.js`, `obradaGresaka.js`, `posrednici/korelacija.js` | I01-T01 … I01-T05 |
 | O-1 (tehnička dopuna, nije SRS kod) | `katalogGresaka.js` (NOT_FOUND, INVALID_REQUEST) | I01-T01, I01-T02, I01-T03 |
-| §25.1, §25.10, NFR-03 (default deny) | `firebase/firestore.rules` | RULE-T12 (preliminarno) |
+| §25.1, §25.9, §25.10, NFR-03 (default deny) | `firebase/firestore.rules` | RULE-T12 (preliminarno: internal/unknown kolekcije) |
+| §25.1 (default deny za users i loyaltyLedger dok nemaju pravila) | `firebase/firestore.rules` | I01-T10 (privremen) |
 | NFR-07, §3.4 (bez logovanja ključa) | `.gitignore`, `.env.example`, `backend/src/dnevnik.js`, `backend/src/konfiguracija/konfiguracija.js` | inspekcija u `provjera.ps1`; I01-T04 (dopunska log asercija); I01-T06 |
 
 ## 10. Tehničke odluke
@@ -514,7 +516,7 @@ Pokretanje: `.\skripte\provjera.ps1`, pa `$LASTEXITCODE`. ExecutionPolicy Remote
 - **Struktura kataloga**: niz zamrznutih objekata `{ kod, http, poruka, izvor: '§27' | 'O-1' }` i iz njega izvedena zamrznuta mapa `KATALOG_GRESAKA[kod]`.
 - **Konstante kolekcija** (§24): `export const KOLEKCIJE = Object.freeze({ users: 'users', loyaltyAccounts: 'loyaltyAccounts', purchases: 'purchases', loyaltyLedger: 'loyaltyLedger', rewardDefinitions: 'rewardDefinitions', vouchers: 'vouchers', notifications: 'notifications', rewardRequests: 'rewardRequests', redemptionRequests: 'redemptionRequests' })`. Ključevi i vrijednosti su tačni SRS nazivi. Seed koristi `KOLEKCIJE.rewardDefinitions`.
 - **Listen**: `app.listen(port, '127.0.0.1')` i ispis `FuelPoints backend sluša na http://127.0.0.1:<port>/api/v1` (ispisuju se samo host i port, nikad druge varijable).
-- **package/applicationId** (Android): `org.unibl.pmf.fuelpoints`, po domenu PMF-a Univerziteta u Banjoj Luci. SRS ga ne propisuje; Ana ga može promijeniti u R-1 (P-5).
+- **package/applicationId** (Android): `io.github.anaspasojevic.fuelpoints` (odluka P-5). SRS ga ne propisuje.
 
 ## 11. Ručni koraci za Anu
 
@@ -524,7 +526,7 @@ U Android Studio-u 2024.3.2: *File → New → New Project… → Phone and Tabl
 | Polje | Vrijednost |
 |---|---|
 | Name | `FuelPoints` |
-| Package name | `org.unibl.pmf.fuelpoints` (vidi P-5) |
+| Package name | `io.github.anaspasojevic.fuelpoints` (odluka P-5) |
 | Save location | `C:\Users\Elitebook\fuelpoints02\android-app` |
 | Language | Kotlin (Empty Activity je Compose/Kotlin šablon) |
 | Minimum SDK | `API 26 ("Oreo"; Android 8.0)` |
@@ -579,10 +581,10 @@ Opšte za svaki korak: poslije commit-a odmah `git push`. Commit poruke su bez p
 - Dokaz: `git check-attr -a docs/srs/FuelPoints_SRS_3_1.docx` → `binary`; `git ls-files | Select-String '(^|/)\.env$'` prazno; `git status` bez promjena na `docs/srs`.
 - Commit: `i01: gitignore, gitattributes, env primjer i konfiguracija emulatora`
 
-**Korak 2: Default deny pravila i RULE-T12 (preliminarno)**
+**Korak 2: Default deny pravila, RULE-T12 (preliminarno) i I01-T10**
 - Fajlovi: `firebase/firestore.rules`, `firebase/tests/package.json`, `firebase/tests/package-lock.json`, `firebase/tests/podrazumijevanaZabrana.test.js`.
-- Šta: prvo test (7.4), pa rules po 10.3; `npm install --save-exact` verzija iz 10.1; skripta `test` po 10.2. Potvrditi u logu emulatora da je učitan `firebase/firestore.rules`.
-- Dokaz: `cd firebase\tests; npm ci; npm test` → RULE-T12 PASS. Kontrola: privremena lokalna izmjena rules u `allow read: if true` (bez commit-a) mora oboriti test; vratiti i zabilježiti u TEST_REPORT.
+- Šta: prvo testovi (7.4: RULE-T12 i I01-T10, podjela po P-2), pa rules po 10.3; `npm install --save-exact` verzija iz 10.1; skripta `test` po 10.2. Potvrditi u logu emulatora da je učitan `firebase/firestore.rules`.
+- Dokaz: `cd firebase\tests; npm ci; npm test` → RULE-T12 i I01-T10 PASS. Kontrola: privremena lokalna izmjena rules u `allow read: if true` (bez commit-a) mora oboriti test; vratiti i zabilježiti u TEST_REPORT.
 - Commit: `i01: default deny pravila i RULE-T12 (preliminarno)`
 
 **Korak 3: Backend paket i testni pomoćnici**
@@ -654,3 +656,39 @@ Opšte za svaki korak: poslije commit-a odmah `git push`. Commit poruke su bez p
 **Korak 14: Pull request**
 - Šta: `gh pr create --base main --head iteracija-01 --title "i01: Bootstrap i test infrastruktura"` sa opisom na srpskom (isporuka A–G iz brief-a, tačka 9; bez potpisa alata). BEZ merge-a i BEZ taga, jer to dolazi tek poslije ITERATION ACCEPTED.
 - Commit: nema.
+
+## 14. Odluke Orchestrator-a (odobrenje plana)
+
+Plan je ODOBREN (Orchestrator, 2026-10-15) uz ispravke K-1 … K-4.
+
+P-1 Seed displayName je latinicom: CAR_WASH "Besplatno pranje", SHOWER "Besplatan tuš".
+    Odluku je donijela Ana (autor SRS-a): tabela §12 ispisuje naziv pismom dokumenta, a vrijednost
+    podatka je tekst koji se prikazuje u aplikaciji, na latinici (kao poruka u §3.5). Korak 9 je deblokiran.
+    U TRACEABILITY se vodi kao "odluka i01/P-1".
+P-2 RULE-T12 (preliminarno) obuhvata samo ono što §30 navodi: internal i unknown kolekcije —
+    rewardRequests, redemptionRequests i nepoznata kolekcija; unauthenticated i authenticated
+    get, set, delete i list → DENY.
+    Asercije za users i loyaltyLedger izdvajaju se u dopunski test I01-T10 "default deny za kolekcije
+    još bez pravila" (isti fajl, isti obim provjera). I01-T10 je privremen: dio za users zamjenjuju
+    RULE-T01–T05 u Iteraciji 2, a dio za loyaltyLedger RULE-T11 u Iteraciji 3.
+    RULE-T12 konačan oblik dobija u Iteraciji 8.
+P-3 Android u i01 nema testova. Šablonski Example*Test.kt se brišu; testDebugUnitTest sa NO-SOURCE
+    i BUILD SUCCESSFUL ispunjava DoD. U TEST_REPORT se NO-SOURCE navodi eksplicitno.
+P-4 Svaka greška body-parser-a (4xx sa err.type: neispravan JSON, preveliko tijelo, nepodržan
+    charset/encoding, prekinut zahtjev) → INVALID_REQUEST 422. Drugi kodovi se ne uvode (O-1).
+P-5 Android namespace/applicationId: io.github.anaspasojevic.fuelpoints.
+P-6 U docs/TRACEABILITY.md Builder smije, samo za redove Iteracije 1, dopuniti kolonu
+    "Planirani test" stvarnim I01 oznakama (npr. I01-T06 u redove §2.3 i NFR-07; I01-T10 u red §25/§31),
+    pored kolona "Kod" i "Status". Ostali redovi i kolone ostaju netaknuti.
+P-7 Seed u i01 radi isključivo nad emulatorom. Odluka o demo okruženju (emulator ili stvarni
+    Firebase projekat, zbog §3.5/§3.6) donosi se prije Iteracije 9 (otvoreno pitanje O-2).
+P-8 Prihvaćeno pravilo "posljednja stabilna verzija starija od 14 dana"; verzije iz 10.1 ostaju.
+
+K-1 Sekcija 2, red "§25.2 … §25.9, §31, RULE-T01 … RULE-T11": umjesto "8" piše "2–8, postepeno
+    (odluka D-2): users i loyaltyAccounts u i02; purchases, notifications i loyaltyLedger u i03;
+    vouchers, rewardDefinitions i rewardRequests u i04; redemptionRequests u i06; doslovna provjera
+    §31 i 12/12 RULE testova u i08".
+K-2 Sekcije 7.4, 8, 9 i korak 2: podjela RULE-T12 / I01-T10 prema P-2.
+K-3 Sekcije 10.7 i 11 (R-1): package name io.github.anaspasojevic.fuelpoints.
+K-4 Sekcija 7.1, I01-T03: dodaje se slučaj tijela većeg od limita parsera → 422 INVALID_REQUEST,
+    tačno tri polja, bez teksta greške parsera (P-4).
