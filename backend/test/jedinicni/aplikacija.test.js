@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, mock, test } from 'node:test';
+import { format } from 'node:util';
 import request from 'supertest';
 import { napraviAplikaciju } from '../../src/aplikacija.js';
 import { KATALOG_GRESAKA } from '../../src/greske/katalogGresaka.js';
@@ -11,13 +12,29 @@ afterEach(() => {
   mock.restoreAll();
 });
 
-// Utišava i bilježi serverski log da testovi mogu provjeriti šta se loguje.
+const METODE_KONZOLE = ['log', 'info', 'warn', 'error', 'debug'];
+
+// Bilježi sve izlazne kanale procesa da testovi mogu provjeriti šta se loguje: console.* se utišava,
+// a process.stdout/stderr.write se bilježi i prosljeđuje (njima piše i test runner).
 function presretniLog() {
-  return mock.method(console, 'error', () => {});
+  const zapisi = [];
+  for (const metoda of METODE_KONZOLE) {
+    mock.method(console, metoda, (...argumenti) => {
+      zapisi.push(format(...argumenti));
+    });
+  }
+  for (const tok of [process.stdout, process.stderr]) {
+    const pisi = tok.write;
+    mock.method(tok, 'write', (komad, ...ostalo) => {
+      zapisi.push(String(komad));
+      return pisi.call(tok, komad, ...ostalo);
+    });
+  }
+  return zapisi;
 }
 
-function tekstLoga(presretac) {
-  return presretac.mock.calls.map((poziv) => poziv.arguments.map(String).join(' ')).join('\n');
+function tekstLoga(zapisi) {
+  return zapisi.join('\n');
 }
 
 function provjeriTijeloGreske(odgovor, status, kod) {
