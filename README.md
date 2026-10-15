@@ -50,6 +50,8 @@ cd backend; npm start
 cd backend; npm run seed:emu
 ```
 
+Seed postavlja tačno stavke iz SRS §12 (`CAR_WASH`, `SHOWER`) i ne briše druge dokumente u kolekciji `rewardDefinitions`.
+
 ## Testovi
 
 ```powershell

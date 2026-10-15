@@ -7,7 +7,8 @@ export const REWARD_DEFINITIONS = Object.freeze({
 });
 
 // Idempotentno punjenje: deterministički ID-evi (rewardId) i set() bez merge u jednom batch-u,
-// pa svako pokretanje vraća tačno vrijednosti iz §12.
+// pa svako pokretanje vraća tačno vrijednosti iz §12 za te stavke.
+// Seed postavlja samo stavke iz §12 i ne briše druge dokumente u rewardDefinitions.
 export async function napuniRewardDefinitions(db) {
   const batch = db.batch();
   for (const [rewardId, definicija] of Object.entries(REWARD_DEFINITIONS)) {

@@ -101,7 +101,7 @@ try {
         }
     }
 
-    Korak 'Backend: npm start smoke (404 NOT_FOUND na /api/v1)' {
+    Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1)' {
         $env:PORT = $portSmoke
         $env:FIREBASE_PROJECT_ID = 'demo-fuelpoints'
         $proces = Start-Process node -ArgumentList 'src/pokreni.js' -WorkingDirectory (Join-Path $korijen 'backend') -PassThru -NoNewWindow
