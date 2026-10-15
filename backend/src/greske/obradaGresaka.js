@@ -7,18 +7,11 @@ export function nepoznataRuta(req, res, next) {
   next(new GreskaApi('NOT_FOUND'));
 }
 
-function jeGreskaParsera(err) {
-  const status = err?.status ?? err?.statusCode;
-  return typeof err?.type === 'string' && Number.isInteger(status) && status >= 400 && status < 500;
-}
-
+// Greške JSON parsera se klasifikuju na izvoru (aplikacija.js → parsirajJson);
+// ovdje je sve što nije GreskaApi INTERNAL_ERROR.
 function odrediKod(err) {
   if (err instanceof GreskaApi) {
     return err.kod;
-  }
-  // Svaka greška body-parser-a → INVALID_REQUEST (odluka P-4, O-1).
-  if (jeGreskaParsera(err)) {
-    return 'INVALID_REQUEST';
   }
   return 'INTERNAL_ERROR';
 }

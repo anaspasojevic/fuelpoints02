@@ -78,6 +78,36 @@ test('I01-T03 tijelo veće od limita parsera → 422 INVALID_REQUEST bez teksta 
   assert.doesNotMatch(odgovor.text, /too large|entity|limit|JSON/i);
 });
 
+test('I01-T03 oštećeno komprimovano tijelo (gzip, deflate, br) → 422 INVALID_REQUEST bez teksta zlib greške', async () => {
+  const presretac = presretniLog();
+  const aplikacija = napraviAplikaciju();
+  for (const kodiranje of ['gzip', 'deflate', 'br']) {
+    const odgovor = await request(aplikacija)
+      .post('/api/v1/nepostojeca')
+      .set('Content-Type', 'application/json')
+      .set('Content-Encoding', kodiranje)
+      .send(Buffer.from('nije komprimovano'));
+    provjeriTijeloGreske(odgovor, 422, 'INVALID_REQUEST');
+    assert.doesNotMatch(odgovor.text, /header check|zlib|Z_[A-Z_]+|ecompress|stored block|unexpected end|JSON/i, kodiranje);
+  }
+  const log = tekstLoga(presretac);
+  assert.ok(!log.includes('"stack"'), 'INVALID_REQUEST je logovan sa stack-om');
+  assert.ok(!log.includes('INTERNAL_ERROR'), 'log sadrži INTERNAL_ERROR');
+});
+
+test('I01-T03 greška sa 4xx statusom koja ne dolazi iz JSON parsera → 500 INTERNAL_ERROR', async () => {
+  presretniLog();
+  const aplikacija = napraviAplikaciju({
+    dodajRute(ruter) {
+      ruter.get('/test-greska-4xx', () => {
+        throw Object.assign(new Error(INTERNA_PORUKA), { status: 400, type: 'entity.parse.failed' });
+      });
+    },
+  });
+  const odgovor = await request(aplikacija).get('/api/v1/test-greska-4xx');
+  provjeriTijeloGreske(odgovor, 500, 'INTERNAL_ERROR');
+});
+
 test('I01-T04 sinhroni i async izuzetak → 500 INTERNAL_ERROR bez stack-a, putanje i originalne poruke', async () => {
   presretniLog();
   const aplikacija = aplikacijaSaTestRutama();
