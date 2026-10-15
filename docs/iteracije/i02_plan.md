@@ -548,4 +548,34 @@ Opšte: poslije svakog commit-a odmah `git push`. Commit poruke na srpskom, bez 
 
 ## 15. Odluke Orchestrator-a (odobrenje plana)
 
-(Popunjava Orchestrator.)
+Plan je ODOBREN (Orchestrator, 2026-10-15), bez ispravki teksta plana.
+
+i02/P-1 Odobreno: 201 kad je kreiran bar jedan dokument, 200 za ponovljeni init; tijelo tačno
+        { displayName, accountStatus, acceptedTermsVersion, availablePoints, reservedPoints }, vrijednosti iz Firestore-a,
+        bez timestamp-ova i uid-a.
+i02/P-2 Odobrena varijanta A: init u istoj transakciji kreira samo dokument koji nedostaje; postojeći dokument se ne
+        mijenja ni jednim poljem; DELETION_IN_PROGRESS uvijek 409; accountStatus van SRS enum-a → 500 bez izmjene.
+        Ograničenje za Iteraciju 7 (upisati u IMPLEMENTATION_LOG pod "Ograničenja za buduće iteracije"):
+        u DELETE workflow-u users/{uid} (sa DELETION_IN_PROGRESS) mora biti POSLJEDNJI obrisani Firestore dokument
+        prije brisanja Auth naloga, da prekid brisanja nikad ne ostavi samo loyaltyAccounts, koje bi init "oživio".
+i02/P-3 Normativno je pravilo iz §31 (size()). Backend mora brojati dužinu displayName-a TAČNO kao size() u Rules.
+        Polazna pretpostavka je broj Unicode code point-a. Builder u I02-T15 utvrđuje stvarno ponašanje size() u emulatoru
+        (100 i 101 × astralni znak) i, ako se razlikuje, usklađuje brojanje u Backend-u sa Rules (ne obrnuto).
+        Ishod i izabrano brojanje upisuje u TEST_REPORT i IMPLEMENTATION_LOG. Ne staje zbog toga.
+i02/P-4 Odobreno: VERZIJA_USLOVA je obavezna env varijabla bez podrazumijevane vrijednosti u kodu; vrijednost 1.0 u
+        .env.example i provjera.ps1. Prilagođavanje I01-T06 je dozvoljeno samo kao proširenje ulaza i očekivanja;
+        nijedna postojeća asercija se ne uklanja ni ne slabi.
+i02/P-5 Odobreno: rok 10 s (konstanta); 503 za istek roka, app/network-error, app/network-timeout i Firestore
+        UNAVAILABLE / DEADLINE_EXCEEDED / ABORTED; sve ostalo 500. Kasni commit poslije 503 je prihvatljiv SAMO zato što je
+        init idempotentan — to nije opšte pravilo za kasnije iteracije (upisati u IMPLEMENTATION_LOG pod
+        "Ograničenja za buduće iteracije").
+i02/P-6 Odobreno: neispravan JSON bez token-a → 422 INVALID_REQUEST (arhitektura i01 ostaje).
+i02/P-7 Odobreno: šema Bearer je case-insensitive; sve ostalo (druga šema, prazan token, više razmaka, dodatni dio) → 401.
+i02/P-8 Prihvaćene oznake I02-T01 … I02-T16.
+i02/P-9 Prihvaćeno kao poznato ograničenje emulatora; upotreba verifyIdToken(token, true) provjerava se inspekcijom.
+
+Backlog i01 (iz docs/iteracije/i01_review_fix1.md):
+N-01 Ulazi u i02 SAMO kao test (poseban commit): greška JSON parsera sa statusom 5xx → 500 INTERNAL_ERROR, tačno tri
+     polja; mutacija M-R01c (uklonjen uslov "status < 500") MORA oboriti test. Ako se slučaj ne može izazvati bez
+     izmjene produkcionog koda, produkcioni kod se NE mijenja, a nemogućnost se upisuje u TEST_REPORT kao poznato ograničenje.
+N-02 Ne ispravlja se; upisuje se u IMPLEMENTATION_LOG kao poznato ograničenje seed alata.
