@@ -1,0 +1,34 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Okruženje i tajne (NFR-07)
+.env
+.env.*
+!.env.example
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+google-services.json
+
+# Firebase emulator
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+.firebase/
+
+# Android / Gradle / IDE
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+.cxx/
+.externalNativeBuild/
+
+# OS
+Thumbs.db
+.DS_Store

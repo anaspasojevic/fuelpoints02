@@ -1,0 +1,17 @@
+{
+  "name": "fuelpoints-firestore-rules-testovi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.12.0 <25"
+  },
+  "scripts": {
+    "test": "firebase emulators:exec --config ../../firebase.json --project demo-fuelpoints --only firestore \"node --test --test-concurrency=1 *.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0",
+    "firebase-tools": "15.32.1"
+  }
+}
