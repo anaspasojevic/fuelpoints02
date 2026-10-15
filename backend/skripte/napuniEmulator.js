@@ -14,8 +14,17 @@ async function napuni() {
 
   const { deleteApp } = await import('firebase-admin/app');
   const { inicijalizujFirebaseAdmin } = await import('../src/firebase/inicijalizacija.js');
+  const { napuniRewardDefinitions } = await import('../src/punjenje/rewardDefinitions.js');
   const firebase = inicijalizujFirebaseAdmin({ projectId });
-  await deleteApp(firebase.app);
+  try {
+    const broj = await napuniRewardDefinitions(firebase.db);
+    console.log(`Upisano ${broj} dokumenta u rewardDefinitions.`);
+  } catch {
+    console.error('Punjenje nije uspjelo. Provjeri da li je emulator pokrenut.');
+    process.exitCode = 1;
+  } finally {
+    await deleteApp(firebase.app);
+  }
 }
 
 await napuni();
