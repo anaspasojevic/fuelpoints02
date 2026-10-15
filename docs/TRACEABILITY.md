@@ -26,7 +26,7 @@ Pravila vođenja:
 | §2.1, §34.1 | Obavezne komponente | 1 | `android-app/`, `backend/`, `pos-simulator/`, `firebase.json`, `.firebaserc`, `firebase/firestore.rules` | I01 bootstrap testovi (I01-T07, RULE-T12, I01-T10, assembleDebug, testDebugUnitTest) | PASS (TEST_REPORT i01) |
 | §2.2, §3.2 | Android ne mijenja kritično loyalty stanje | 2–8 | | RULE-T05, T07, T08, T09, T11; AC-02 | PLANIRANO |
 | §2.3 | Node.js 24 LTS + Express + Admin SDK, lokalni proces | 1 | `backend/package.json`, `backend/src/pokreni.js`, `backend/src/aplikacija.js`, `backend/src/konfiguracija/konfiguracija.js`, `backend/src/firebase/inicijalizacija.js` | I01-T07, I01-T06 | PASS (TEST_REPORT i01) |
-| §2.4 | Emulator Suite; testovi bez production projekta | 1 | `firebase.json`, `.firebaserc`, `backend/test/pomocnici/emulator.js`, `backend/src/punjenje/zastitaEmulatora.js` | I01-T07, I01-T09 | PASS (TEST_REPORT i01) |
+| §2.4 | Emulator Suite; testovi bez production projekta | 1 | `firebase.json`, `.firebaserc`, `backend/test/pomocnici/emulator.js`, `backend/src/punjenje/zastitaEmulatora.js` | I01-T07, I01-T09, I01-T11 | PASS (TEST_REPORT i01, FIX LOOP 1) |
 | §2.5 | POS Simulator (kostur → HTML forme) | 1, 11 | `pos-simulator/README.md`, `pos-simulator/index.html` (kostur i01) | AC scenario (it. 11) | IMPLEMENTIRANO – i01 kostur (inspekcija); forme PLANIRANO |
 | §2.6 | Android samo generiše QR, nema skenera | 9 | | inspekcija | PLANIRANO |
 | §3.3 | Bearer Firebase ID token; UID samo iz tokena | 2 | | API-T01; I02 negativni (bez tokena, nevažeći token, uid u body-ju) | PLANIRANO |
@@ -55,7 +55,7 @@ Pravila vođenja:
 | §9 | Jedna transakcija: purchase + balance + EARN + notifikacija earn_{purchaseId} | 3 | | API-T02; I03 failure injection | PLANIRANO |
 | §10 | Idempotencija kupovine; 409 IDEMPOTENCY_CONFLICT | 3 | | API-T03, API-T04; I03 paralelni identični zahtjevi | PLANIRANO |
 | §11 | Immutable ledger | 3–7 | | AC-09 asercije u API testovima; RULE-T11 | PLANIRANO |
-| §12 | rewardDefinitions (CAR_WASH 50, SHOWER 30) | 1 (seed), 4, 10 | `backend/src/punjenje/rewardDefinitions.js`, `backend/skripte/napuniEmulator.js` (displayName latinicom: odluka i01/P-1) | I01-T08, I01-T09; API-T05 | PASS – i01 seed (TEST_REPORT i01); ostalo PLANIRANO |
+| §12 | rewardDefinitions (CAR_WASH 50, SHOWER 30) | 1 (seed), 4, 10 | `backend/src/punjenje/rewardDefinitions.js`, `backend/skripte/napuniEmulator.js` (displayName latinicom: odluka i01/P-1) | I01-T08, I01-T09, I01-T11; API-T05 | PASS – i01 seed (TEST_REPORT i01, FIX LOOP 1); ostalo PLANIRANO |
 | §13 | Reward issue + preduslovi | 4 | | API-T05, API-T06 | PLANIRANO |
 | §14 | rewardRequests, SHA-256(uid:requestId), 409 za drugi reward | 4 | | API-T06; I04 konflikt | PLANIRANO |
 | §15 | voucherId opaque, ≥ 128 bita, samo Backend | 4 | | I04 format/entropija ID-a | PLANIRANO |

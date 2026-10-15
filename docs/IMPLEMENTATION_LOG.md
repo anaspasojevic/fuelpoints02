@@ -20,7 +20,9 @@ Grana `iteracija-01`. Brief: `docs/iteracije/i01_brief.md`. Plan: `docs/iteracij
   - Express fabrika `napraviAplikaciju()` sa base path `/api/v1` bez ijednog business endpointa (§26);
   - novi `correlationId` (UUID v4) za svaki zahtjev; dolazni ID se ignoriše;
   - centralni rukovalac greškama: tijelo tačno `{ error: { code, message, correlationId } }`, bez stack trace-a;
-    sve greške body-parser-a → `INVALID_REQUEST` 422 (P-4); ostalo → `INTERNAL_ERROR` 500;
+    greške JSON parsera (`express.json()`) sa statusom 400–499 → `INVALID_REQUEST` 422 (P-4); ostalo → `INTERNAL_ERROR` 500
+    (ispravljeno u FIX LOOP 1: prvobitna implementacija je tražila `err.type`, pa greške dekompresije bez `type`
+    nisu bile obuhvaćene, nalaz R-01);
   - serverski log grešaka kao JSON linija bez zaglavlja i tijela zahtjeva (§3.4, NFR-07);
   - konfiguracija samo iz env varijabli (`PORT`, `FIREBASE_PROJECT_ID`), fail fast bez ispisa vrijednosti;
     `npm start` sluša na `127.0.0.1:<PORT>`;
@@ -145,7 +147,7 @@ Netaknuti: `docs/srs/*` (SHA-256 provjeren), `CLAUDE.md`, `.claude/settings.json
 | P-1 displayName | Riješeno: latinica („Besplatno pranje”, „Besplatan tuš”), odluka i01/P-1; I01-T08 PASS. |
 | P-2 RULE-T12 | Riješeno: RULE-T12 = internal/unknown; I01-T10 = users/loyaltyLedger (privremen). |
 | P-3 Android testovi | Riješeno: šablonski testovi obrisani; `testDebugUnitTest` NO-SOURCE, BUILD SUCCESSFUL. |
-| P-4 body-parser greške | Riješeno: sve → `INVALID_REQUEST` 422; I01-T03 pokriva neispravan JSON i preveliko tijelo. |
+| P-4 body-parser greške | Riješeno: greške JSON parsera sa 4xx → `INVALID_REQUEST` 422, klasifikacija na izvoru (FIX LOOP 1, R-01); I01-T03 pokriva neispravan JSON, preveliko i oštećeno komprimovano tijelo (gzip, deflate, br). |
 | P-5 package | Riješeno: `io.github.anaspasojevic.fuelpoints`. |
 | P-6 sljedivost | Riješeno: I01 oznake upisane u „Planirani test” samo za redove Iteracije 1. |
 | P-7 demo okruženje | Otvoreno (O-2), odluka prije Iteracije 9. Seed radi samo nad emulatorom. |
@@ -166,3 +168,19 @@ Netaknuti: `docs/srs/*` (SHA-256 provjeren), `CLAUDE.md`, `.claude/settings.json
 - Android nema testova u Iteraciji 1 (P-3); NFR-09 smoke je Iteracija 10–11.
 - Pokretanje `npm run test:emu` i `npm test` u `firebase\tests` paralelno ili uz već pokrenut `emulators:start` nije
   podržano (isti port 8080); `provjera.ps1` to provjerava prije emulator koraka.
+
+### FIX LOOP 1 (nalazi iz `docs/iteracije/i01_review.md`, commit 05d7d45)
+
+Uloga: BUILDER, 2026-10-15. Opseg po odluci Orchestrator-a: R-01, R-02, R-03 ispraviti; R-04 i R-05 samo dokumentovati/preimenovati.
+
+| Nalaz | Izmjena | Fajlovi | Test |
+|---|---|---|---|
+| R-01 (P2) | Klasifikacija vezana za izvor: omotač `parsirajJson` oko `express.json()` pretvara grešku parsera sa statusom 400–499 u `GreskaApi('INVALID_REQUEST')` bez obzira na `err.type`; greška parsera sa 5xx ide dalje kao `INTERNAL_ERROR`. Iz centralnog rukovaoca uklonjena provjera „ima `type` i 4xx status”, pa greška van parsera sa 4xx statusom ostaje `INTERNAL_ERROR`. | `backend/src/aplikacija.js`, `backend/src/greske/obradaGresaka.js`, `backend/test/jedinicni/aplikacija.test.js` | I01-T03: gzip/deflate/br sa neispravno komprimovanim tijelom → 422, tačno tri polja, bez teksta zlib greške i bez stack-a u logu; 4xx greška van parsera → 500. Crveno → zeleno; mutacija (stari uslov `err.type`) obara test. |
+| R-02 (P2) | Presretač loga u testu bilježi `console.log/info/warn/error/debug` (preko `util.format`) i `process.stdout.write`/`process.stderr.write`; asercija nad spojenim izlazom. Produkcioni kod nije mijenjan. | `backend/test/jedinicni/aplikacija.test.js` | I01-T04: M7b (`console.error`) i M7d (`console.log`), kao i M7e/M7f/M7g (`console.info`, `stdout.write`, `stderr.write`) obaraju test; bez mutacije PASS. |
+| R-03 (P3) | Seed CLI poslije zaštite samo-emulator (I01-T09 ostaje prva provjera), a prije učitavanja Admin SDK-a, provjerava dostupnost `FIRESTORE_EMULATOR_HOST` (`fetch` sa `AbortSignal.timeout(5000)`); nedostupan → postojeća poruka, exit 1, bez stack-a i vrijednosti varijabli. | `backend/skripte/napuniEmulator.js`, `backend/test/jedinicni/punjenjeBezEmulatora.test.js` (novi) | I01-T11 (novi, jedinični): exit 1 za < 15 s (izmjereno ~0,1 s); prije ispravke ETIMEDOUT poslije 20 s. |
+| R-04 (P3) | Samo dokumentacija: seed postavlja tačno §12 stavke i ne briše druge dokumente u `rewardDefinitions`. Ponašanje nepromijenjeno. | `backend/src/punjenje/rewardDefinitions.js`, `README.md` | — |
+| R-05 (P3) | Samo naziv koraka: „Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1)”. Logika nepromijenjena. | `skripte/provjera.ps1` | — |
+
+Ispravljena netačna tvrdnja iz CHANGELOG-a i tabele otvorenih pitanja („sve greške body-parser-a → `INVALID_REQUEST`”):
+prvobitna implementacija je obuhvatala samo greške sa `err.type`, a greške dekompresije (`createError(400, zlibGreska)`) su
+završavale kao 500 `INTERNAL_ERROR`. Nisu dodati paketi, kodovi grešaka ni endpointi. Detalji izvršavanja: `docs/TEST_REPORT.md`, sekcija FIX LOOP 1.

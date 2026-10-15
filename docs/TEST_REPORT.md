@@ -365,3 +365,478 @@ Poslije Anine odluke (OD-2: `coreKtx` 1.16.0, `activityCompose` 1.10.1) oba Grad
 
 Nije izvršeno: ništa iz brief-a i plana nije preskočeno. Android instrumentisani testovi i smoke na
 emulatorima API 26/35 (NFR-09) nisu dio Iteracije 1.
+
+---
+
+## Iteracija 1 — FIX LOOP 1 (nalazi R-01 … R-05 iz `docs/iteracije/i01_review.md`, commit 05d7d45)
+
+Uloga: BUILDER, 2026-10-15. Polazni commit `05d7d45`. Svi izlazi ispod su stvarni; mutacije su bile privremene
+(kopija fajla u scratchpad-u, vraćeno poslije izvršavanja, ništa od toga nije commit-ovano).
+
+### R-01 — greške JSON parsera bez `err.type` → `INVALID_REQUEST`
+
+Novi slučajevi u I01-T03 (`backend/test/jedinicni/aplikacija.test.js`): oštećeno komprimovano tijelo za
+`Content-Encoding` `gzip`, `deflate` i `br` (→ 422, tačno tri polja, bez teksta zlib greške, bez `"stack"` i
+`INTERNAL_ERROR` u logu) i greška sa statusom 400 i `type` koja NE dolazi iz parsera (→ 500 `INTERNAL_ERROR`;
+dokaz da je klasifikacija vezana za izvor).
+
+CRVENO, nad kodom iz 05d7d45 (`git stash` ispravke, konačna verzija testa;
+`node --test --test-name-pattern="I01-T03" test/jedinicni/aplikacija.test.js`, izvod):
+
+```
+✔ I01-T03 neispravan JSON ("{") → 422 INVALID_REQUEST bez teksta greške parsera
+✔ I01-T03 tijelo veće od limita parsera → 422 INVALID_REQUEST bez teksta greške parsera (P-4)
+✖ I01-T03 oštećeno komprimovano tijelo (gzip, deflate, br) → 422 INVALID_REQUEST bez teksta zlib greške
+✖ I01-T03 greška sa 4xx statusom koja ne dolazi iz JSON parsera → 500 INTERNAL_ERROR
+ℹ pass 2
+ℹ fail 2
+  500 !== 422
+  422 !== 500
+```
+
+Međukorak (zabilježen radi tačnosti): prva verzija asercije o tekstu zlib greške koristila je regex sa `invalid`
+(bez razlikovanja slova), koji hvata i sam kod `INVALID_REQUEST`, pa je test poslije ispravke i dalje padao
+(`AssertionError [ERR_ASSERTION]: gzip`). Regex je sužen na tekst zlib/brotli grešaka
+(`header check|zlib|Z_[A-Z_]+|ecompress|stored block|unexpected end|JSON`).
+
+ZELENO, poslije ispravke (ista komanda):
+
+```
+✔ I01-T03 neispravan JSON ("{") → 422 INVALID_REQUEST bez teksta greške parsera (50.7516ms)
+✔ I01-T03 tijelo veće od limita parsera → 422 INVALID_REQUEST bez teksta greške parsera (P-4) (11.9374ms)
+✔ I01-T03 oštećeno komprimovano tijelo (gzip, deflate, br) → 422 INVALID_REQUEST bez teksta zlib greške (32.3828ms)
+✔ I01-T03 greška sa 4xx statusom koja ne dolazi iz JSON parsera → 500 INTERNAL_ERROR (13.7844ms)
+ℹ pass 4
+ℹ fail 0
+```
+
+Mutacioni dokaz M-R01: u `parsirajJson` (`backend/src/aplikacija.js`) privremeno vraćen stari uslov
+`typeof err?.type === 'string' && …`; `node --test test/jedinicni/*.test.js` (izvod):
+
+```
+✖ I01-T03 oštećeno komprimovano tijelo (gzip, deflate, br) → 422 INVALID_REQUEST bez teksta zlib greške (13.5287ms)
+ℹ pass 20
+ℹ fail 1
+  500 !== 422
+```
+
+Regression suite poslije R-01: `.\skripte\provjera.ps1` → `SVE PROVJERE PROŠLE`, `EXIT 0` (npm test 21/21,
+test:emu 6/6, rules 5/5, Android BUILD SUCCESSFUL).
+
+### R-02 — log asercija I01-T04 presreće sve izlazne kanale
+
+Reprodukcija nad starim testom, mutacija M7d (`console.log(JSON.stringify(req.headers));` u `centralniRukovalacGreskama`),
+`node --test --test-name-pattern="I01-T04 log" test/jedinicni/aplikacija.test.js` (izvod) — test PROLAZI iako su tajne u izlazu:
+
+```
+{"authorization":"Bearer SENTINEL_AUTH_123","x-pos-api-key":"SENTINEL_POS_456","host":"127.0.0.1:56465","accept-encoding":"gzip, deflate","connection":"close"}
+✔ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (36.3062ms)
+ℹ pass 1
+ℹ fail 0
+```
+
+Poslije izmjene testa (presreću se `console.log/info/warn/error/debug` preko `util.format` i
+`process.stdout.write`/`process.stderr.write`; asercija nad spojenim izlazom), ista komanda sa mutacijama (izvod):
+
+```
+== M7b: console.error(JSON.stringify(req.headers));
+  AssertionError [ERR_ASSERTION]: log sadrži Authorization
+✖ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (18.8982ms)
+ℹ fail 1
+== M7d: console.log(JSON.stringify(req.headers));
+  AssertionError [ERR_ASSERTION]: log sadrži Authorization
+✖ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (17.4038ms)
+ℹ fail 1
+== M7e: console.info(req.headers);
+  AssertionError [ERR_ASSERTION]: log sadrži Authorization
+✖ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (19.7881ms)
+ℹ fail 1
+== M7f: process.stdout.write(JSON.stringify(req.headers));
+  AssertionError [ERR_ASSERTION]: log sadrži Authorization
+✖ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (17.4246ms)
+ℹ fail 1
+== M7g: process.stderr.write(JSON.stringify(req.headers));
+  AssertionError [ERR_ASSERTION]: log sadrži Authorization
+✖ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (18.2115ms)
+ℹ fail 1
+== bez mutacije (node --test test/jedinicni/*.test.js)
+ℹ tests 21
+ℹ pass 21
+ℹ fail 0
+```
+
+Regression suite poslije R-02: `.\skripte\provjera.ps1` → `SVE PROVJERE PROŠLE`, `EXIT 0`.
+
+### R-03 — seed brzo pada kad emulator nije dostupan (I01-T11)
+
+Novi test I01-T11 (`backend/test/jedinicni/punjenjeBezEmulatora.test.js`, bez emulatora, dio `npm test`):
+CLI sa `FIRESTORE_EMULATOR_HOST=127.0.0.1:<slobodan port>` i `FIREBASE_PROJECT_ID=demo-fuelpoints` → exit 1 za < 15 s,
+stderr pominje emulator, bez stack-a i bez vrijednosti varijabli (rok `spawnSync` 20 s).
+
+CRVENO, nad kodom iz 05d7d45 (`node --test test/jedinicni/punjenjeBezEmulatora.test.js`, izvod):
+
+```
+✖ I01-T11 seed CLI kad Firestore emulator nije dostupan → exit 1 za manje od 15 s, poruka o emulatoru, bez stack-a (20036.3782ms)
+ℹ pass 0
+ℹ fail 1
+  AssertionError [ERR_ASSERTION]: proces nije završio u roku od 20 s
+  + Error: spawnSync C:\Program Files\nodejs\node.exe ETIMEDOUT
+```
+
+ZELENO, poslije ispravke (ista komanda), i ručno pokretanje CLI-ja:
+
+```
+✔ I01-T11 seed CLI kad Firestore emulator nije dostupan → exit 1 za manje od 15 s, poruka o emulatoru, bez stack-a (93.8206ms)
+ℹ pass 1
+ℹ fail 0
+
+PS> $env:FIRESTORE_EMULATOR_HOST='127.0.0.1:1'; $env:FIREBASE_PROJECT_ID='demo-fuelpoints'; node skripte/napuniEmulator.js; "exit $LASTEXITCODE"
+Punjenje nije uspjelo. Provjeri da li je emulator pokrenut.
+exit 1
+```
+
+Regression suite poslije R-03: `.\skripte\provjera.ps1` → `SVE PROVJERE PROŠLE`, `EXIT 0`; I01-T08 (seed nad pokrenutim
+emulatorom) i I01-T09 (zaštita ostaje prva provjera) i dalje PASS.
+
+### R-04, R-05
+
+Samo dokumentacija/naziv, bez promjene ponašanja: komentar u `backend/src/punjenje/rewardDefinitions.js` i rečenica u
+`README.md` (seed postavlja tačno stavke iz §12 i ne briše druge dokumente u `rewardDefinitions`); korak u
+`skripte/provjera.ps1` preimenovan u „Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1)”.
+
+### Rezultat po ID-u (FIX LOOP 1)
+
+| ID | Komanda | Rezultat |
+|---|---|---|
+| I01-T01 | `cd backend; npm test` | PASS (6/6) |
+| I01-T02 | `cd backend; npm test` | PASS (2/2) |
+| I01-T03 | `cd backend; npm test` | PASS (4/4, uklj. gzip/deflate/br i 4xx van parsera) |
+| I01-T04 | `cd backend; npm test` | PASS (3/3; M7b, M7d, M7e, M7f, M7g obaraju test) |
+| I01-T05 | `cd backend; npm test` | PASS (2/2) |
+| I01-T06 | `cd backend; npm test` | PASS (4/4) |
+| I01-T07 | `cd backend; npm run test:emu` | PASS (2/2) |
+| I01-T08 | `cd backend; npm run test:emu` | PASS (2/2) |
+| I01-T09 | `cd backend; npm run test:emu` | PASS (2/2) |
+| I01-T11 | `cd backend; npm test` | PASS (1/1) |
+| RULE-T12 (preliminarno) | `cd firebase\tests; npm test` | PASS (3/3) |
+| I01-T10 | `cd firebase\tests; npm test` | PASS (2/2) |
+| assembleDebug, testDebugUnitTest | `.\gradlew.bat …` | BUILD SUCCESSFUL (testDebugUnitTest NO-SOURCE) |
+| provjera.ps1 | `.\skripte\provjera.ps1; $LASTEXITCODE` | 0 |
+
+### `.\skripte\provjera.ps1` — kompletan izlaz (commit 642b8a6, `EXIT 0`)
+
+Komanda: `.\skripte\provjera.ps1 *>&1 | Out-File -Encoding utf8 <scratchpad>\provjera_final.txt; "EXIT $LASTEXITCODE"`.
+Smoke server (`node src/pokreni.js`, `Start-Process -NoNewWindow`) piše direktno na konzolu, pa njegove linije nisu
+u preusmjerenom fajlu; na konzoli je bilo:
+
+```
+FuelPoints backend sluša na http://127.0.0.1:3999/api/v1
+{"vrijeme":"2026-10-15T19:26:44.502Z","nivo":"greska","correlationId":"c6004eee-058b-46cb-be3c-6dac59f6bdf2","code":"NOT_FOUND","status":404,"metod":"GET","putanja":"/api/v1/nepostojeca"}
+EXIT 0
+```
+
+Sadržaj fajla:
+
+```
+==> Alati (Node 24, Java 21+, JDK za Gradle)
+==> SRS integritet (SHA-256 normativnog .docx-a)
+==> NFR-07 (bez tajni u repozitorijumu)
+==> Bez TODO/FIXME
+==> Portovi emulatora 8080 i 9099 su slobodni
+==> Backend: npm ci, npm test, npm run test:emu
+node.exe : npm warn deprecated json-ptr@3.1.1: Package no longer supported. Contact Support at https://www.npmjs.com/su
+pport for more info.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn deprec... for more info.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnera
+bilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at ex
+orbitant rates) by contacting i@izs.me
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  F
+or CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+
+added 713 packages, and audited 714 packages in 22s
+
+115 packages are looking for funding
+  run `npm fund` for details
+
+11 vulnerabilities (4 moderate, 7 high)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn install-scripts 3 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   @firebase/util@1.15.3 (postinstall: node ./postinstall.js)
+npm warn install-scripts   protobufjs@7.6.6 (postinstall: node scripts/postinstall)
+npm warn install-scripts   re2@1.27.0 (install: install-from-cache --artifact build/Release/re2.node --host-var RE2_DOW
+NLOAD_MIRROR --skip-path-var RE2_DOWNLOAD_SKIP_PATH --skip-ver-var RE2_DOWNLOAD_SKIP_VER --force-build-var RE2_DOWNLOAD
+_FORCE_BUILD || node-gyp -j max rebuild)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+
+> fuelpoints-backend@0.1.0 test
+> node --test test/jedinicni/*.test.js
+
+✔ I01-T02 GET /api/v1/nepostojeca → 404 NOT_FOUND sa tačno tri polja (19.5911ms)
+✔ I01-T02 nepodržan metod (DELETE /api/v1) i putanja van /api/v1 (GET /) → 404 NOT_FOUND (6.3222ms)
+✔ I01-T03 neispravan JSON ("{") → 422 INVALID_REQUEST bez teksta greške parsera (11.6046ms)
+✔ I01-T03 tijelo veće od limita parsera → 422 INVALID_REQUEST bez teksta greške parsera (P-4) (6.2229ms)
+✔ I01-T03 oštećeno komprimovano tijelo (gzip, deflate, br) → 422 INVALID_REQUEST bez teksta zlib greške (14.9605ms)
+✔ I01-T03 greška sa 4xx statusom koja ne dolazi iz JSON parsera → 500 INTERNAL_ERROR (3.8501ms)
+✔ I01-T04 sinhroni i async izuzetak → 500 INTERNAL_ERROR bez stack-a, putanje i originalne poruke (6.0917ms)
+✔ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (2.7645ms)
+✔ I01-T04 test rute ne postoje u podrazumijevanoj aplikaciji (bez dodajRute) → 404 (4.8271ms)
+✔ I01-T05 dva zahtjeva → dva različita correlationId (UUID v4) (4.454ms)
+✔ I01-T05 dolazni X-Correlation-Id se ignoriše (2.3421ms)
+✔ I01-T01 katalog: 23 koda iz §27 sa tačnim HTTP statusima (1.7757ms)
+✔ I01-T01 katalog: tabela §27 iz čitljive kopije SRS-a odgovara katalogu (bez drifta) (1.0211ms)
+✔ I01-T01 katalog: dopuna O-1 je tačno NOT_FOUND 404 i INVALID_REQUEST 422 (0.1373ms)
+✔ I01-T01 katalog: ukupno 25 stavki, bez duplikata i bez kodova van §27 + O-1 (0.2607ms)
+✔ I01-T01 katalog: svaka poruka je neprazna, na latinici (bez ćirilice) (0.2605ms)
+✔ I01-T01 katalog: niz, stavke i mapa su zamrznuti (0.1149ms)
+✔ I01-T06 nedostaju PORT i FIREBASE_PROJECT_ID → GreskaKonfiguracije navodi obje varijable (0.9149ms)
+✔ I01-T06 neispravan PORT → greška formata bez ispisa vrijednosti (0.2581ms)
+✔ I01-T06 ispravne vrijednosti → zamrznut objekat konfiguracije (1.14ms)
+✔ I01-T06 pokretanje bez PORT → izlaz ≠ 0, poruka imenuje PORT, bez vrijednosti i stack-a (152.272ms)
+✔ I01-T11 seed CLI kad Firestore emulator nije dostupan → exit 1 za manje od 15 s, poruka o emulatoru, bez stack-a (97.8965ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 642.0099
+
+> fuelpoints-backend@0.1.0 test:emu
+> firebase emulators:exec --config ../firebase.json --project demo-fuelpoints --only firestore,auth "node --test --test-concurrency=1 test/emulator/*.test.js"
+
+i  emulators: Starting emulators: auth, firestore
+i  emulators: Detected demo project ID "demo-fuelpoints", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+i  firestore: Firestore Emulator logging to firestore-debug.log
++  firestore: Firestore Emulator was started in standard edition.
++  firestore: Firestore Emulator UI websocket is running on 9150.
+i  Running script: node --test --test-concurrency=1 test/emulator/*.test.js
+(node:28676) MetadataLookupWarning: received unexpected error = All promises were rejected code = ETIMEDOUT, ENOTFOUND
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ I01-T07 Admin SDK: upis, čitanje i brisanje probnog dokumenta u Firestore emulatoru (3786.0475ms)
+✔ I01-T07 Admin SDK: kreiranje i brisanje test korisnika u Auth emulatoru (47.6705ms)
+▶ I01-T09 seed odbija rad van emulatora i van demo projekta
+  ✔ I01-T09 provjeriEmulatorskoOkruzenje: bez emulator host-a i sa ne-demo projektom → greška (32.1985ms)
+(node:8428) MetadataLookupWarning: received unexpected error = All promises were rejected code = ETIMEDOUT, ENOTFOUND
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✔ I01-T09 CLI bez FIRESTORE_EMULATOR_HOST i CLI sa ne-demo projektom → exit 1, ništa upisano (3261.9885ms)
+✔ I01-T09 seed odbija rad van emulatora i van demo projekta (3294.8986ms)
+▶ I01-T08 seed rewardDefinitions po §12 je idempotentan
+  ✔ I01-T08 dvostruko pokretanje → tačno 2 dokumenta sa vrijednostima iz §12, bez dodatnih polja (7215.1191ms)
+  ✔ I01-T08 ručno izmijenjen dokument vraća se na §12 vrijednosti pri ponovnom punjenju (7196.2411ms)
+✔ I01-T08 seed rewardDefinitions po §12 je idempotentan (14411.7306ms)
+ℹ tests 6
+ℹ suites 2
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22733.9516
++  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+!  Firestore Emulator has exited upon receiving signal: SIGINT
+i  auth: Stopping Authentication Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator
+==> Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1)
+Smoke: 404 NOT_FOUND, correlationId c6004eee-058b-46cb-be3c-6dac59f6bdf2
+==> Firestore rules: npm ci, npm test
+node.exe : npm warn deprecated json-ptr@3.1.1: Package no longer supported. Contact Support at https://www.npmjs.com/su
+pport for more info.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn deprec... for more info.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnera
+bilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at ex
+orbitant rates) by contacting i@izs.me
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  F
+or CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+
+added 729 packages, and audited 730 packages in 28s
+
+100 packages are looking for funding
+  run `npm fund` for details
+
+16 vulnerabilities (4 moderate, 12 high)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn install-scripts 3 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   @firebase/util@1.15.3 (postinstall: node ./postinstall.js)
+npm warn install-scripts   protobufjs@7.6.6 (postinstall: node scripts/postinstall)
+npm warn install-scripts   re2@1.27.0 (install: install-from-cache --artifact build/Release/re2.node --host-var RE2_DOW
+NLOAD_MIRROR --skip-path-var RE2_DOWNLOAD_SKIP_PATH --skip-ver-var RE2_DOWNLOAD_SKIP_VER --force-build-var RE2_DOWNLOAD
+_FORCE_BUILD || node-gyp -j max rebuild)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+
+> fuelpoints-firestore-rules-testovi@0.1.0 test
+> firebase emulators:exec --config ../../firebase.json --project demo-fuelpoints --only firestore "node --test --test-concurrency=1 *.test.js"
+
+i  emulators: Starting emulators: firestore
+i  emulators: Detected demo project ID "demo-fuelpoints", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+i  firestore: Firestore Emulator logging to firestore-debug.log
++  firestore: Firestore Emulator was started in standard edition.
++  firestore: Firestore Emulator UI websocket is running on 9150.
+i  Running script: node --test --test-concurrency=1 *.test.js
+[2026-10-15T19:27:17.065Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf50a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.082Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf50b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+[2026-10-15T19:27:17.136Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf50d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.145Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf50e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+▶ RULE-T12 (preliminarno) client access nad internal/unknown kolekcijom → DENY
+  ✔ RULE-T12 rewardRequests: get, set, delete, list → DENY (621.5997ms)
+[2026-10-15T19:27:17.242Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf511 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.250Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf512 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+[2026-10-15T19:27:17.333Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf514 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.346Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf515 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+  ✔ RULE-T12 redemptionRequests: get, set, delete, list → DENY (200.8341ms)
+[2026-10-15T19:27:17.428Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf518 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.435Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf519 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+[2026-10-15T19:27:17.516Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf51b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.534Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf51c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+  ✔ RULE-T12 nepoznata kolekcija: get, set, delete, list → DENY (187.833ms)
+✔ RULE-T12 (preliminarno) client access nad internal/unknown kolekcijom → DENY (1486.4631ms)
+[2026-10-15T19:27:17.613Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf51f error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.620Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf520 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+[2026-10-15T19:27:17.698Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf522 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.705Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf523 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+▶ I01-T10 default deny za kolekcije još bez pravila
+  ✔ I01-T10 users: get, set, delete, list → DENY (i za vlasnika) (170.1373ms)
+[2026-10-15T19:27:17.769Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf526 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.782Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf527 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+[2026-10-15T19:27:17.830Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf529 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L5, false for 'update' @ L5
+[2026-10-15T19:27:17.843Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x42eaf52a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L5
+  ✔ I01-T10 loyaltyLedger: get, set, delete, list → DENY (137.9086ms)
+✔ I01-T10 default deny za kolekcije još bez pravila (308.4035ms)
+ℹ tests 5
+ℹ suites 2
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2155.1719
++  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+!  Firestore Emulator has exited upon receiving signal: SIGINT
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator
+==> Android: assembleDebug, testDebugUnitTest
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug UP-TO-DATE
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug UP-TO-DATE
+
+BUILD SUCCESSFUL in 951ms
+34 actionable tasks: 34 up-to-date
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin NO-SOURCE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:processDebugUnitTestJavaRes NO-SOURCE
+> Task :app:testDebugUnitTest NO-SOURCE
+
+BUILD SUCCESSFUL in 937ms
+19 actionable tasks: 19 up-to-date
+SVE PROVJERE PROŠLE
+```
