@@ -16,6 +16,12 @@ function odrediKod(err) {
   return 'INTERNAL_ERROR';
 }
 
+// Log nikad ne bilježi sirovu putanju zahtjeva: klijent može u nju staviti tajnu (§3.4, NFR-07; i03 FIX LOOP 1, R-04).
+// Za pogođenu rutu bilježi se njen šablon relativan na ruter /api/v1 (npr. "/pos/purchases"); inače fiksna vrijednost.
+function putanjaZaLog(req) {
+  return typeof req.route?.path === 'string' ? req.route.path : '(nepoznata ruta)';
+}
+
 // Centralni rukovalac: tijelo tačno po §27, poruka uvijek iz kataloga, bez stack trace-a.
 export function centralniRukovalacGreskama(err, req, res, next) {
   if (res.headersSent) {
@@ -29,7 +35,7 @@ export function centralniRukovalacGreskama(err, req, res, next) {
     code: stavka.kod,
     status: stavka.http,
     metod: req.method,
-    putanja: req.path,
+    putanja: putanjaZaLog(req),
     stack: stavka.http >= 500 ? String(err?.stack ?? err) : undefined,
   });
   res.status(stavka.http).json({
