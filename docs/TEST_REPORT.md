@@ -840,3 +840,342 @@ BUILD SUCCESSFUL in 937ms
 19 actionable tasks: 19 up-to-date
 SVE PROVJERE PROŠLE
 ```
+
+---
+
+## Iteracija 2 — Account lifecycle i granica autentikacije
+
+Datum izvršavanja: 2026-10-15/16 (Windows 11 Pro 10.0.22621, Windows PowerShell 5.1). Grana `iteracija-02`,
+kod na commit-u `0b833e5` (svi koraci 1–7 i N-01; dokumentacija necommit-ovana u trenutku izvršavanja).
+Verzije alata nepromijenjene u odnosu na i01: `node -v` → `v24.21.0`, `npm -v` → `11.19.0`, `npx firebase --version` → `15.32.1`.
+Emulator komande sa JBR-om prvim u PATH-u (kao i01, OD-1).
+
+### Završno izvršavanje (checkpoint)
+
+Komande su izvršene redom iz jedne PowerShell skripte (izlaz svake komande u poseban fajl; ovdje skraćeno na rezultat):
+
+```powershell
+cd backend; npm ci; npm test; npm run test:emu; npm run test:emu; npm run test:emu; cd ..
+cd firebase\tests; npm ci; npm test; cd ..\..
+.\skripte\provjera.ps1   # dva puta zaredom, svaki put kao zaseban proces; exit code iz procesa
+```
+
+| Komanda | Rezultat | Exit code | Trajanje |
+|---|---|---|---|
+| `backend: npm ci` | `added 713 packages, and audited 714 packages in 25s`; `11 vulnerabilities (4 moderate, 7 high)` | 0 | — |
+| `backend: npm test` | `ℹ tests 34` `ℹ pass 34` `ℹ fail 0` | 0 | 2 s |
+| `backend: npm run test:emu` (1) | `ℹ tests 32` `ℹ pass 32` `ℹ fail 0` | 0 | 112 s |
+| `backend: npm run test:emu` (2) | `ℹ tests 32` `ℹ pass 32` `ℹ fail 0` | 0 | 107 s |
+| `backend: npm run test:emu` (3) | `ℹ tests 32` `ℹ pass 32` `ℹ fail 0` | 0 | 113 s |
+| `firebase\tests: npm ci` | `added 729 packages, and audited 730 packages in 29s`; `16 vulnerabilities (4 moderate, 12 high)` | 0 | — |
+| `firebase\tests: npm test` | `ℹ tests 17` `ℹ pass 17` `ℹ fail 0` | 0 | 8 s |
+| `.\skripte\provjera.ps1` (1) | `SVE PROVJERE PROŠLE` | 0 | 177 s |
+| `.\skripte\provjera.ps1` (2) | `SVE PROVJERE PROŠLE` | 0 | 175 s |
+
+#### `cd backend; npm test` (unit, bez emulatora) — izvod
+
+```
+✔ I01-T02 GET /api/v1/nepostojeca → 404 NOT_FOUND sa tačno tri polja (26.2982ms)
+✔ I01-T02 nepodržan metod (DELETE /api/v1) i putanja van /api/v1 (GET /) → 404 NOT_FOUND (11.5517ms)
+✔ I01-T03 neispravan JSON ("{") → 422 INVALID_REQUEST bez teksta greške parsera (19.9637ms)
+✔ I01-T03 tijelo veće od limita parsera → 422 INVALID_REQUEST bez teksta greške parsera (P-4) (8.8643ms)
+✔ I01-T03 oštećeno komprimovano tijelo (gzip, deflate, br) → 422 INVALID_REQUEST bez teksta zlib greške (18.4013ms)
+✔ I01-T03 greška sa 4xx statusom koja ne dolazi iz JSON parsera → 500 INTERNAL_ERROR (6.3728ms)
+✔ I01-T03 greška JSON parsera sa 5xx statusom → 500 INTERNAL_ERROR, ne INVALID_REQUEST (N-01) (7.6584ms)
+✔ I01-T04 sinhroni i async izuzetak → 500 INTERNAL_ERROR bez stack-a, putanje i originalne poruke (10.6473ms)
+✔ I01-T04 log sadrži correlationId, a ne sadrži Authorization ni X-POS-API-Key (10.0566ms)
+✔ I01-T04 test rute ne postoje u podrazumijevanoj aplikaciji (bez dodajRute) → 404 (10.3207ms)
+✔ I01-T05 dva zahtjeva → dva različita correlationId (UUID v4) (10.0289ms)
+✔ I01-T05 dolazni X-Correlation-Id se ignoriše (4.3323ms)
+✔ I02-T11 rok zavisnog servisa je 10 s (i02/P-5) (0.6776ms)
+✔ I02-T11 saRokom: obećanje koje nikad ne završi → GreskaApi SERVICE_UNAVAILABLE za < 1 s (56.8731ms)
+✔ I02-T11 saRokom: uspjeh i greška u roku prolaze nepromijenjeni (0.3413ms)
+✔ I02-T11 klasifikujGreskuAuth: token ili korisnik nije važeći → UNAUTHENTICATED (0.1878ms)
+✔ I02-T11 klasifikujGreskuAuth: nedostupnost i istek roka → SERVICE_UNAVAILABLE; ostalo → INTERNAL_ERROR (0.1909ms)
+✔ I02-T11 jeNedostupnostFirestore: UNAVAILABLE (14), DEADLINE_EXCEEDED (4), ABORTED (10) → true; ostalo → false (0.1829ms)
+✔ I01-T01 katalog: 23 koda iz §27 sa tačnim HTTP statusima (3.3424ms)
+✔ I01-T01 katalog: tabela §27 iz čitljive kopije SRS-a odgovara katalogu (bez drifta) (1.165ms)
+✔ I01-T01 katalog: dopuna O-1 je tačno NOT_FOUND 404 i INVALID_REQUEST 422 (0.1522ms)
+✔ I01-T01 katalog: ukupno 25 stavki, bez duplikata i bez kodova van §27 + O-1 (0.2774ms)
+✔ I01-T01 katalog: svaka poruka je neprazna, na latinici (bez ćirilice) (0.2829ms)
+✔ I01-T01 katalog: niz, stavke i mapa su zamrznuti (0.1243ms)
+✔ I01-T06 nedostaju PORT, FIREBASE_PROJECT_ID i VERZIJA_USLOVA → GreskaKonfiguracije navodi sve tri varijable (1.0395ms)
+✔ I01-T06 neispravan PORT → greška formata bez ispisa vrijednosti (0.7729ms)
+✔ I01-T06 ispravne vrijednosti → zamrznut objekat konfiguracije (0.7954ms)
+✔ I01-T06 pokretanje bez PORT → izlaz ≠ 0, poruka imenuje PORT, bez vrijednosti i stack-a (683.1737ms)
+✔ I01-T06 prazna ili samo razmaci VERZIJA_USLOVA → greška koja imenuje VERZIJA_USLOVA (i02/P-4) (0.2342ms)
+✔ I02-T13 emulator varijabla uz projekat koji ne počinje sa demo- → GreskaKonfiguracije bez vrijednosti (0.2698ms)
+✔ I02-T13 emulator varijable uz demo- projekat i produkcioni projekat bez emulator varijabli → prolazi (0.1095ms)
+✔ I02-T13 start sa FIRESTORE_EMULATOR_HOST i projektom bez demo- → izlaz ≠ 0, port nikad ne sluša, bez vrijednosti i stack-a (635.933ms)
+✔ I02-T13 start sa FIREBASE_AUTH_EMULATOR_HOST i projektom bez demo- → izlaz ≠ 0, port nikad ne sluša, bez vrijednosti i stack-a (511.6698ms)
+✔ I01-T11 seed CLI kad Firestore emulator nije dostupan → exit 1 za manje od 15 s, poruka o emulatoru, bez stack-a (139.6875ms)
+ℹ tests 34
+ℹ pass 34
+ℹ fail 0
+```
+
+#### `cd backend; npm run test:emu` (Firestore + Auth emulator, `demo-fuelpoints`) — izvršavanje 1, izvod
+
+```
+✔ I01-T07 Admin SDK: upis, čitanje i brisanje probnog dokumenta u Firestore emulatoru (3877.4163ms)
+✔ I01-T07 Admin SDK: kreiranje i brisanje test korisnika u Auth emulatoru (54.9177ms)
+✔ I02-T01 bez Authorization zaglavlja → 401 UNAUTHENTICATED, ništa upisano (3194.297ms)
+✔ I02-T01 važeći token van Authorization zaglavlja (query, X-Firebase-Token) → 401, ništa upisano (43.6632ms)
+✔ I02-T02 pogrešna šema ili oblik zaglavlja → 401, ništa upisano (46.4162ms)
+✔ I02-T02 neispravan, istekao i token drugog projekta → 401, ništa upisano (stvarni err.code u dijagnostici) (42.3371ms)
+ℹ err.code za "Bearer abc": auth/argument-error
+ℹ err.code za "Bearer a.b.c": auth/argument-error
+ℹ err.code za "istekao (exp u prošlosti)": auth/id-token-expired
+ℹ err.code za "aud drugog projekta (demo-drugi)": auth/argument-error
+✔ I02-T02 pozitivna kontrola: šema bearer malim slovima → 201 (i02/P-7) (96.3968ms)
+✔ I02-T03 token obrisanog, onemogućenog i opozvanog korisnika → 401 (checkRevoked) (1355.4213ms)
+ℹ err.code za obrisan korisnik: auth/user-not-found
+ℹ err.code za onemogućen korisnik: auth/user-disabled
+ℹ err.code za opozvan korisnik: auth/id-token-revoked
+✔ I02-T16 granice rute: GET init → 404, nepostojeća ruta bez token-a → 404, neispravan JSON bez token-a → 422 (47.238ms)
+✔ API-T01 validan init kreira profil i balance 0/0 sa tačnim poljima; ponovljeni init ne resetuje stanje (3452.0961ms)
+✔ I02-T04 uid u tijelu → 422 INVALID_REQUEST; dokument za uid iz tijela nikad ne nastaje (140.9964ms)
+✔ I02-T05 server-controlled ili nepoznato polje u tijelu → 422 INVALID_REQUEST, ništa upisano (51.9525ms)
+✔ I02-T05 tijelo nije JSON objekat → 422 INVALID_REQUEST, ništa upisano; nepoznato polje ima prednost nad displayName (35.153ms)
+✔ I02-T06 neispravan displayName → 422 INVALID_DISPLAY_NAME, ništa upisano (52.9752ms)
+✔ I02-T06 granične vrijednosti displayName → 201, upisano tačno (bez trim-a); brojanje kao size() u Rules (i02/P-3) (342.5123ms)
+✔ I02-T07 acceptedTermsVersion različit od aktuelne verzije → 422 INVALID_REQUEST, ništa upisano (124.2732ms)
+✔ I02-T08 failure injection između dva upisa i prije commit-a → 500 bez stack-a, nijedan dokument (188.2373ms)
+✔ I02-T09 10 paralelnih init-a za isti uid → jedan users i jedan loyaltyAccounts, bez 500, isto stanje (3 ponavljanja) (14712.0309ms)
+✔ I02-T10 nalog u DELETION_IN_PROGRESS → 409 ACCOUNT_DELETION_IN_PROGRESS, dokumenti nepromijenjeni (92.4718ms)
+✔ I02-T10 DELETION_IN_PROGRESS bez loyaltyAccounts → 409, loyaltyAccounts i dalje ne postoji (76.4747ms)
+✔ I02-T14 (a) postoji samo users ACTIVE → 201, nastaje loyaltyAccounts 0/0, users nepromijenjen (i02/P-2) (94.0001ms)
+✔ I02-T14 (b) postoji samo loyaltyAccounts sa 42 boda → 201, nastaje users, bodovi ostaju 42 (i02/P-2) (92.7946ms)
+✔ I02-T14 (c) users sa accountStatus van SRS enum-a → 500, ništa promijenjeno (93.3152ms)
+✔ I02-T12 log (svi kanali) i odgovori ne sadrže token ni Authorization ni za jedan ishod (4481.259ms)
+✔ I02-T11 Firestore nedostupan (zatvoren port) → 503 SERVICE_UNAVAILABLE za < 15 s, bez stack-a i token-a (10784.4833ms)
+ℹ Firestore – zatvoren port: HTTP 503 za 10038 ms
+✔ I02-T11 Firestore nedostupan (crna rupa) → 503 SERVICE_UNAVAILABLE za < 15 s, bez stack-a i token-a (10748.326ms)
+ℹ Firestore – crna rupa: HTTP 503 za 10041 ms
+✔ I02-T11 Auth nedostupan (zatvoren port) → 503 SERVICE_UNAVAILABLE za < 15 s, bez stack-a i token-a (4000.7847ms)
+ℹ Auth – zatvoren port: HTTP 503 za 29 ms
+ℹ err.code Admin SDK-a (Auth – zatvoren port): app/network-error
+✔ I02-T11 Auth nedostupan (crna rupa) → 503 SERVICE_UNAVAILABLE za < 15 s, bez stack-a i token-a (22636.175ms)
+ℹ Auth – crna rupa: HTTP 503 za 10018 ms
+ℹ err.code Admin SDK-a (Auth – crna rupa): bez odgovora u roku od 12 s
+✔ I01-T09 seed odbija rad van emulatora i van demo projekta (3313.1302ms)
+✔ I01-T08 seed rewardDefinitions po §12 je idempotentan (14767.2008ms)
+ℹ tests 32
+ℹ pass 32
+ℹ fail 0
+```
+
+(I01-T08 i I01-T09 imaju po dva podtesta, svi ✔.) Trajanje testa I02-T11 „Auth – crna rupa” (22,6 s) uključuje dijagnostički
+poziv sa rokom od 12 s; mjereni odgovor Backend-a je 10 018 ms.
+
+#### I02-T09 — tri uzastopna izvršavanja `npm run test:emu`
+
+```
+(1) ✔ I02-T09 10 paralelnih init-a za isti uid → … (3 ponavljanja) (14712.0309ms)   ℹ pass 32  ℹ fail 0
+(2) ✔ I02-T09 10 paralelnih init-a za isti uid → … (3 ponavljanja) (10589.073ms)    ℹ pass 32  ℹ fail 0
+(3) ✔ I02-T09 10 paralelnih init-a za isti uid → … (3 ponavljanja) (17801.696ms)    ℹ pass 32  ℹ fail 0
+```
+
+Dodatno je I02-T09 zelen u ranijim izvršavanjima tokom koraka 5–7 i u oba `provjera.ps1` izvršavanja (ukupno ≥ 7 puta × 3 ponavljanja,
+nijedan pad). `maxAttempts` je ostao 5.
+
+#### `cd firebase\tests; npm test` (Firestore emulator, `demo-fuelpoints`)
+
+```
+  ✔ RULE-T01 neautentifikovan read users/{uid} → DENY (447.6516ms)
+  ✔ RULE-T02 owner read sopstvenog profila → ALLOW (95.6415ms)
+  ✔ RULE-T03 cross-user read profila → DENY; list users → DENY i za vlasnika (139.6868ms)
+  ✔ RULE-T04 owner update samo displayName + updatedAt (= request.time) → ALLOW (102.5416ms)
+  ✔ RULE-T05 update koji dodaje ili mijenja server/unknown polje → DENY (170.8429ms)
+  ✔ RULE-T06 owner read sopstvenog loyaltyAccounts/{uid} → ALLOW (73.458ms)
+  ✔ RULE-T07 client create loyaltyAccounts (i za sopstveni uid) → DENY (137.823ms)
+  ✔ RULE-T07 client update, merge i delete postojećeg loyaltyAccounts (i od strane vlasnika) → DENY (215.0458ms)
+  ✔ I02-T15 users: create i delete vlasnika → DENY (94.282ms)
+  ✔ I02-T15 users update vlasnika: neispravan displayName ili klijentski updatedAt → DENY (139.8052ms)
+  ✔ I02-T15 users update drugog korisnika i neautentifikovan update → DENY (97.3259ms)
+  ✔ I02-T15 loyaltyAccounts: get drugog korisnika, neautentifikovan get i list → DENY (164.9077ms)
+  ✔ I02-T15 displayName od astralnih znakova: size() broji UTF-16 jedinice (50 → ALLOW, 51 i 100 → DENY) (123.315ms)
+  ✔ RULE-T12 rewardRequests: get, set, delete, list → DENY (343.3114ms)
+  ✔ RULE-T12 redemptionRequests: get, set, delete, list → DENY (193.8001ms)
+  ✔ RULE-T12 nepoznata kolekcija: get, set, delete, list → DENY (213.6119ms)
+  ✔ I01-T10 loyaltyLedger: get, set, delete, list → DENY (170.6526ms)
+ℹ tests 17
+ℹ pass 17
+ℹ fail 0
+```
+
+Emulator nije prijavio upozorenje o nekorišćenoj funkciji `ownResource()`.
+
+#### `.\skripte\provjera.ps1` — oba izvršavanja (izvod stdout-a)
+
+```
+==> Alati (Node 24, Java 21+, JDK za Gradle)
+==> SRS integritet (SHA-256 normativnog .docx-a)
+==> NFR-07 (bez tajni u repozitorijumu)
+==> Bez TODO/FIXME
+==> Portovi emulatora 8080 i 9099 su slobodni
+==> Backend: npm ci, npm test, npm run test:emu
+==> Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init bez token-a)
+Smoke: 404 NOT_FOUND, correlationId 6b837715-7eb6-46ab-8ad6-410ab30097d2        (2. put: 93212601-0ce9-46a1-896e-df4920d33400)
+Smoke: 401 UNAUTHENTICATED, correlationId cddf5864-d899-4987-abbf-4059051bd112  (2. put: c40a1143-9ce6-4b86-9641-79fc5942967c)
+==> Firestore rules: npm ci, npm test
+==> Android: assembleDebug, testDebugUnitTest
+BUILD SUCCESSFUL in 1s
+BUILD SUCCESSFUL in 1s
+SVE PROVJERE PROŠLE
+```
+
+Exit code procesa: `0` i `0` (177 s, 175 s). Ranije, poslije koraka 7, `provjera.ps1` je izvršena dva puta: prvi put `EXIT=0`
+(`SVE PROVJERE PROŠLE`); drugi put je ispisano `SVE PROVJERE PROŠLE`, ali exit code nije uhvaćen (vidi „Nalazi tokom izvršavanja”).
+
+### Inspekcije
+
+| Komanda | Izlaz |
+|---|---|
+| `git grep -n -i -E "process\.env\.(NODE_ENV\|TEST)\|inject\|ubriz" -- backend/src` | prazno (exit 1) |
+| `git grep -n -E "/pos/\|/rewards/\|/vouchers\|reconcile\|loyaltyLedger" -- backend/src` | samo `backend/src/podaci/kolekcije.js:6:  loyaltyLedger: 'loyaltyLedger',` |
+| `git grep -n "verifyIdToken" -- backend/src` | `backend/src/posrednici/autentikacija.js:20:      dekodiran = await saRokom(auth.verifyIdToken(poklapanje[1], true), ROK_ZAVISNOG_SERVISA_MS);` (checkRevoked = `true`, i02/P-9) |
+| `(Get-FileHash docs\srs\FuelPoints_SRS_3_1.docx -Algorithm SHA256).Hash` | `7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C60228` |
+| `git diff main -- docs/srs` | prazno |
+| `git log main..HEAD --format=%B \| Select-String -Pattern 'Co-Authored-By\|Generated with\|claude\.com'` | prazno |
+| `git grep -n -E "TODO\|FIXME" -- backend firebase skripte README.md ':!skripte/provjera.ps1'` | prazno (exit 1) |
+| `firebase/firestore.rules` vs §31 `.docx` (`word/document.xml`, prelomi `w:br`, bez blokova purchases … redemptionRequests) | Python poređenje: `JEDNAKO_DOCX`; `diff` sa planom 11.3: `IDENTICNO_PLANU` |
+
+### i02/P-3 — stvarno ponašanje `size()` u Firestore emulatoru
+
+Privremena sonda (`firebase/tests/_sonda_size.mjs`, obrisana poslije izvršavanja, nije commit-ovana), `updateDoc` vlasnika sa
+`displayName = znak × n` i `updatedAt: serverTimestamp()` nad pravilima iz §31:
+
+```
+SONDA %uD83D%uDE00 x 25: ALLOW
+SONDA %uD83D%uDE00 x 26: ALLOW
+SONDA %uD83D%uDE00 x 33: ALLOW
+SONDA %uD83D%uDE00 x 34: ALLOW
+SONDA %uD83D%uDE00 x 50: ALLOW
+SONDA %uD83D%uDE00 x 51: DENY
+SONDA %uD83D%uDE00 x 100: DENY
+SONDA %u0161 x 50: ALLOW
+SONDA %u0161 x 51: ALLOW
+SONDA %u0161 x 100: ALLOW
+SONDA %u0161 x 101: DENY
+SONDA %u20AC x 33: ALLOW
+SONDA %u20AC x 34: ALLOW
+SONDA %u20AC x 100: ALLOW
+SONDA %u20AC x 101: DENY
+SONDA a x 100: ALLOW
+SONDA a x 101: DENY
+```
+
+Zaključak: `size()` broji UTF-16 jedinice (😀 = 2), ne code point-e ni UTF-8 bajtove. Po odluci i02/P-3 Backend broji
+`String.prototype.length`; I02-T06 i I02-T15 provjeravaju istu granicu u oba sloja (50 × 😀 prolazi, 51 i 100 × 😀 ne prolaze).
+Prva verzija I02-T15 (pretpostavka code point-a: 100 × 😀 → ALLOW) je pala: `✖ I02-T15 displayName od astralnih znakova …`
+(`ℹ pass 16`, `ℹ fail 1`), što je i dovelo do sonde.
+
+### Stvarni `err.code`-ovi Admin SDK-a
+
+| Test | Slučaj | `err.code` | Mapiranje |
+|---|---|---|---|
+| I02-T02 | `Bearer abc` | `auth/argument-error` | 401 |
+| I02-T02 | `Bearer a.b.c` | `auth/argument-error` | 401 |
+| I02-T02 | nepotpisan token, `exp` u prošlosti | `auth/id-token-expired` | 401 |
+| I02-T02 | nepotpisan token, `aud` = `demo-drugi` | `auth/argument-error` | 401 |
+| I02-T03 | obrisan korisnik | `auth/user-not-found` | 401 |
+| I02-T03 | onemogućen korisnik | `auth/user-disabled` | 401 |
+| I02-T03 | opozvan korisnik (`revokeRefreshTokens` 1,1 s poslije izdavanja) | `auth/id-token-revoked` | 401 |
+| I02-T11 | Auth emulator host → zatvoren port | `app/network-error` | 503 (u listi; nije bilo zastoja po planu 5.5) |
+| I02-T11 | Auth emulator host → „crna rupa” | bez odgovora u 12 s (nema koda) | 503 preko `saRokom` (10 018 ms) |
+
+Slučajevi oblika zaglavlja (`Basic …`, `Bearer`, `Bearer `, dva razmaka, dodatni dio, `Token …`, token bez šeme, prazno) se odbijaju
+u posredniku prije poziva Admin SDK-a (401, bez `err.code`).
+
+### Kontrolne mutacije (plan 8.4 + M-R01c + dodatna M10)
+
+Svaka mutacija je primijenjena lokalno, pokrenut je ciljani test fajl, pa je stanje vraćeno sa `git checkout -- backend/src firebase/firestore.rules`
+(poslije svih: `git status --short` → samo ` M docs/TRACEABILITY.md`, tada necommit-ovan). Prvo izvršavanje višelinijskih mutacija
+(M2b, M4, M5, M8, M9, M10) nije primijenilo izmjenu (greška u pomoćnom skriptu: `\n` nije pretvoren u prelom reda; za M10 je fajl
+postao sintaksno neispravan pa je test fajl pao u cjelini — rezultat odbačen); ponovljene su ispravljenim skriptom. U tabeli su samo važeći rezultati.
+
+| Mutacija | Ciljani test | Rezultat | Očekivano po planu |
+|---|---|---|---|
+| M1 `verifyIdToken(token, true)` → `verifyIdToken(token)` | `emulator/autentikacija.test.js` | `ℹ pass 7` `ℹ fail 0` — preživljava | da (i02/P-9: emulator uvijek provjerava opoziv); `true` potvrđeno inspekcijom |
+| M2 `res.locals.uid = req.body?.uid ?? dekodiran.uid` | `emulator/inicijalizacijaNaloga.test.js` | `ℹ pass 14` `ℹ fail 0` — preživljava | plan: I02-T04. Ne obara jer stroga validacija tijela odbija `uid` (422) prije servisa; drugi sloj zaštite drži granicu. Vidi M2b. |
+| M2b M2 + uklonjena provjera nepoznatih ključeva | isti | `✖ I02-T04`, `✖ I02-T05` (oba testa); `ℹ pass 11` `ℹ fail 3` | da: bez validacije uid iz tijela prolazi i I02-T04 pada |
+| M3 `users` upis van transakcije (`await refKorisnik.create(korisnik)`) | isti | `✖ API-T01`, `✖ I02-T04`, `✖ I02-T06`, `✖ I02-T07`, `✖ I02-T08`, `✖ I02-T09`, `✖ I02-T14 (b)`, `✖ I02-T14 (c)`; `ℹ pass 6` `ℹ fail 8` | da (I02-T08 (a)) |
+| M4 `loyaltyAccounts`: `tx.set` bez provjere postojanja | isti | `✖ API-T01`, `✖ I02-T09`, `✖ I02-T14 (b)`; `ℹ pass 11` `ℹ fail 3` | da (API-T01 (b) / I02-T14 (b)) |
+| M5 uklonjena provjera nepoznatih ključeva | isti | `✖ I02-T04`, `✖ I02-T05` (oba testa); `ℹ pass 11` `ℹ fail 3` | da |
+| M6 uklonjen `saRokom` oko transakcije | `emulator/nedostupnostServisa.test.js` | `✖ I02-T11 Firestore nedostupan (crna rupa)` (20 596 ms), `✖ I02-T11 Firestore nedostupan (zatvoren port)` (21 347 ms); `ℹ pass 2` `ℹ fail 2` | da |
+| M7 uklonjena zaštita emulator/demo | `jedinicni/konfiguracija.test.js`, `jedinicni/pokretanjeBackenda.test.js` | `✖ I02-T13` (unit i oba spawn testa); `ℹ pass 6` `ℹ fail 3` | da |
+| M8 rules: `allow get: if signedIn();` u `/users/{uid}` | `firebase/tests/korisnikINalog.test.js` | `✖ RULE-T03`; `ℹ pass 12` `ℹ fail 1` | da |
+| M9 rules: `/users/{uid}` update bez `changedOnly(...)` | isti | `✖ RULE-T05`; `ℹ pass 12` `ℹ fail 1` | da |
+| M10 (dodatna) posrednik `console.log(zaglavlje)` | `emulator/logBezTokena.test.js` | `✖ I02-T12`; `ℹ pass 0` `ℹ fail 1` | da |
+| M7b/M7d (i01) `console.error/console.log(req.get('authorization'))` u centralnom rukovaocu, poslije premještanja presretača | `jedinicni/aplikacija.test.js` | oba: `✖ I01-T04 log sadrži correlationId, a ne sadrži Authorization …`; `ℹ pass 10` `ℹ fail 1` | da (korak 6) |
+| M-R01c `status >= 400 && status < 500` → `status >= 400` (N-01) | `npm test` | `✖ I01-T03 greška JSON parsera sa 5xx statusom → 500 INTERNAL_ERROR, ne INVALID_REQUEST (N-01)`; `ℹ pass 33` `ℹ fail 1` | da |
+
+(Za mutacije nad `inicijalizacijaNaloga.test.js` tada je fajl imao 14 testova jer je izvršen samostalno.)
+
+### Test-first (crveno prije koda)
+
+| Korak | Komanda | Rezultat prije implementacije |
+|---|---|---|
+| 1 | `firebase\tests: npm test` nad default deny | `✖ RULE-T02`, `✖ RULE-T04`, `✖ RULE-T06`, `✖ I02-T15 … astralnih` (ostali DENY testovi zeleni) |
+| 2 | `backend: npm test` | `ℹ tests 27` `ℹ pass 21` `ℹ fail 6` (I01-T06 ×3, I02-T13 ×3) |
+| 3 | `backend: npm test` | `ERR_MODULE_NOT_FOUND … greskeServisa.js`; `ℹ fail 1` |
+| 4–5 | `backend: npm run test:emu` | `ℹ tests 27` `ℹ pass 7` `ℹ fail 20` (svi novi osim I02-T16, koji važi i bez rute) |
+| 6 | I02-T11 (b) i I02-T12 nad starim `pokreni.js` | I02-T11: 4 × `✖` (HTTP 500 za 14–16 ms); I02-T12 zelen (in-process, zavisi od koraka 4–5) |
+| N-01 | test sa M-R01c | vidi tabelu mutacija |
+
+### Nalazi tokom izvršavanja
+
+- **I02-T05, prazno tijelo:** prvo izvršavanje poslije koraka 4–5 je palo (`prazno tijelo: actual 'INVALID_DISPLAY_NAME', expected 'INVALID_REQUEST'`).
+  Uzrok je bio testni pomoćnik (podrazumijevani parametar je postavljao `Content-Type: application/json`, pa je parser dao `{}`).
+  Sonda: bez Content-Type `req.body` je `undefined`; sa `application/json` i praznim tijelom `{}`. Ispravljen je pomoćnik
+  (`null` = bez Content-Type); produkcioni kod nije mijenjan. Prazno JSON tijelo `{}` daje `INVALID_DISPLAY_NAME` (objekat bez nepoznatih ključeva).
+- **Auth host i postojeća instanca:** dijagnostika u I02-T11 koja je mijenjala `FIREBASE_AUTH_EMULATOR_HOST` u procesu testa nad postojećom
+  Auth instancom je vratila `PRIHVAĆEN`; sa novom Admin aplikacijom → `app/network-error` (IMPLEMENTATION_LOG, OD-3).
+- **Firestore na zatvorenom portu** ne vraća grešku odmah: odgovor 503 stiže po isteku roka (10 038 ms), jer gRPC klijent ponavlja konekciju.
+- **`provjera.ps1` i Gradle daemon:** kad je skripta pokrenuta sa preusmjerenim izlazom (`*> fajl`) iz drugog PowerShell-a, pozivalac je čekao
+  628 s iako je skripta ispisala `SVE PROVJERE PROŠLE` i izašla sa 0: Gradle daemon je naslijedio handle izlaza. `.\gradlew.bat --stop`
+  (`1 Daemon stopped`) je oslobodio pozivaoca. Drugo izvršavanje preko `Start-Process -PassThru` bez keširanog handle-a nije vratilo
+  exit code (prazan `ExitCode`). Završna izvršavanja koriste `Start-Process` + `$p.Handle` + `WaitForExit()` → exit code 0 i 0.
+- `MetadataLookupWarning` (kao i01) i `npm warn install-scripts` (`re2`) se pojavljuju; ne utiču na rezultat.
+
+### Testovi koji nisu izvršeni
+
+- Odbijanje token-a sa pogrešnim potpisom ili izmijenjenim payload-om (tuđi uid): emulator token-i nisu potpisani i emulator ih prihvata
+  (poznato ograničenje iz brief-a, tačka 5).
+- Razlika `verifyIdToken(token, true)` / `verifyIdToken(token)`: neizvodljiva u emulatoru (i02/P-9, M1 preživljava); provjera inspekcijom.
+- `size()` nad produkcionim Rules engine-om: testovi rade samo nad emulatorom.
+
+### Rezultat po ID-u (Iteracija 2)
+
+| ID | Rezultat | Izvor |
+|---|---|---|
+| API-T01 | PASS | `npm run test:emu` ×3 |
+| RULE-T01 … RULE-T07 | PASS (7/7) | `firebase\tests: npm test` |
+| I02-T01 | PASS (2 testa) | `npm run test:emu` |
+| I02-T02 | PASS (3 testa, stvarni kodovi iznad) | `npm run test:emu` |
+| I02-T03 | PASS (stvarni kodovi iznad) | `npm run test:emu` |
+| I02-T04 | PASS | `npm run test:emu` |
+| I02-T05 | PASS (2 testa) | `npm run test:emu` |
+| I02-T06 | PASS (2 testa; granica po `size()`) | `npm run test:emu` |
+| I02-T07 | PASS | `npm run test:emu` |
+| I02-T08 | PASS (0 dokumenata u (a) i (b); kontrola 201) | `npm run test:emu` |
+| I02-T09 | PASS u 3/3 uzastopna izvršavanja | `npm run test:emu` ×3 |
+| I02-T10 | PASS (2 testa) | `npm run test:emu` |
+| I02-T11 | PASS: (a) 6 unit testova; (b) 4 varijante, 503 za 29–10 041 ms | `npm test`, `npm run test:emu` |
+| I02-T12 | PASS | `npm run test:emu` |
+| I02-T13 | PASS: (a) 2 unit testa; (b) 2 spawn testa | `npm test` |
+| I02-T14 | PASS ((a), (b), (c)) | `npm run test:emu` |
+| I02-T15 | PASS (5 testova) | `firebase\tests: npm test` |
+| I02-T16 | PASS (+ smoke 401 u `provjera.ps1` ×2) | `npm run test:emu`, `provjera.ps1` |
+| N-01 (I01-T03, parser 5xx) | PASS; M-R01c obara test | `npm test` |
+| Regresija i01 | PASS: I01-T01 … I01-T09, I01-T11 (I01-T06 proširen), I01-T10 (samo loyaltyLedger), RULE-T12 (preliminarno), Android `assembleDebug` i `testDebugUnitTest` (NO-SOURCE) | `npm test`, `npm run test:emu`, `firebase\tests: npm test`, `provjera.ps1` |
+| `provjera.ps1` | exit 0, dva puta zaredom | — |
+
+### Poznata ograničenja
+
+- Nepotpisani emulator token-i (gore); zaštita I02-T13 sprječava emulator režim van `demo-` projekta.
+- i02/P-9: checkRevoked se ne može razlikovati u emulatoru (M1 preživljava).
+- `size()` utvrđen samo u emulatoru.
+- N-02 (backlog i01): seed CLI visi kad na `FIRESTORE_EMULATOR_HOST` sluša servis koji nije Firestore emulator — ne ispravlja se (odluka).
+- N-01 je izvodljiv bez izmjene produkcionog koda (spoljna Express aplikacija postavlja kodiranje toka), pa nema ograničenja po N-01.

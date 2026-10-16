@@ -184,3 +184,170 @@ Uloga: BUILDER, 2026-10-15. Opseg po odluci Orchestrator-a: R-01, R-02, R-03 isp
 Ispravljena netačna tvrdnja iz CHANGELOG-a i tabele otvorenih pitanja („sve greške body-parser-a → `INVALID_REQUEST`”):
 prvobitna implementacija je obuhvatala samo greške sa `err.type`, a greške dekompresije (`createError(400, zlibGreska)`) su
 završavale kao 500 `INTERNAL_ERROR`. Nisu dodati paketi, kodovi grešaka ni endpointi. Detalji izvršavanja: `docs/TEST_REPORT.md`, sekcija FIX LOOP 1.
+
+---
+
+## Iteracija 2 — Account lifecycle i granica autentikacije
+
+Grana `iteracija-02`. Brief: `docs/iteracije/i02_brief.md`. Plan: `docs/iteracije/i02_plan.md`
+(odobren uz odluke i02/P-1 … i02/P-9 i backlog N-01, N-02, sekcija 15). Uloga: BUILDER, 2026-10-15/16.
+
+### CHANGELOG
+
+- Firestore Security Rules (§25.2, §25.3, §31, NFR-03): helper funkcije `signedIn`, `isOwner`, `ownResource`, `changedOnly`
+  i blokovi `/users/{uid}` i `/loyaltyAccounts/{uid}` doslovno iz §31 normativnog `.docx`-a (automatsko poređenje teksta:
+  jednako); default deny ostaje posljednji. Blokovi ostalih kolekcija dolaze u i03–i06 (D-2).
+- Rules testovi: RULE-T01 … RULE-T07 i I02-T15 (`firebase/tests/korisnikINalog.test.js`); I01-T10 sveden na `loyaltyLedger`.
+- Konfiguracija Backend-a: obavezna `VERZIJA_USLOVA` bez podrazumijevane vrijednosti (AUTH-10, O-11, i02/P-4);
+  zaštita NFR-01: start se odbija ako je definisana `FIRESTORE_EMULATOR_HOST` ili `FIREBASE_AUTH_EMULATOR_HOST`
+  (i prazna), a `FIREBASE_PROJECT_ID` ne počinje sa `demo-`; poruke bez vrijednosti. Konstanta `ROK_ZAVISNOG_SERVISA_MS = 10 000`.
+- `greske/greskeServisa.js`: `saRokom` (istek → `SERVICE_UNAVAILABLE`), `klasifikujGreskuAuth`
+  (token/korisnik → `UNAUTHENTICATED`; `app/network-error`, `app/network-timeout`, istek → `SERVICE_UNAVAILABLE`; ostalo → `INTERNAL_ERROR`),
+  `jeNedostupnostFirestore` (gRPC 14, 4, 10) — i02/P-5.
+- Posrednik `napraviProvjeruTokena(auth)` (§3.3, NFR-01): `Authorization: Bearer <token>` (šema case-insensitive, i02/P-7),
+  `verifyIdToken(token, true)` u roku od 10 s, UID samo iz verifikovanog token-a (`res.locals.uid`); posrednik uvijek baca novu
+  `GreskaApi`, token se nigdje ne upisuje. Vezan samo na rutu `POST /account/init`.
+- Validacija tijela API-01: tačno `{ displayName, acceptedTermsVersion }`; tijelo koje nije objekat ili ima bilo koje drugo polje
+  → `INVALID_REQUEST`; `displayName` string dužine 1–100 UTF-16 jedinica (kao `size()` u Rules, i02/P-3) → inače
+  `INVALID_DISPLAY_NAME`; `acceptedTermsVersion` strogo jednak `VERZIJA_USLOVA` → inače `INVALID_REQUEST`.
+- Servis `inicijalizujNalog` (AUTH-02 … AUTH-05, §7.1, NFR-04): JEDNA Firestore transakcija; oba dokumenta se čitaju u
+  transakciji, kreira se samo dokument koji nedostaje (`tx.create`, i02/P-2 varijanta A), postojeći dokument se ne piše;
+  `DELETION_IN_PROGRESS` → 409; `accountStatus` van enum-a → 500 bez izmjene; svi timestamp-ovi serverski; bez ledger eventa;
+  `maxAttempts: 5`; rok 10 s; nedostupnost/contention → 503.
+- Ruta `POST /api/v1/account/init` (§26 API-01, i02/P-1): 201 kad je kreiran bar jedan dokument, 200 za ponovljeni init; tijelo tačno
+  `{ displayName, accountStatus, acceptedTermsVersion, availablePoints, reservedPoints }` iz Firestore stanja.
+- `napraviAplikaciju({ servisi, verzijaUslova })`; `pokreni.js` inicijalizuje Admin SDK tek poslije provjere konfiguracije.
+- Testovi backend-a: I02-T11 (a), I02-T13 (unit); API-T01, I02-T01 … I02-T12, I02-T14, I02-T16 (emulator); I01-T06 proširen
+  (samo ulaz i očekivanje, plus prazna `VERZIJA_USLOVA`); presretač loga premješten u `test/pomocnici/presretanjeLoga.js` bez promjene
+  ponašanja; N-01 test za grešku parsera sa 5xx (I01-T03).
+- `skripte/provjera.ps1`: `VERZIJA_USLOVA=1.0` za smoke (vraća se na kraju), dodatni smoke `POST /api/v1/account/init` bez token-a → 401
+  `UNAUTHENTICATED`, zaglavlje bez „Iteracija 1”. `.env.example`: `VERZIJA_USLOVA=1.0`. README: konfiguracija, zaštita, API-01.
+- Dokumentacija: `docs/TEST_REPORT.md` (sekcija i02), `docs/TRACEABILITY.md` (redovi Iteracije 2), ovaj unos.
+
+Nijedan novi npm paket, kod greške ni endpoint; katalog grešaka, centralni rukovalac, `parsirajJson`, `dnevnik.js` i seed nepromijenjeni.
+
+### Commit-i
+
+| Commit | Korak plana |
+|---|---|
+| `1380b44` i02: odobrenje plana i odluke Orchestrator-a | sekcija 15 |
+| `f0fc40c` i02: Security Rules za users i loyaltyAccounts doslovno po §31 (RULE-T01–T07) | 1 |
+| `dcb590c` i02: verzija uslova iz konfiguracije i odbijanje emulator režima van demo projekta (I02-T13) | 2 |
+| `fef9ab7` i02: rok i klasifikacija grešaka Firestore i Auth servisa (I02-T11) | 3 |
+| `7344d92` i02: verifikacija Firebase ID token-a … (I02-T01–T03) + POST /account/init u jednoj Firestore transakciji, idempotentno (API-T01) | 4 i 5 (jedan commit, dozvoljeno planom) |
+| `7a6ce98` i02: pokretanje sa Admin SDK-om, 503 kad servis nije dostupan i log bez token-a (I02-T11, I02-T12) | 6 |
+| `dba886a` i02: provjera.ps1 sa smoke testom za /account/init i README | 7 |
+| `0b833e5` i02: test za grešku parsera sa 5xx (backlog i01 N-01) | N-01 |
+| (ovaj commit) i02: TEST_REPORT, IMPLEMENTATION_LOG i sljedivost za iteraciju 2 | 9 |
+
+Korak 8 (kontrolne mutacije) nema commit; rezultat je u TEST_REPORT.
+
+### Fajlovi
+
+Dodati:
+
+```
+firebase/tests/korisnikINalog.test.js
+backend/src/greske/greskeServisa.js
+backend/src/posrednici/autentikacija.js
+backend/src/validacija/tijeloInita.js
+backend/src/servisi/inicijalizacijaNaloga.js
+backend/src/rute/nalog.js
+backend/test/pomocnici/procesBackenda.js
+backend/test/pomocnici/authEmulator.js
+backend/test/pomocnici/presretanjeLoga.js
+backend/test/jedinicni/pokretanjeBackenda.test.js
+backend/test/jedinicni/greskeServisa.test.js
+backend/test/emulator/autentikacija.test.js
+backend/test/emulator/inicijalizacijaNaloga.test.js
+backend/test/emulator/nedostupnostServisa.test.js
+backend/test/emulator/logBezTokena.test.js
+```
+
+Izmijenjeni:
+
+```
+firebase/firestore.rules
+firebase/tests/podrazumijevanaZabrana.test.js     (I01-T10 bez users dijela)
+backend/src/aplikacija.js
+backend/src/pokreni.js
+backend/src/konfiguracija/konfiguracija.js
+backend/test/jedinicni/konfiguracija.test.js       (I01-T06 proširen; I02-T13 (a))
+backend/test/jedinicni/aplikacija.test.js          (import presretača; N-01)
+.env.example
+README.md
+skripte/provjera.ps1
+docs/iteracije/i02_plan.md                         (samo sekcija 15)
+docs/TRACEABILITY.md                               (samo redovi Iteracije 2)
+docs/IMPLEMENTATION_LOG.md
+docs/TEST_REPORT.md
+```
+
+Netaknuti: `docs/srs/*` (SHA-256 provjeren), `CLAUDE.md`, `docs/iteracije/i02_brief.md`, katalog grešaka, `GreskaApi.js`,
+`obradaGresaka.js`, `dnevnik.js`, `korelacija.js`, `kolekcije.js`, `firebase/inicijalizacija.js`, seed, `package.json`/`package-lock.json`, Android.
+
+### Odstupanja od plana
+
+**OD-1 — `displayName` se broji u UTF-16 jedinicama, ne u code point-ima (odluka i02/P-3).**
+- Šta: Backend broji `String.prototype.length`. Granični slučajevi u I02-T06 i I02-T15 su postavljeni prema stvarnom `size()`:
+  50 × 😀 (100 UTF-16 jedinica) → ALLOW / 201; 51 i 100 × 😀 → DENY / 422 `INVALID_DISPLAY_NAME`; 100 × `š` (BMP) → ALLOW / 201.
+  Plan (8.2) je pretpostavljao code point-e (100 × 😀 → ALLOW / 201).
+- Zašto: odluka Orchestrator-a i02/P-3 — normativno je `size()` iz §31, Backend se usklađuje sa Rules, ne obrnuto.
+- Dokaz: sonda nad Firestore emulatorom (privremeni skript, nije commit-ovan): 25/26/33/34/50 × 😀 ALLOW, 51 i 100 × 😀 DENY;
+  100 × `š` ALLOW, 101 DENY; 100 × `€` ALLOW, 101 DENY. Prvi RULE test sa pretpostavkom code point-a je pao (TEST_REPORT).
+- Ponašanje `size()` je utvrđeno samo u emulatoru (poznato ograničenje).
+
+**OD-2 — Konstanta `ROK_ZAVISNOG_SERVISA_MS` je dodata u commit-u koraka 3, ne koraka 2.**
+- Plan (sekcija 4) je navodi u `konfiguracija.js`; korak 2 opisuje samo 5.6. Konstanta je uvedena zajedno sa prvim korisnikom
+  (`greskeServisa.test.js`). Ne mijenja opseg ni ugovor.
+
+**OD-3 — Dijagnostika stvarnog `err.code` za nedostupan Auth u I02-T11 (b) koristi privremenu Admin aplikaciju.**
+- Plan (sekcija 3) navodi da se Auth emulator host čita pri svakom pozivu. Za već kreiranu Auth instancu to se nije pokazalo
+  (prva verzija dijagnostike je vratila „PRIHVAĆEN” iako je host promijenjen); nova Admin aplikacija kreirana poslije izmjene
+  env-a vraća `app/network-error`. Asercije testa se ne oslanjaju na dijagnostiku (testiraju spawn-ovan proces); produkcija
+  čita env pri startu. Tehnička dopuna testa, bez promjene definicije testa.
+
+**OD-4 — Smoke 401 je u istom koraku `provjera.ps1` kao smoke 404** (isti pokrenut proces; naziv koraka proširen).
+
+Ostalo po planu: `maxAttempts` ostaje 5 (I02-T09 zelen u svim izvršavanjima); nijedan Auth kod nije dodat (svi stvarni kodovi
+iz I02-T02/T03/T11 su već u listi); stvaran kod za nedostupan Auth (`app/network-error`) je u listi 503, pa nije bilo zastoja (plan 5.5).
+
+### Status otvorenih pitanja iz plana
+
+| Pitanje | Status |
+|---|---|
+| i02/P-1 ugovor API-01 | Riješeno po odluci: 201/200, tijelo sa 5 polja; API-T01, I02-T09, I02-T14 PASS. |
+| i02/P-2 djelimično stanje | Riješeno: varijanta A; I02-T14 (a), (b), (c) i I02-T10 PASS. |
+| i02/P-3 dužina displayName | Riješeno: `size()` u emulatoru broji UTF-16 jedinice → Backend `.length` (OD-1). |
+| i02/P-4 `VERZIJA_USLOVA` | Riješeno: obavezna, bez podrazumijevane vrijednosti; I01-T06 samo proširen. |
+| i02/P-5 rok i mapiranje | Riješeno: 10 s; I02-T11 (a) i (b) PASS. |
+| i02/P-6 neispravan JSON bez token-a | Riješeno: 422 `INVALID_REQUEST`; I02-T16 PASS. |
+| i02/P-7 šema Bearer | Riješeno: case-insensitive; I02-T02 PASS (uklj. pozitivnu kontrolu `bearer`). |
+| i02/P-8 oznake | Prihvaćeno: I02-T01 … I02-T16. |
+| i02/P-9 checkRevoked u emulatoru | Prihvaćeno kao ograničenje; mutacija M1 preživljava (TEST_REPORT); `verifyIdToken(token, true)` provjeren inspekcijom. |
+| N-01 (backlog i01) | Urađeno kao test bez izmjene produkcionog koda; M-R01c obara test. |
+| N-02 (backlog i01) | Ne ispravlja se (poznato ograničenje, ispod). |
+
+### Ograničenja za buduće iteracije
+
+- **Iteracija 7 (i02/P-2):** u DELETE workflow-u `users/{uid}` (sa `DELETION_IN_PROGRESS`) mora biti POSLJEDNJI obrisani Firestore
+  dokument prije brisanja Auth naloga, da prekid brisanja nikad ne ostavi samo `loyaltyAccounts/{uid}`, koje bi init „oživio”
+  (init iz stanja „postoji samo loyaltyAccounts” kreira `users` i zadržava bodove).
+- **i02/P-5:** kasni commit transakcije poslije odgovora 503 (istek roka) je prihvatljiv SAMO zato što je init idempotentan.
+  To nije opšte pravilo: kasnije mutacije (purchase, issue, redeem, cancel, delete) moraju same obezbijediti tačno ponašanje
+  pri isteku roka (eksplicitna idempotentnost).
+
+### Poznata ograničenja
+
+- Emulator token-i nisu potpisani: odbijanje token-a sa pogrešnim potpisom (ili izmijenjenim payload-om) ne može se testirati
+  u emulatoru (brief, tačka 5). Zaštita na startu (I02-T13) sprječava emulator režim van `demo-` projekta.
+- i02/P-9: u emulator režimu Admin SDK uvijek provjerava opoziv i onemogućenje, pa test ne razlikuje `verifyIdToken(token, true)`
+  od `verifyIdToken(token)`; upotreba `true` se provjerava inspekcijom (`backend/src/posrednici/autentikacija.js`).
+- Ponašanje `size()` (UTF-16 jedinice) je utvrđeno nad Firestore emulatorom; produkcioni Rules engine nije dostupan testovima.
+- Firestore na zatvorenom portu: gRPC klijent ponavlja konekciju, pa odgovor 503 stiže tek po isteku roka (~10 s), ne odmah.
+- `MetadataLookupWarning` u procesima bez kredencijala (kao i01): produžava prvi poziv Admin SDK-a za ~3–4 s.
+- N-02 (backlog i01, ne ispravlja se po odluci): seed CLI visi ako na `FIRESTORE_EMULATOR_HOST` sluša HTTP servis koji nije
+  Firestore emulator (provjera dostupnosti prolazi, a gRPC poziv ne završava).
+- `provjera.ps1`: kad se skripta pokreće sa preusmjerenim izlazom u procesu koji čeka EOF, Gradle daemon (naslijeđen handle)
+  zadržava pipe otvorenim i pozivalac čeka; skripta sama završava normalno (TEST_REPORT). Ne utiče na direktno pokretanje.
+- Ostala ograničenja iz i01 (ranjivosti razvojnih zavisnosti, `npm warn install-scripts`, putanja JBR-a) i dalje važe.

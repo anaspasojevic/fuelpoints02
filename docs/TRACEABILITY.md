@@ -24,28 +24,28 @@ Pravila vođenja:
 | §1.3, §22 | Van opsega (uklj. FCM — ne radimo) | sve | — | Reviewer scope provjera | PLANIRANO |
 | §1.5 | earnedPoints = floor(volumeMl / 1000) | 3 | | API-T02; I03 dopunski (900→0, 10 000→10, 10 990→10) | PLANIRANO |
 | §2.1, §34.1 | Obavezne komponente | 1 | `android-app/`, `backend/`, `pos-simulator/`, `firebase.json`, `.firebaserc`, `firebase/firestore.rules` | I01 bootstrap testovi (I01-T07, RULE-T12, I01-T10, assembleDebug, testDebugUnitTest) | PASS (TEST_REPORT i01) |
-| §2.2, §3.2 | Android ne mijenja kritično loyalty stanje | 2–8 | | RULE-T05, T07, T08, T09, T11; AC-02 | PLANIRANO |
+| §2.2, §3.2 | Android ne mijenja kritično loyalty stanje | 2–8 | `firebase/firestore.rules` (users, loyaltyAccounts), `backend/src/validacija/tijeloInita.js` | RULE-T05, T07, T08, T09, T11; AC-02; I02-T04, I02-T05 | PASS – i02: RULE-T05, RULE-T07, I02-T04, I02-T05 (TEST_REPORT i02); ostalo PLANIRANO |
 | §2.3 | Node.js 24 LTS + Express + Admin SDK, lokalni proces | 1 | `backend/package.json`, `backend/src/pokreni.js`, `backend/src/aplikacija.js`, `backend/src/konfiguracija/konfiguracija.js`, `backend/src/firebase/inicijalizacija.js` | I01-T07, I01-T06 | PASS (TEST_REPORT i01) |
 | §2.4 | Emulator Suite; testovi bez production projekta | 1 | `firebase.json`, `.firebaserc`, `backend/test/pomocnici/emulator.js`, `backend/src/punjenje/zastitaEmulatora.js` | I01-T07, I01-T09, I01-T11 | PASS (TEST_REPORT i01, FIX LOOP 1) |
 | §2.5 | POS Simulator (kostur → HTML forme) | 1, 11 | `pos-simulator/README.md`, `pos-simulator/index.html` (kostur i01) | AC scenario (it. 11) | IMPLEMENTIRANO – i01 kostur (inspekcija); forme PLANIRANO |
 | §2.6 | Android samo generiše QR, nema skenera | 9 | | inspekcija | PLANIRANO |
-| §3.3 | Bearer Firebase ID token; UID samo iz tokena | 2 | | API-T01; I02 negativni (bez tokena, nevažeći token, uid u body-ju) | PLANIRANO |
+| §3.3 | Bearer Firebase ID token; UID samo iz tokena | 2 | `backend/src/posrednici/autentikacija.js`, `backend/src/greske/greskeServisa.js`, `backend/src/rute/nalog.js` | API-T01; I02-T01, I02-T02, I02-T03, I02-T04, I02-T16 | PASS (TEST_REPORT i02) |
 | §3.4 | X-POS-API-Key → stationId; stationId nikad iz body-ja; ključ se ne loguje | 3, 6 | | I03/I06 negativni POS testovi | PLANIRANO |
 | §3.5 | Auth e-mail/password, Email Enumeration Protection, generička poruka | 9 | | ručna provjera konzole + UI provjera | PLANIRANO |
 | §3.6 | Password policy (8, veliko slovo, cifra; Require) | 9, 10 | | Android unit test validacije + ručna provjera | PLANIRANO |
 | UI-01 – UI-04 | Login, Registration, Home, Customer QR | 9 | | NFR-09 smoke | PLANIRANO |
 | UI-05 – UI-08 | Purchases, Rewards, Notifications, Settings/Help | 10 | | NFR-09 smoke | PLANIRANO |
-| AUTH-01 | Registracija → /account/init | 2 (API), 9 (Android) | | API-T01; AC-01 | PLANIRANO |
-| AUTH-02 | init: users + loyaltyAccounts u jednoj transakciji, 0/0 | 2 | | API-T01; I02 failure injection (nijedan dokument) | PLANIRANO |
-| AUTH-03 | NOT_INITIALIZED (logičko stanje) | 2, 9 | | I02 ACCOUNT_NOT_INITIALIZED | PLANIRANO |
-| AUTH-04, AUTH-05 | ACTIVE / DELETION_IN_PROGRESS, blokada mutacija | 2, 7 | | API-T12; I07 blokade | PLANIRANO |
+| AUTH-01 | Registracija → /account/init | 2 (API), 9 (Android) | `backend/src/rute/nalog.js` (API dio) | API-T01; AC-01 | PASS – i02 API dio: API-T01 (TEST_REPORT i02); Android PLANIRANO |
+| AUTH-02 | init: users + loyaltyAccounts u jednoj transakciji, 0/0 | 2 | `backend/src/servisi/inicijalizacijaNaloga.js` (`inicijalizujNalog`) | API-T01; I02-T08 (failure injection, nijedan dokument); I02-T09 | PASS (TEST_REPORT i02) |
+| AUTH-03 | NOT_INITIALIZED (logičko stanje) | 2, 9 | `backend/src/servisi/inicijalizacijaNaloga.js` | I02 init iz stanja NOT_INITIALIZED; ACCOUNT_NOT_INITIALIZED u i04 (API-T01 (a), I02-T14) | PASS – i02 init: API-T01, I02-T14 (TEST_REPORT i02); Android retry (i09) i ACCOUNT_NOT_INITIALIZED (i04) PLANIRANO |
+| AUTH-04, AUTH-05 | ACTIVE / DELETION_IN_PROGRESS, blokada mutacija | 2, 7 | `backend/src/servisi/inicijalizacijaNaloga.js` (init) | API-T12; I07 blokade; i02: API-T01 (b), I02-T09, I02-T10, I02-T14 (c) | PASS – i02 init: API-T01, I02-T09, I02-T10, I02-T14 (TEST_REPORT i02); blokade mutacija i API-T12 PLANIRANO (i07) |
 | AUTH-06 | Session restore | 9 | | AC-01 | PLANIRANO |
 | AUTH-07 | Logout | 10 | | AC-01 | PLANIRANO |
 | AUTH-08 | Promjena lozinke (recent reauth) | 10 | | smoke | PLANIRANO |
 | AUTH-09 | Password reset preko Firebase-a | 9 | | smoke | PLANIRANO |
-| AUTH-10 | Uslovi upisani pri init-u | 2 | | API-T01 | PLANIRANO |
+| AUTH-10 | Uslovi upisani pri init-u | 2 | `backend/src/validacija/tijeloInita.js`, `backend/src/servisi/inicijalizacijaNaloga.js`, `backend/src/konfiguracija/konfiguracija.js` (`VERZIJA_USLOVA`, O-11) | API-T01; I02-T07; I01-T06 | PASS (TEST_REPORT i02) |
 | QR-01 – QR-06 | Customer QR = UID, lokalno, samo uz sesiju, nije voucher | 9 (+6) | | AC-04; I06 UID kao voucherId → VOUCHER_NOT_FOUND | PLANIRANO |
-| §7.1, §7.2 | loyaltyAccount schema; invarijante ≥ 0 | 2–7 | | asercija invarijanti u svakom API testu | PLANIRANO |
+| §7.1, §7.2 | loyaltyAccount schema; invarijante ≥ 0 | 2–7 | `backend/src/servisi/inicijalizacijaNaloga.js` | asercija invarijanti u svakom API testu; i02: API-T01, I02-T09, I02-T14 | PASS – i02 init (TEST_REPORT i02); ostalo PLANIRANO |
 | §7.3 | EARN | 3 | | API-T02 | PLANIRANO |
 | §7.4 | RESERVE | 4 | | API-T06 | PLANIRANO |
 | §7.5 | REDEEM | 6 | | API-T08 | PLANIRANO |
@@ -66,28 +66,28 @@ Pravila vođenja:
 | §20 | Redemption, redemptionRequests, istekao ACTIVE | 6 | | API-T08, API-T09, API-T10 | PLANIRANO |
 | §21 | In-app notifikacije, readAt, do 50 | 3, 8, 10 | | API-T02; RULE-T10 | PLANIRANO |
 | §23 | Account deletion, pseudonimizacija, Auth posljednji, resume | 7 | | API-T12; I07 resume; I07 REAUTHENTICATION_REQUIRED | PLANIRANO |
-| §24 | 9 kanonskih kolekcija | 1 (konstante), 2–7 | `backend/src/podaci/kolekcije.js` | RULE-T12 | IMPLEMENTIRANO – i01 konstante (inspekcija); ostalo PLANIRANO |
-| §25, §31 | Security policy / normativna pravila | 1 (default deny), 2–7, 8 | `firebase/firestore.rules` (samo default deny), `firebase/tests/podrazumijevanaZabrana.test.js` | RULE-T01 – RULE-T12; I01-T10 (privremen) | PASS – i01 default deny: RULE-T12 (preliminarno), I01-T10 (TEST_REPORT i01); ostalo PLANIRANO |
-| §26 API-01 | POST /account/init | 2 | | API-T01 | PLANIRANO |
+| §24 | 9 kanonskih kolekcija | 1 (konstante), 2–7 | `backend/src/podaci/kolekcije.js`; i02: `users`, `loyaltyAccounts` u `backend/src/servisi/inicijalizacijaNaloga.js` | RULE-T12; API-T01 | IMPLEMENTIRANO – i01 konstante (inspekcija); PASS – i02 users, loyaltyAccounts (API-T01, TEST_REPORT i02); ostalo PLANIRANO |
+| §25, §31 | Security policy / normativna pravila | 1 (default deny), 2–7, 8 | `firebase/firestore.rules` (default deny; i02: helper funkcije i blokovi `/users/{uid}`, `/loyaltyAccounts/{uid}` doslovno iz §31), `firebase/tests/podrazumijevanaZabrana.test.js`, `firebase/tests/korisnikINalog.test.js` | RULE-T01 – RULE-T12; I01-T10 (privremen, od i02 samo loyaltyLedger); I02-T15 | PASS – i01 default deny: RULE-T12 (preliminarno), I01-T10 (TEST_REPORT i01); PASS – i02: RULE-T01 – RULE-T07, I02-T15 (TEST_REPORT i02); ostalo PLANIRANO |
+| §26 API-01 | POST /account/init | 2 | `backend/src/rute/nalog.js`, `backend/src/aplikacija.js`, `backend/src/pokreni.js`, `backend/src/posrednici/autentikacija.js`, `backend/src/validacija/tijeloInita.js`, `backend/src/servisi/inicijalizacijaNaloga.js` | API-T01; I02-T01 – I02-T14, I02-T16; smoke 401 u `provjera.ps1` | PASS (TEST_REPORT i02) |
 | §26 API-02 | POST /pos/purchases | 3 | | API-T02 – API-T04 | PLANIRANO |
 | §26 API-03 | POST /rewards/{rewardId}/issue | 4 | | API-T05 – API-T07 | PLANIRANO |
 | §26 API-04 | POST /pos/vouchers/{voucherId}/redeem | 6 | | API-T08 – API-T10 | PLANIRANO |
 | §26 API-05 | POST /vouchers/{voucherId}/cancel | 5 | | API-T11 | PLANIRANO |
 | §26 API-06 | POST /account/vouchers/reconcile | 5 | | I05 reconcile testovi | PLANIRANO |
 | §26 API-07 | DELETE /account | 7 | | API-T12 | PLANIRANO |
-| §27 | Error body, katalog, bez stack trace-a | 1 (+ svaka) | `backend/src/greske/katalogGresaka.js`, `backend/src/greske/GreskaApi.js`, `backend/src/greske/obradaGresaka.js`, `backend/src/posrednici/korelacija.js`, `backend/src/dnevnik.js` | I01-T01 – I01-T05 | PASS – i01 (TEST_REPORT i01) |
-| NFR-01 | Verifikacija ID tokena | 2 | | I02 negativni token testovi | PLANIRANO |
+| §27 | Error body, katalog, bez stack trace-a | 1 (+ svaka) | `backend/src/greske/katalogGresaka.js`, `backend/src/greske/GreskaApi.js`, `backend/src/greske/obradaGresaka.js`, `backend/src/posrednici/korelacija.js`, `backend/src/dnevnik.js`; i02: `backend/src/greske/greskeServisa.js` | I01-T01 – I01-T05; i02: I02-T01 – I02-T11 (UNAUTHENTICATED, ACCOUNT_DELETION_IN_PROGRESS, INVALID_DISPLAY_NAME, INVALID_REQUEST, INTERNAL_ERROR, SERVICE_UNAVAILABLE) | PASS – i01 (TEST_REPORT i01); PASS – i02 (TEST_REPORT i02) |
+| NFR-01 | Verifikacija ID tokena | 2 | `backend/src/posrednici/autentikacija.js` (`verifyIdToken(token, true)`), `backend/src/konfiguracija/konfiguracija.js` (zaštita emulator/demo), `backend/src/pokreni.js` | I02-T01, I02-T02, I02-T03, I02-T13; inspekcija checkRevoked (i02/P-9) | PASS (TEST_REPORT i02) |
 | NFR-02 | POS key obavezan | 3, 6 | | I03/I06 negativni POS testovi | PLANIRANO |
-| NFR-03 | Default deny, owner isolation | 1, 8 | `firebase/firestore.rules` | RULE-T01 – RULE-T12; I01-T10 (privremen) | PASS – i01 default deny (TEST_REPORT i01); owner isolation PLANIRANO |
-| NFR-04 | Atomičnost | 2–7 | | failure injection testovi | PLANIRANO |
+| NFR-03 | Default deny, owner isolation | 1, 8 | `firebase/firestore.rules` | RULE-T01 – RULE-T12; I01-T10 (privremen); I02-T15 | PASS – i01 default deny (TEST_REPORT i01); PASS – i02 owner isolation za users i loyaltyAccounts: RULE-T01 – RULE-T07, I02-T15 (TEST_REPORT i02); ostalo PLANIRANO |
+| NFR-04 | Atomičnost | 2–7 | `backend/src/servisi/inicijalizacijaNaloga.js` (init) | failure injection testovi; i02: I02-T08 | PASS – i02 init: I02-T08 (TEST_REPORT i02); ostalo PLANIRANO |
 | NFR-05 | Idempotencija purchase/issue/redemption | 3, 4, 6 | | API-T03, API-T06, API-T09 | PLANIRANO |
 | NFR-06 | Concurrency / double-spend | 4 (+6) | | API-T07; I06 paralelni redeem | PLANIRANO |
-| NFR-07 | Secrets van APK-a, repoa i logova | 1 (+ svaka) | `.gitignore`, `.env.example`, `backend/src/dnevnik.js`, `backend/src/konfiguracija/konfiguracija.js`, `skripte/provjera.ps1` | inspekcija (git ls-files, grep); I01-T04 (log bez zaglavlja), I01-T06 | PASS – i01 (TEST_REPORT i01) |
+| NFR-07 | Secrets van APK-a, repoa i logova | 1 (+ svaka) | `.gitignore`, `.env.example`, `backend/src/dnevnik.js`, `backend/src/konfiguracija/konfiguracija.js`, `skripte/provjera.ps1`; i02: `backend/src/posrednici/autentikacija.js` (token se ne loguje i ne vraća) | inspekcija (git ls-files, grep); I01-T04 (log bez zaglavlja), I01-T06; i02: I02-T12, I02-T11 | PASS – i01 (TEST_REPORT i01); PASS – i02 (TEST_REPORT i02) |
 | NFR-08 | Stale/offline marker (isFromCache) | 9 | | offline test | PLANIRANO |
 | NFR-09 | Smoke na API 26 i API 35 | 10, 11 | | smoke protokol | PLANIRANO |
 | NFR-10 | Touch target ≥ 48×48 dp, contentDescription | 9, 10 | | UI inspekcija | PLANIRANO |
 | AC-01 | Registracija, prijava, restore, odjava | 9, 10 → 11 | | smoke + scenario | PLANIRANO |
-| AC-02 | Android ne može povećati bodove | 2–8 | | RULE-T07 i ostali write DENY | PLANIRANO |
+| AC-02 | Android ne može povećati bodove | 2–8 | `firebase/firestore.rules` (`/loyaltyAccounts/{uid}`) | RULE-T07 i ostali write DENY | PASS – i02 dio: RULE-T07 (TEST_REPORT i02); ostalo PLANIRANO |
 | AC-03 | 42,730 l → 42 boda tačno jednom | 3 | | API-T02, API-T03 | PLANIRANO |
 | AC-04 | Customer QR = UID, nije voucher | 9, 6 | | I06 UID kao voucherId | PLANIRANO |
 | AC-05 | Issue rezerviše atomski | 4 | | API-T06 + failure injection | PLANIRANO |
