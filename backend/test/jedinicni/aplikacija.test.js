@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { afterEach, mock, test } from 'node:test';
-import { format } from 'node:util';
+import express from 'express';
 import request from 'supertest';
 import { napraviAplikaciju } from '../../src/aplikacija.js';
 import { KATALOG_GRESAKA } from '../../src/greske/katalogGresaka.js';
+import { presretniLog, tekstLoga } from '../pomocnici/presretanjeLoga.js';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const INTERNA_PORUKA = 'interna tajna poruka C:\\tajno\\putanja\\fajl.js';
@@ -11,31 +12,6 @@ const INTERNA_PORUKA = 'interna tajna poruka C:\\tajno\\putanja\\fajl.js';
 afterEach(() => {
   mock.restoreAll();
 });
-
-const METODE_KONZOLE = ['log', 'info', 'warn', 'error', 'debug'];
-
-// Bilježi sve izlazne kanale procesa da testovi mogu provjeriti šta se loguje: console.* se utišava,
-// a process.stdout/stderr.write se bilježi i prosljeđuje (njima piše i test runner).
-function presretniLog() {
-  const zapisi = [];
-  for (const metoda of METODE_KONZOLE) {
-    mock.method(console, metoda, (...argumenti) => {
-      zapisi.push(format(...argumenti));
-    });
-  }
-  for (const tok of [process.stdout, process.stderr]) {
-    const pisi = tok.write;
-    mock.method(tok, 'write', (komad, ...ostalo) => {
-      zapisi.push(String(komad));
-      return pisi.call(tok, komad, ...ostalo);
-    });
-  }
-  return zapisi;
-}
-
-function tekstLoga(zapisi) {
-  return zapisi.join('\n');
-}
 
 function provjeriTijeloGreske(odgovor, status, kod) {
   assert.equal(odgovor.status, status);
@@ -123,6 +99,25 @@ test('I01-T03 greška sa 4xx statusom koja ne dolazi iz JSON parsera → 500 INT
   });
   const odgovor = await request(aplikacija).get('/api/v1/test-greska-4xx');
   provjeriTijeloGreske(odgovor, 500, 'INTERNAL_ERROR');
+});
+
+// Backlog i01 N-01: greška JSON parsera sa 5xx statusom (stream.encoding.set, 500) ostaje INTERNAL_ERROR.
+// Spoljna aplikacija postavlja kodiranje toka prije parsera; produkcioni kod se ne mijenja.
+test('I01-T03 greška JSON parsera sa 5xx statusom → 500 INTERNAL_ERROR, ne INVALID_REQUEST (N-01)', async () => {
+  const presretac = presretniLog();
+  const spoljna = express();
+  spoljna.use((req, res, next) => {
+    req.setEncoding('utf8');
+    next();
+  });
+  spoljna.use(napraviAplikaciju());
+  const odgovor = await request(spoljna)
+    .post('/api/v1/nepostojeca')
+    .set('Content-Type', 'application/json')
+    .send('{"a":1}');
+  provjeriTijeloGreske(odgovor, 500, 'INTERNAL_ERROR');
+  assert.doesNotMatch(odgovor.text, /encoding|stream|JSON/i);
+  assert.ok(tekstLoga(presretac).includes('"status":500'), 'greška parsera nije logovana kao 500');
 });
 
 test('I01-T04 sinhroni i async izuzetak → 500 INTERNAL_ERROR bez stack-a, putanje i originalne poruke', async () => {

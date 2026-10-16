@@ -1,4 +1,5 @@
 import { napraviAplikaciju } from './aplikacija.js';
+import { inicijalizujFirebaseAdmin } from './firebase/inicijalizacija.js';
 import { GreskaKonfiguracije, ucitajKonfiguraciju } from './konfiguracija/konfiguracija.js';
 
 function pokreni() {
@@ -15,8 +16,10 @@ function pokreni() {
     return;
   }
 
-  const { host, port } = konfiguracija;
-  const server = napraviAplikaciju().listen(port, host, () => {
+  // Admin SDK se inicijalizuje tek POSLIJE provjere konfiguracije (zaštita emulator/demo, NFR-01).
+  const { host, port, projectId, verzijaUslova } = konfiguracija;
+  const { db, auth } = inicijalizujFirebaseAdmin({ projectId });
+  const server = napraviAplikaciju({ servisi: { db, auth }, verzijaUslova }).listen(port, host, () => {
     console.log(`FuelPoints backend sluša na http://${host}:${port}/api/v1`);
   });
   server.on('error', (greska) => {
