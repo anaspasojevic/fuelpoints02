@@ -17,9 +17,9 @@ function pokreni() {
   }
 
   // Admin SDK se inicijalizuje tek POSLIJE provjere konfiguracije (zaštita emulator/demo, NFR-01).
-  const { host, port, projectId, verzijaUslova } = konfiguracija;
+  const { host, port, projectId, verzijaUslova, posStanice } = konfiguracija;
   const { db, auth } = inicijalizujFirebaseAdmin({ projectId });
-  const server = napraviAplikaciju({ servisi: { db, auth }, verzijaUslova }).listen(port, host, () => {
+  const server = napraviAplikaciju({ servisi: { db, auth }, verzijaUslova, posStanice }).listen(port, host, () => {
     console.log(`FuelPoints backend sluša na http://${host}:${port}/api/v1`);
   });
   server.on('error', (greska) => {
