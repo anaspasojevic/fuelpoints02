@@ -37,6 +37,27 @@ Copy-Item .env.example .env
 
 `.env` se nikad ne commit-uje. `.env.example` sadrži samo ne-tajne vrijednosti.
 
+| Varijabla | Obavezna | Značenje |
+|---|---|---|
+| `PORT` | da | port na kojem Backend sluša (`127.0.0.1`) |
+| `FIREBASE_PROJECT_ID` | da | Firebase projekat; za emulator `demo-fuelpoints` |
+| `VERZIJA_USLOVA` | da | aktuelna verzija uslova korišćenja (AUTH-10, odluka O-11); `/account/init` prihvata samo nju (`1.0`) |
+| `FIRESTORE_EMULATOR_HOST`, `FIREBASE_AUTH_EMULATOR_HOST` | ne | emulator režim (`127.0.0.1:8080`, `127.0.0.1:9099`) |
+
+Backend odbija start ako je postavljena bilo koja emulator varijabla, a `FIREBASE_PROJECT_ID` ne počinje sa `demo-`
+(u emulator režimu Admin SDK prihvata nepotpisane token-e; NFR-01). Poslije izmjene `.env.example` ponovo ga kopirati u `.env`.
+
+## API
+
+Base path `/api/v1` (§26). Greške imaju tijelo `{ "error": { "code", "message", "correlationId" } }` (§27).
+
+**API-01 `POST /api/v1/account/init`** — zaglavlje `Authorization: Bearer <Firebase ID token>`, tijelo tačno
+`{ "displayName", "acceptedTermsVersion" }`. U jednoj Firestore transakciji kreira `users/{uid}` i `loyaltyAccounts/{uid}`
+(UID samo iz verifikovanog token-a). Odgovor: `201` kad je nalog kreiran, `200` za ponovljeni init (stanje se ne mijenja);
+tijelo `{ "displayName", "accountStatus", "acceptedTermsVersion", "availablePoints", "reservedPoints" }`.
+Greške: `401 UNAUTHENTICATED`, `409 ACCOUNT_DELETION_IN_PROGRESS`, `422 INVALID_DISPLAY_NAME`, `422 INVALID_REQUEST`,
+`500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`.
+
 ## Pokretanje
 
 ```powershell
@@ -72,5 +93,6 @@ cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\
 ```
 
 Skripta redom provjerava alate, SHA-256 SRS-a, odsustvo tajni i nedovršenih oznaka, slobodne portove,
-backend testove, `npm start`, rules testove i Android build. Na prvu grešku vraća exit code 1,
+backend testove, start Backend-a (`node src/pokreni.js`: 404 na nepoznatoj ruti i 401 na `/account/init` bez token-a),
+rules testove i Android build. Na prvu grešku vraća exit code 1,
 a kad sve prođe, ispisuje `SVE PROVJERE PROŠLE` i vraća 0.

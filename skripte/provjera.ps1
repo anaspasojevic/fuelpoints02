@@ -1,4 +1,4 @@
-﻿# FuelPoints – provjera Definition of Done za Iteraciju 1.
+﻿# FuelPoints – provjera Definition of Done (zeleni checkpoint iteracije).
 # Pokretanje iz korijena repozitorijuma: .\skripte\provjera.ps1; $LASTEXITCODE
 # Prekida se na prvu grešku i vraća exit code 1; kad sve prođe, vraća 0.
 
@@ -10,7 +10,7 @@ $ocekivaniHash = '7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C602
 $portSmoke = '3999'
 
 # Promjene env varijabli važe samo dok skripta radi; na kraju se vraćaju.
-$naziviEnv = @('PATH', 'JAVA_HOME', 'PORT', 'FIREBASE_PROJECT_ID')
+$naziviEnv = @('PATH', 'JAVA_HOME', 'PORT', 'FIREBASE_PROJECT_ID', 'VERZIJA_USLOVA')
 $sacuvanEnv = @{}
 foreach ($naziv in $naziviEnv) {
     $sacuvanEnv[$naziv] = [Environment]::GetEnvironmentVariable($naziv, 'Process')
@@ -101,9 +101,10 @@ try {
         }
     }
 
-    Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1)' {
+    Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init bez token-a)' {
         $env:PORT = $portSmoke
         $env:FIREBASE_PROJECT_ID = 'demo-fuelpoints'
+        $env:VERZIJA_USLOVA = '1.0'
         $proces = Start-Process node -ArgumentList 'src/pokreni.js' -WorkingDirectory (Join-Path $korijen 'backend') -PassThru -NoNewWindow
         try {
             $odgovor = $null
@@ -123,6 +124,21 @@ try {
             $greska = ($odgovor.tijelo | ConvertFrom-Json).error
             if ($greska.code -ne 'NOT_FOUND') { throw "Očekivan kod NOT_FOUND, dobijen $($greska.code)." }
             Write-Host "Smoke: 404 $($greska.code), correlationId $($greska.correlationId)"
+
+            # API-01 bez Authorization zaglavlja (I02-T16): ruta postoji u produkcionom startu i traži token.
+            $odgovor = $null
+            try {
+                Invoke-WebRequest "http://127.0.0.1:$portSmoke/api/v1/account/init" -Method Post -UseBasicParsing `
+                    -ContentType 'application/json' -Body '{"displayName":"Ana","acceptedTermsVersion":"1.0"}' | Out-Null
+                throw 'Očekivan je status 401, a zahtjev je uspio.'
+            } catch [System.Net.WebException] {
+                if ($null -eq $_.Exception.Response) { throw 'Server nije odgovorio na POST /api/v1/account/init.' }
+                $odgovor = @{ status = [int]$_.Exception.Response.StatusCode; tijelo = $_.ErrorDetails.Message }
+            }
+            if ($odgovor.status -ne 401) { throw "Očekivan status 401, dobijen $($odgovor.status)." }
+            $greska = ($odgovor.tijelo | ConvertFrom-Json).error
+            if ($greska.code -ne 'UNAUTHENTICATED') { throw "Očekivan kod UNAUTHENTICATED, dobijen $($greska.code)." }
+            Write-Host "Smoke: 401 $($greska.code), correlationId $($greska.correlationId)"
         } finally {
             Stop-Process -Id $proces.Id -Force -ErrorAction SilentlyContinue
         }
