@@ -40,6 +40,31 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
+    match /purchases/{purchaseId} {
+      allow get: if ownResource();
+      allow list: if ownResource()
+                  && request.query.limit != null
+                  && request.query.limit <= 20;
+      allow create, update, delete: if false;
+    }
+
+    match /loyaltyLedger/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if ownResource();
+      allow list: if ownResource()
+                  && request.query.limit != null
+                  && request.query.limit <= 50;
+      allow create, delete: if false;
+      allow update: if ownResource()
+                    && changedOnly(['readAt'])
+                    && resource.data.readAt == null
+                    && request.resource.data.readAt is timestamp
+                    && request.resource.data.readAt == request.time;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -7,6 +7,7 @@ import { inicijalizujFirebaseAdmin } from '../../src/firebase/inicijalizacija.js
 import { KATALOG_GRESAKA } from '../../src/greske/katalogGresaka.js';
 import { napraviKorisnika } from '../pomocnici/authEmulator.js';
 import { ocistiEmulatore, provjeriTestnoOkruzenje } from '../pomocnici/emulator.js';
+import { generisiPosKljuc, posKonfiguracija } from '../pomocnici/posKljuc.js';
 import { crnaRupa, envProcesa, pokreniBackend, slobodanPort, sporProksi } from '../pomocnici/procesBackenda.js';
 
 const projectId = provjeriTestnoOkruzenje();
@@ -71,6 +72,7 @@ async function provjeri503(t, { opis, idToken, firestoreHost, authHost, rokMs, p
       PORT: String(port),
       FIREBASE_PROJECT_ID: projectId,
       VERZIJA_USLOVA: '1.0',
+      POS_API_KLJUCEVI: posKonfiguracija([['SIM01', generisiPosKljuc()]]),
       FIRESTORE_EMULATOR_HOST: firestoreHost,
       FIREBASE_AUTH_EMULATOR_HOST: authHost,
     }),

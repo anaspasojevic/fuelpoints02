@@ -396,3 +396,233 @@ Poznata ograničenja (dopuna FIX LOOP 1):
   (odobreni redoslijed provjera: nepoznata polja, pa `displayName`, pa `acceptedTermsVersion`); tijelo bez JSON `Content-Type` → `422 INVALID_REQUEST`.
 - I02-T11 (c) zavisi od toga da spori proksi (kašnjenje po komadu u oba smjera) propusti verifikaciju token-a prije isteka roka;
   izmjereno ukupno vrijeme do 503 je ~10,03 s, pa je granica testa 12 s.
+
+---
+
+## Iteracija 3 — Purchase / EARN
+
+Grana `iteracija-03`. Brief: `docs/iteracije/i03_brief.md`. Plan: `docs/iteracije/i03_plan.md`
+(odobren uz odluke i03/P-1 … i03/P-15 i ispravke K-1, K-2, sekcija 15). Uloga: BUILDER, 2026-10-16.
+
+### CHANGELOG
+
+- Firestore Security Rules (§25.4, §25.5, §25.8, §31, NFR-03): blokovi `/purchases/{purchaseId}`, `/loyaltyLedger/{eventId}` i
+  `/notifications/{notificationId}` doslovno iz §31 normativnog `.docx`-a, na mjestima kao u §31 (automatsko poređenje: `JEDNAKO_DOCX`,
+  `IDENTICNO_PLANU`). Rules testovi RULE-T08, RULE-T10, RULE-T11 i I03-T20 (`firebase/tests/kupovineObavjestenjaLedger.test.js`);
+  I01-T10 uklonjen u potpunosti (zamjenjuje ga RULE-T11).
+- Konfiguracija POS ključeva (§3.4, NFR-02, i03/P-2): obavezna `POS_API_KLJUCEVI=stationId:ključ[,…]`; ključ kanonski base64url od
+  32 bajta (43 znaka) sa najmanje 16 različitih znakova; `stationId` `^[A-Za-z0-9.-]{1,32}$` (O-13, bez `_`); ponovljen ključ ili
+  `stationId` odbijen; poruke imenuju varijablu i stavku, nikad vrijednost. Konfiguracija čuva samo SHA-256 otiske (`posStanice`).
+  `.env.example` ima placeholder sa kojim Backend ne startuje.
+- POS posrednik `napraviProvjeruPosKljuca(posStanice)` (i03/P-3): ključ samo iz zaglavlja `X-POS-API-Key`; SHA-256 +
+  `crypto.timingSafeEqual`, petlja kroz sve stanice bez ranog izlaska; `stationId` isključivo iz mape (`res.locals.stationId`);
+  rok zahtjeva (i02 R-02) počinje u posredniku; bez `posStanice` → 500 (i03/P-11). Vezan samo na rutu `POST /pos/purchases`.
+- Validacija tijela API-02 (i03/P-4 … P-6, P-9): tačno šest polja (bilo koje drugo → `INVALID_REQUEST`), redoslijed provjera po tabeli
+  5.3; vlastiti RFC 3339 parser `occurredAt` (obavezna zona, kalendarska provjera, opseg `Timestamp`-a, najviše +5 min); format
+  `loyaltyUid` → 404 bez pristupa bazi; `-0` → `0`. Validacija uvijek prethodi provjeri idempotentnosti (dopuna i03/P-6).
+- Bodovanje i tekst notifikacije (§1.5, i03/P-8): `izracunajBodove`, `oblikRijeciBod` (bod/boda/bodova), `tekstObavjestenja`.
+- Servis `evidentirajKupovinu` (§9, §10, §11, §7.3, O-3, O-4, O-10, O-12, O-13, i03/P-7, i03/P-15): JEDNA Firestore transakcija;
+  prvo se čita `purchases/{stationId}__{posTransactionId}` (postoji → poređenje `uid`, `volumeMl`, `amountMinor`, `currency`:
+  isti → prvi rezultat (200), različit → 409; `stationId`/`posTransactionId` dokumenta ≠ zahtjeva → 500); inače provjera ACTIVE
+  naloga (404), provjera nekonzistentnog stanja (ledger/notifikacija bez purchase-a → 500), provjera ispravnosti balansa (→ 500),
+  pa četiri upisa: `tx.create` purchase, `tx.update` `loyaltyAccounts` (`availablePoints`, `updatedAt`), `tx.create`
+  `loyaltyLedger/earn_{purchaseId}` (EARN), `tx.create` `notifications/earn_{purchaseId}`; jedan serverski timestamp za sva četiri;
+  bez preostalog roka transakcija se ne pokreće (503).
+- Ruta `POST /api/v1/pos/purchases` (§26 API-02, i03/P-1): 201 za prvi zahtjev, 200 za retry; tijelo tačno
+  `{ purchaseId, stationId, posTransactionId, volumeMl, amountMinor, currency, earnedPoints, occurredAt }` iz sačuvanog dokumenta.
+- `napraviAplikaciju({ servisi, verzijaUslova, posStanice })`; `pokreni.js` prosljeđuje `posStanice` iz konfiguracije.
+- Testovi backend-a: I03-T01 (a), I03-T03 (a), I03-T07 (a), I03-T15, I03-T21 (unit); API-T02 … API-T04, I03-T01 (b), I03-T02 … I03-T14,
+  I03-T16 … I03-T19, I03-T22 (emulator). Pomoćnici `test/pomocnici/posKljuc.js` i `test/pomocnici/omotacBaze.js`.
+  I01-T06, I02-T13 i I02-T11 prošireni samo ulazom (`POS_API_KLJUCEVI`); I01-T06 (a) dobio asercije da poruka imenuje i `POS_API_KLJUCEVI`.
+- `skripte/provjera.ps1`: `POS_API_KLJUCEVI` generisan u toku izvršavanja (bez ispisa, vraća se na kraju; K-2 u koraku 2), treći smoke
+  `POST /api/v1/pos/purchases` bez ključa → 401 `UNAUTHENTICATED_POS` (korak 7). README: POS ključevi, komanda za generisanje, API-02,
+  pravilo „validacija prethodi idempotentnosti” (i03/P-6).
+- Dokumentacija: `docs/TEST_REPORT.md` (sekcija i03), `docs/TRACEABILITY.md` (redovi Iteracije 3), ovaj unos.
+
+Nijedan novi npm paket, kod greške ni endpoint; katalog grešaka, `GreskaApi`, centralni rukovalac, `dnevnik.js`, `greskeServisa.js`,
+`inicijalizacijaNaloga.js`, `posrednici/autentikacija.js` i ugovor API-01 nepromijenjeni.
+
+### Commit-i
+
+| Commit | Korak plana |
+|---|---|
+| `01d574b` i03: odobrenje plana i odluke Orchestrator-a | sekcija 15 |
+| `5f924d0` i03: Security Rules za purchases, loyaltyLedger i notifications doslovno po §31 (RULE-T08, T10, T11) | 1 |
+| `1f55369` i03: POS ključevi iz konfiguracije sa provjerom formata i jedinstvenosti (I03-T15) | 2 (uklj. K-2) |
+| `15a18cd` i03: obračun bodova po §1.5, tekst notifikacije i strogo čitanje occurredAt | 3 |
+| `f539574` i03: POS autentikacija X-POS-API-Key, stroga validacija tijela i POST /pos/purchases u jednoj Firestore transakciji … | 4 i 5 (jedan commit, dozvoljeno planom) |
+| `228ade1` i03: testovi isteklog roka prije transakcije (F1-01) i loga bez POS ključa (I03-T16, I03-T17) | 6 |
+| `9adad02` i03: provjera.ps1 sa POS ključem iz izvršavanja i smoke 401 za /pos/purchases; README | 7 |
+| `35c35f6` i03: ojačan RULE-T10 i izolacija I03-T11/T12 od kasnog commit-a poslije 503 (nalazi kontrolnih mutacija) | 8 (OD-4, OD-5) |
+| (ovaj commit) i03: TEST_REPORT, IMPLEMENTATION_LOG i sljedivost za iteraciju 3 | 9 |
+
+### Fajlovi
+
+Dodati:
+
+```
+firebase/tests/kupovineObavjestenjaLedger.test.js
+backend/src/konfiguracija/posKljucevi.js
+backend/src/posrednici/posAutentikacija.js
+backend/src/validacija/tijeloKupovine.js
+backend/src/validacija/vrijemeKupovine.js
+backend/src/servisi/bodovanje.js
+backend/src/servisi/evidencijaKupovine.js
+backend/src/rute/kupovine.js
+backend/test/pomocnici/posKljuc.js
+backend/test/pomocnici/omotacBaze.js
+backend/test/jedinicni/posAutentikacija.test.js
+backend/test/jedinicni/bodovanje.test.js
+backend/test/jedinicni/vrijemeKupovine.test.js
+backend/test/emulator/posAutentikacija.test.js
+backend/test/emulator/kupovina.test.js
+backend/test/emulator/kupovinaAtomicnost.test.js
+backend/test/emulator/rokPrijeTransakcije.test.js
+backend/test/emulator/logBezPosKljuca.test.js
+```
+
+Izmijenjeni:
+
+```
+firebase/firestore.rules
+firebase/tests/podrazumijevanaZabrana.test.js      (I01-T10 uklonjen)
+backend/src/aplikacija.js
+backend/src/pokreni.js
+backend/src/konfiguracija/konfiguracija.js
+backend/test/jedinicni/konfiguracija.test.js        (I01-T06, I02-T13 (a): proširenje ulaza; I03-T15 (a))
+backend/test/jedinicni/pokretanjeBackenda.test.js   (I02-T13 (b): proširenje ulaza; I03-T15 (b))
+backend/test/emulator/nedostupnostServisa.test.js   (samo env spawn-ovanog procesa)
+.env.example
+README.md
+skripte/provjera.ps1                                (UTF-8 sa BOM-om, CRLF)
+docs/TRACEABILITY.md                                (samo redovi Iteracije 3)
+docs/IMPLEMENTATION_LOG.md
+docs/TEST_REPORT.md
+```
+
+`i03_brief.md` i `i03_plan.md` su dodati na grani u koracima Orchestrator-a i Planner-a; Builder je mijenjao samo sekciju 15 plana.
+(Ispravka FIX LOOP 1, R-05: ranije je `i03_plan.md` naveden kao „izmijenjen”, a `i03_brief.md` kao „netaknut”.)
+
+Netaknuti: `docs/srs/*` (SHA-256 provjeren), `CLAUDE.md`, katalog grešaka, `GreskaApi.js`, `obradaGresaka.js` (do FIX LOOP 1, R-04),
+`dnevnik.js`, `greskeServisa.js`, `korelacija.js`, `kolekcije.js`, `firebase/inicijalizacija.js`, `inicijalizacijaNaloga.js`,
+`posrednici/autentikacija.js`, `rute/nalog.js`, `validacija/tijeloInita.js`, seed, `package.json`/`package-lock.json`, Android.
+
+### Odstupanja od plana
+
+**OD-1 — Sekcija 15 nije postojala u `i03_plan.md`.** Zadatak traži zamjenu sadržaja sekcije „## 15. Odluke Orchestrator-a (odobrenje plana)”;
+plan se završavao sekcijom 14. Sekcija je dodata na kraj sa tačno zadatim naslovom i doslovnim tekstom (kao u i02). Commit `01d574b`.
+
+**OD-2 — Koraci 4 i 5 su jedan commit.** Testovi koraka 4 (I03-T01 (b) pozitivno: ključ SIM02 → 201; I03-T22) traže servis iz koraka 5,
+pa bi commit koraka 4 bio crven (plan, korak 4 to dozvoljava).
+
+**OD-3 — Korak 6 nije mogao biti crven prije koda.** Plan (korak 6) navodi „samo testovi (kod već postoji)”. Test-first je za I03-T16 i
+I03-T17 dokazan kontrolnim mutacijama M24, MR02b i M25 (TEST_REPORT), koje obaraju te testove.
+
+**OD-4 — RULE-T10 ojačan (M31).** Plan traži da M31 (`changedOnly(['readAt', 'title'])`) obori RULE-T10. Prvobitni RULE-T10 mijenja
+samo `title`/`body` (bez `readAt`), što pod M31 i dalje pada na `request.resource.data.readAt is timestamp`, pa je M31 obarao samo I03-T20.
+RULE-T10 je dopunjen slučajevima „`readAt: serverTimestamp()` + `title`” i „+ `body`” → DENY; sada M31 obara RULE-T10 i I03-T20.
+
+**OD-5 — I03-T11/T12 čekaju kraj svih transakcija prije provjera (izolacija testova).** Tokom mutacionog izvršavanja M19 (nad jednim
+dugo pokrenutim emulatorom) I03-T12 je jednom pao sa `102 !== 60`: u I03-T11 je jedan od 10 paralelnih zahtjeva dobio dozvoljeni 503,
+a njegova transakcija se commit-ovala tek poslije `ocistiEmulatore` za I03-T12 (prihvaćeni „kasni commit”, brief tačka 5 i I03-T13) i dodala
+42 boda novom nalogu. To je curenje stanja između testova, ne greška proizvoda. `omotacBaze` je dobio `sveTransakcijeZavrsene`, a I03-T11 i
+I03-T12 rade kroz omotač bez opcija i čekaju kraj svih transakcija prije asercija (time I03-T11 provjerava i stanje POSLIJE eventualnog
+kasnog commit-a: i dalje tačno 1 purchase, 1 EARN, 1 notifikacija). Bez mutacije I03-T11/T12 nisu pali ni u jednom izvršavanju.
+
+**OD-6 — I03-T10 (e) provjerava i da transakcija ne pokuša nijedan upis.** Bez te asercije M18 (uklonjena provjera postojećeg ledger
+eventa/notifikacije) preživljava, jer `tx.create` ionako obara commit sa `ALREADY_EXISTS` (isto rezonovanje kao K-1). Dodata je asercija
+`omotac.upisi` = `[]` (provjera nekonzistentnog stanja ide PRIJE upisa, plan 5.5).
+
+**OD-7 — Dodatni test slučajevi van tabele plana (samo pojačanje):** I03-T01 (b) „dva ista ispravna zaglavlja” → 401; I03-T07 (a)
+dodatni neispravni oblici (`+0200`, `+02`, `.Z`, vodeći/završni razmak, završni prelom, ne-ASCII cifre, godina 0000, prošireni oblik godine);
+I03-T10 (d) i drugi `posTransactionId` u dokumentu; I03-T10 (f) `availablePoints: 1.5` i `reservedPoints: -1`; I03-T16 provjerava i
+`brojPristupa === 0` (ne samo `brojTransakcija`).
+
+**OD-8 — Format `loyaltyUid` `^__.*__$` provjeren sa zastavicom `s`** (`.` obuhvata i prelom reda), da se vrijednost tipa `"__\n__"`
+ne propusti do Firestore-a; strože od doslovnog regex-a iz 5.3, isti smisao (rezervisani ID-evi).
+
+### Status otvorenih pitanja iz plana
+
+| Pitanje | Status |
+|---|---|
+| i03/P-1 ugovor API-02 | Riješeno po odluci: 201/200, tijelo sa 8 ključeva tim redoslijedom; API-T02, API-T03, I03-T13 PASS. |
+| i03/P-2 konfiguracija ključeva | Riješeno: `POS_API_KLJUCEVI`, 43 znaka kanonski, ≥ 16 različitih znakova; I03-T15 PASS. |
+| i03/P-3 konstantno vrijeme | Riješeno: SHA-256 + `timingSafeEqual`, petlja bez ranog izlaska; I03-T01 (a) PASS; M02, M03 ubijene. |
+| i03/P-4 format `occurredAt` | Riješeno: vlastiti parser; I03-T07 (a)/(b) PASS; M11 ubijena. |
+| i03/P-5 format `loyaltyUid` | Riješeno (OD-8); I03-T09 PASS; M14 ubijena. |
+| i03/P-6 redoslijed + dopuna | Riješeno; I03-T02 (redoslijed), I03-T18 (validacija na retry-ju, 0 pristupa bazi) PASS; README i ovaj unos. |
+| i03/P-7 ledger eventId | Riješeno: `earn_{purchaseId}`; prefiksi za i04–i06 nisu obavezujući. |
+| i03/P-8 tekst notifikacije | Riješeno; I03-T21 PASS. |
+| i03/P-9 `-0` | Riješeno; I03-T05 PASS; M09 ubijena. |
+| i03/P-10 oznake | Prihvaćeno: I03-T01 … I03-T22. |
+| i03/P-11 bez `posStanice` | Riješeno: 500; I03-T22 PASS. |
+| i03/P-12 whitespace / duplo zaglavlje | Prihvaćeno; I03-T01 (b) PASS. |
+| i03/P-13 trajanje I03-T13 | Prihvaćeno: ~10,7 s. |
+| i03/P-14 poređenje Rules sa `.docx` | Urađeno privremenom skriptom van repoa: `JEDNAKO_DOCX`, `IDENTICNO_PLANU` (TEST_REPORT). |
+| i03/P-15 neispravan nalog | Riješeno: 500, ništa upisano; I03-T10 (f) PASS. |
+| K-1 (I03-T10 (c2)) | Urađeno; M17 obara (c2). |
+| K-2 (`provjera.ps1` u koraku 2) | Urađeno; `provjera.ps1` → 0 na stanju koraka 2. |
+| F1-01 (backlog i02) | Urađeno kao I03-T16 (init i kupovina); MR02b i M24 ubijene. |
+
+### Ograničenja za buduće iteracije
+
+- **i04–i06 (i03/P-7):** ledger `eventId` je `<tip>_<id>`; prefiks `earn_` je zauzet (`earn_{purchaseId}`). Prijedlog `reserve_`, `redeem_`,
+  `release_` nije obavezujući — odluka pripada tim iteracijama.
+- **i06:** isti `napraviProvjeruPosKljuca(posStanice)` se veže na rutu redeem (samo na rutu, ne na prefiks `/pos`); mapa i rok se ne dupliraju.
+- **i07 (O-10a):** postojeći purchase sa `uid: null` i retry sa `loyaltyUid` → po i03 kodu 409 (poređenje `uid`); i07 odlučuje i mijenja.
+- **i10:** Android upit `purchases`/`notifications` mora imati `where('uid', '==', auth.uid)` i `limit ≤ 20 / ≤ 50`; `orderBy` traži composite indeks.
+- **Opšte (kasni commit):** odgovor 503 ne znači da mutacija nije upisana. Za kupovinu je to bezbjedno jer je idempotency ključ par
+  `(stationId, posTransactionId)` (I03-T13). Testovi koji dozvoljavaju 503 pod kontencijom moraju sačekati kraj svih transakcija prije
+  provjera i prije sljedećeg testa (OD-5).
+
+### Poznata ograničenja
+
+- i03/P-12: HTTP parser uklanja okolni whitespace vrijednosti `X-POS-API-Key`; unutrašnji znakovi se porede tačno; duplo zaglavlje → 401.
+- i03/P-13: I03-T13 traje ~10,7 s (rok je konstanta).
+- JSON brojevi: `1000.0` i `1e3` su u JSON-u isti broj kao `1000` i prihvataju se (provjera nad parsiranom vrijednošću); dokumentovano u README-u.
+- `occurredAt`: mala slova `t`/`z` (dozvoljena u RFC 3339) se odbijaju — strože, odobreno (i03/P-4); donja granica je opseg `Timestamp`-a (0001-01-01).
+- Konstantno vrijeme se dokazuje brojem poređenja i inspekcijom, ne mjerenjem vremena (mjerenje bi bilo nestabilno).
+- Ponašanje transakcija pod kontencijom (`maxAttempts: 5`, 503) i `ALREADY_EXISTS` na `tx.create` utvrđeni su nad emulatorom.
+- `I02-T09` (i02, nepromijenjen) dozvoljava 503 kao i I03-T11 i teoretski može ostaviti kasni commit poslije svog kraja; nije uočeno, a
+  i02 testovi se po pravilima ne mijenjaju (napomena za Reviewer-a / FIX LOOP).
+- Ostala ograničenja iz i01/i02 (nepotpisani emulator token-i, `MetadataLookupWarning`, `npm warn install-scripts`, Gradle daemon i preusmjeren
+  izlaz `provjera.ps1`, N-02) i dalje važe.
+
+### FIX LOOP 1 (nalazi iz `docs/iteracije/i03_review.md`, commit f3659f6)
+
+Uloga: BUILDER, 2026-10-16. Opseg po odluci Orchestrator-a (2026-10-16): R-01, R-02 i R-03 samo test; R-04 ispravka koda (odluka D-3);
+R-05 samo dokument; napomena review-a o kontenciji kao poznato ograničenje. Nijedan novi paket, kod greške ni endpoint. Detalji izvršavanja
+(crveno/zeleno, mutacije): `docs/TEST_REPORT.md`, sekcija „Iteracija 3 — FIX LOOP 1”.
+
+| Nalaz | Izmjena | Fajlovi | Test |
+|---|---|---|---|
+| R-01 (P2) | Samo test. Ključ SIM01 sa `?stationId=SIM02`, sa zaglavljem `X-Station-Id: SIM02` i sa zaglavljem `stationId: SIM02` (tri zasebna zahtjeva, `posTransactionId` Q1/Q2/Q3) → 201, `stationId` `SIM01`, `purchaseId` `SIM01__…`, `purchases/SIM01__…`.`stationId` = `SIM01`, `purchases/SIM02__…` ne postoji. Produkcioni kod nepromijenjen. | `backend/test/emulator/posAutentikacija.test.js` | I03-T01 (b) (novi test); M02 i M02b ubijene |
+| R-02 (P3) | Samo test. `provjeriTijeloKupovine(tijelo, sadaMs)` sa fiksnim `sadaMs`: `occurredAt` = `sadaMs + 300 000` ms → bez greške (`occurredAtMs` tačan); `+ 300 001` ms → `GreskaApi` `INVALID_OCCURRED_AT`. | `backend/test/jedinicni/vrijemeKupovine.test.js` | I03-T07 (c) (novi unit test); M06 ubijena |
+| R-03 (P3) | Samo test. I03-T09 (format, 0 pristupa bazi) dopunjen sa `"____"` i `"__\n__"` → 404 `LOYALTY_ACCOUNT_NOT_FOUND`. | `backend/test/emulator/kupovina.test.js` | I03-T09; M25 i M25s ubijene |
+| R-04 (P3) | Polje `putanja` u logu greške više ne sadrži sirovu putanju zahtjeva: za pogođenu rutu bilježi se `req.route.path` — šablon relativan na ruter `/api/v1` (utvrđeno probom nad Express 5.2.1: u centralnom rukovaocu je `req.route.path` = `/pos/purchases`, a `req.baseUrl` = `""`), za zahtjev bez pogođene rute (NOT_FOUND, greška JSON parsera prije rutera, nepodržan metod) fiksno `(nepoznata ruta)`. Ostala polja loga i `dnevnik.js` nepromijenjeni. README: rečenica o sadržaju loga. | `backend/src/greske/obradaGresaka.js`, `backend/test/emulator/logBezPosKljuca.test.js`, `README.md` | I03-T17 (a) i (b): `POST /api/v1/pos/purchases/<K1>` sa ispravnim zaglavljem i `POST /api/v1/pos/<K2>` bez zaglavlja → 404 `NOT_FOUND`, log bez K1/K2, `putanja` = `(nepoznata ruta)`; 401 na `/pos/purchases` → `putanja` = `/pos/purchases`. Prije: crveno (`log sadrži POS ključ`); poslije: PASS; mutacija `putanja: req.path` ubijena. |
+| R-05 (P3) | Ispravljena klasifikacija `i03_brief.md` / `i03_plan.md` u sekciji „Fajlovi” iznad. | ovaj fajl | — |
+
+Nijedan postojeći test i01/i02/i03 ne zavisi od sirove putanje u logu (`grep` po `putanja` u `backend/test`: samo lokalne promjenljive i
+putanje dokumenata), pa nijedna asercija nije uklonjena ni oslabljena. I03-T17 (b) očekivani statusi prošireni sa `[201, 401, 422]` na
+`[201, 401, 422, 404, 404]`.
+
+Commit-i FIX LOOP 1:
+
+| Commit | Nalaz |
+|---|---|
+| `45f6884` i03 fix: R-01 test da se stationId ne uzima iz query-ja ni zaglavlja | R-01 |
+| `4bd81da` i03 fix: R-02 test uključive granice +5 min za occurredAt | R-02 |
+| `235323f` i03 fix: R-03 test rezervisanih oblika loyaltyUid (____, __\n__) | R-03 |
+| `5b0cfa0` i03 fix: R-04 log greške bilježi šablon rute, ne sirovu putanju | R-04 |
+| (ovaj commit) i03 fix: TEST_REPORT, IMPLEMENTATION_LOG, README i sljedivost za FIX LOOP 1 | R-04 (README), R-05, poznato ograničenje |
+
+Poznata ograničenja (dopuna FIX LOOP 1):
+
+- **503 i latencija pod jakom kontencijom istog korisnika (prihvaćeno ponašanje po brief-u i i02/P-5).** Transakcije istog korisnika se u
+  emulatoru serijalizuju (zaključavanje). Izmjereno u review-u (`docs/iteracije/i03_review.md`, sekcija 3, napomena; 2.3 (f)): 20 paralelnih
+  različitih kupovina istog korisnika → 36–123 odgovora 503 (uz retry do uspjeha), trajanje 48–98 s (47,6 s i 98,2 s); 10–30 identičnih
+  paralelnih povremeno daje jedan 503 (1 od 3 serije) i latenciju do ~10 s. Stanje je uvijek konzistentno (nijedan dupli EARN ni
+  notifikacija, nijedan 500, zbir bodova tačan), a POS retry je bezbjedan jer je idempotency ključ `(stationId, posTransactionId)`. Za realan
+  POS (jedna kupovina po korisniku u trenutku) bez uticaja; ponašanje nad produkcionim Firestore-om nije provjerljivo u emulatoru. Kod nije mijenjan.
+- **R-04:** log bilježi šablon rute relativan na ruter `/api/v1` (bez prefiksa `/api/v1`), npr. `/pos/purchases`, `/account/init`; za
+  zahtjev na postojeću putanju sa nepodržanim metodom (npr. `GET /api/v1/pos/purchases`) ruta nije pogođena, pa je `putanja` `(nepoznata ruta)`.
