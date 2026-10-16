@@ -7,6 +7,7 @@
 // - sakrijPostojece: [put]  → tx.get/tx.getAll za te putanje vraćaju snimak „ne postoji” (zastarjelo čitanje);
 // - zadrziPrijeCommitaMs    → callback se izvrši, pa omotač čeka prije commit-a (commitZavrsen je promise kraja transakcije);
 // - odbijTransakcijuSa      → runTransaction odmah odbija sa greškom koja nosi ta polja (npr. { code: 14 }).
+// sveTransakcijeZavrsene čeka kraj SVIH pokrenutih transakcija, i onih čiji je zahtjev već dobio 503 (kasni commit).
 import { setTimeout as pauza } from 'node:timers/promises';
 
 const METODE_UPISA = ['create', 'set', 'update', 'delete'];
@@ -25,6 +26,7 @@ export function omotacBaze(
   let brojUpisa = 0;
   const upisi = [];
   let commitZavrsen = Promise.resolve();
+  const zavrseneTransakcije = [];
 
   function sakrij(snimak) {
     return sakrijPostojece.includes(snimak.ref.path) ? lazanSnimakBezDokumenta(snimak.ref) : snimak;
@@ -91,6 +93,7 @@ export function omotacBaze(
         () => undefined,
         () => undefined,
       );
+      zavrseneTransakcije.push(commitZavrsen);
       return transakcija;
     },
     get brojPristupa() {
@@ -107,6 +110,9 @@ export function omotacBaze(
     },
     get commitZavrsen() {
       return commitZavrsen;
+    },
+    get sveTransakcijeZavrsene() {
+      return Promise.all(zavrseneTransakcije);
     },
   };
 }

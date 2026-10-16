@@ -193,6 +193,9 @@ describe('RULE-T10 notifications', () => {
     const referenca = doc(bazaVlasnika(), 'notifications/earn_SIM01__A2');
     await ocekujZabranu(updateDoc(referenca, { title: 'x' }), 'vlasnik update title');
     await ocekujZabranu(updateDoc(referenca, { body: 'x' }), 'vlasnik update body');
+    // I uz inače ispravan readAt (null → request.time): title i body ne smiju biti dio izmjene.
+    await ocekujZabranu(updateDoc(referenca, { readAt: serverTimestamp(), title: 'x' }), 'vlasnik update readAt + title');
+    await ocekujZabranu(updateDoc(referenca, { readAt: serverTimestamp(), body: 'x' }), 'vlasnik update readAt + body');
   });
 });
 

@@ -254,8 +254,12 @@ test('I03-T11 10 paralelnih identičnih zahtjeva → 1 purchase, 1 EARN, 1 notif
     await ocistiEmulatore();
     await pripremiNalog('korisnikA', { availablePoints: 10, reservedPoints: 3 });
     const tijelo = tijeloKupovine();
-    const app = aplikacija();
+    // Omotač bez opcija samo delegira; služi da se sačeka kraj svih transakcija (i kasnog commit-a poslije 503),
+    // da stanje ne „procuri” u sljedeće ponavljanje ili test.
+    const omotac = omotacBaze(firebase.db);
+    const app = aplikacija(omotac);
     const odgovori = await Promise.all(Array.from({ length: 10 }, () => kupi(tijelo, { app })));
+    await omotac.sveTransakcijeZavrsene;
     const statusi = odgovori.map((odgovor) => odgovor.status);
     t.diagnostic(`ponavljanje ${ponavljanje + 1}: statusi ${statusi.join(',')}`);
     assert.ok(statusi.every((status) => [200, 201, 503].includes(status)), `statusi: ${statusi.join(',')}`);
@@ -286,7 +290,8 @@ test('I03-T11 10 paralelnih identičnih zahtjeva → 1 purchase, 1 EARN, 1 notif
 
 test('I03-T12 10 paralelnih različitih kupovina istog korisnika → tačan zbir i konzistentan niz availableAfter', async (t) => {
   await pripremiNalog('korisnikA', { availablePoints: 5, reservedPoints: 3 });
-  const app = aplikacija();
+  const omotac = omotacBaze(firebase.db);
+  const app = aplikacija(omotac);
   const zahtjevi = Array.from({ length: 10 }, (_, i) =>
     tijeloKupovine({ posTransactionId: `R${i}`, volumeMl: 1000 * (i + 1) + i }),
   );
@@ -305,6 +310,7 @@ test('I03-T12 10 paralelnih različitih kupovina istog korisnika → tačan zbir
     throw new Error(`${tijelo.posTransactionId}: nema uspjeha poslije 20 pokušaja`);
   }
   const odgovori = await Promise.all(zahtjevi.map(doUspjeha));
+  await omotac.sveTransakcijeZavrsene;
   t.diagnostic(`statusi: ${odgovori.map((o) => o.status).join(',')}; broj 503: ${broj503}`);
   for (const [i, odgovor] of odgovori.entries()) {
     assert.ok([200, 201].includes(odgovor.status), `R${i}: status ${odgovor.status}`);
