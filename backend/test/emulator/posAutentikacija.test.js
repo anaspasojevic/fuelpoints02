@@ -149,6 +149,26 @@ test('I03-T01 (b) stationId se izvodi iz ključa; naziv zaglavlja case-insensiti
   assert.equal(razmaci.body.stationId, 'SIM01');
 });
 
+// i03 FIX LOOP 1, R-01: podmetnut stationId van tijela (query, X-Station-Id, zaglavlje stationId) se ignoriše (§3.4, §8.5).
+test('I03-T01 (b) stationId u query-ju ili zaglavljima X-Station-Id / stationId se ignoriše → stanica samo iz ključa', async () => {
+  await pripremiNalog('korisnikA');
+  const putanja = '/api/v1/pos/purchases';
+  const pokusaji = [
+    ['?stationId=SIM02', 'Q1', (app, tijelo) => request(app).post(`${putanja}?stationId=SIM02`).set('X-POS-API-Key', K1).send(tijelo)],
+    ['X-Station-Id: SIM02', 'Q2', (app, tijelo) => request(app).post(putanja).set('X-POS-API-Key', K1).set('X-Station-Id', 'SIM02').send(tijelo)],
+    ['stationId: SIM02', 'Q3', (app, tijelo) => request(app).post(putanja).set('X-POS-API-Key', K1).set('stationId', 'SIM02').send(tijelo)],
+  ];
+  for (const [opis, posTransactionId, posalji] of pokusaji) {
+    const odgovor = await posalji(aplikacija(), tijeloKupovine({ posTransactionId }));
+    assert.equal(odgovor.status, 201, `${opis}: ${odgovor.text}`);
+    assert.equal(odgovor.body.stationId, 'SIM01', `${opis}: stationId u odgovoru`);
+    assert.ok(odgovor.body.purchaseId.startsWith('SIM01__'), `${opis}: purchaseId ${odgovor.body.purchaseId}`);
+    assert.equal(odgovor.body.purchaseId, `SIM01__${posTransactionId}`, opis);
+    assert.equal((await firebase.db.doc(`purchases/SIM01__${posTransactionId}`).get()).get('stationId'), 'SIM01', opis);
+    assert.equal((await firebase.db.doc(`purchases/SIM02__${posTransactionId}`).get()).exists, false, `${opis}: purchases/SIM02__ postoji`);
+  }
+});
+
 test('I03-T22 granice POS rute: GET i nepoznata /pos putanja → 404; neispravan JSON → 422 bez baze; bez posStanice → 500', async () => {
   const omotacGet = omotacBaze(firebase.db);
   provjeriTijeloGreske(
