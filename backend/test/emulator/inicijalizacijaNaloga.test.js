@@ -340,8 +340,14 @@ test('I02-T07 acceptedTermsVersion različit od aktuelne verzije → 422 INVALID
   assert.deepStrictEqual(await podaci('loyaltyAccounts', uid), nalog);
 });
 
+// Snimak dokumenta koji tvrdi da dokument ne postoji (za simulaciju zastarjelog čitanja).
+function lazanSnimakBezDokumenta(ref) {
+  return { exists: false, ref, id: ref.id, data: () => undefined, get: () => undefined };
+}
+
 // Omotač oko pravog db: transakcija dobija proxy čiji upisi (create/set/update) se broje globalno za omotač.
-function omotacBaze(db, { baciNaUpisu, baciPrijeCommita = false } = {}) {
+// sakrijPostojece: putanje dokumenata za koje tx.getAll vraća snimak „ne postoji”, iako ih stvarno čita.
+function omotacBaze(db, { baciNaUpisu, baciPrijeCommita = false, sakrijPostojece = [] } = {}) {
   let upisi = 0;
   return {
     collection: (...argumenti) => db.collection(...argumenti),
@@ -351,6 +357,14 @@ function omotacBaze(db, { baciNaUpisu, baciPrijeCommita = false } = {}) {
         const posrednik = new Proxy(tx, {
           get(cilj, svojstvo) {
             const vrijednost = Reflect.get(cilj, svojstvo, cilj);
+            if (svojstvo === 'getAll') {
+              return async (...argumenti) => {
+                const snimci = await vrijednost.apply(cilj, argumenti);
+                return snimci.map((snimak) =>
+                  sakrijPostojece.includes(snimak.ref.path) ? lazanSnimakBezDokumenta(snimak.ref) : snimak,
+                );
+              };
+            }
             if (['create', 'set', 'update'].includes(svojstvo)) {
               return (...argumenti) => {
                 upisi += 1;
@@ -408,6 +422,30 @@ test('I02-T08 failure injection između dva upisa i prije commit-a → 500 bez s
 });
 
 // 503 pod kontencijom je dozvoljen ishod (i02/P-5, init je idempotentan; FIX LOOP 1, R-01); konzistentnost se provjerava uvijek.
+// FIX LOOP 1 R-06 (i02/P-2): drugi sloj zaštite — upis je tx.create, pa ni zastarjelo čitanje („ne postoji” za postojeći
+// dokument) ne može prepisati postojeći dokument. Svaki dokument se provjerava zasebno.
+test('I02-T08 getAll vraća „ne postoji” za postojeći dokument → 500/503 bez stack-a, users i loyaltyAccounts nepromijenjeni', async (t) => {
+  for (const kolekcija of ['users', 'loyaltyAccounts']) {
+    await ocistiEmulatore();
+    const { uid, idToken } = await noviKorisnik();
+    await referenca('users', uid).set(kanonskiKorisnik());
+    await referenca('loyaltyAccounts', uid).set(kanonskiNalog({ availablePoints: 42 }));
+    const korisnik = await podaci('users', uid);
+    const nalog = await podaci('loyaltyAccounts', uid);
+
+    const omotac = omotacBaze(firebase.db, { sakrijPostojece: [`${kolekcija}/${uid}`] });
+    const odgovor = await init(idToken, { displayName: 'Ana', acceptedTermsVersion: '1.0' }, { ...firebase, db: omotac });
+    t.diagnostic(`sakriven ${kolekcija}/{uid}: HTTP ${odgovor.status} ${odgovor.body.error?.code}`);
+    assert.ok([500, 503].includes(odgovor.status), `${kolekcija}: status ${odgovor.status}`);
+    provjeriTijeloGreske(odgovor, odgovor.status, odgovor.status === 500 ? 'INTERNAL_ERROR' : 'SERVICE_UNAVAILABLE', kolekcija);
+    provjeriBezInternihDetalja(odgovor);
+    assert.ok(omotac.brojUpisa >= 1, `${kolekcija}: init nije pokušao upis`);
+    assert.deepStrictEqual(await podaci('users', uid), korisnik, `${kolekcija}: users promijenjen`);
+    assert.deepStrictEqual(await podaci('loyaltyAccounts', uid), nalog, `${kolekcija}: loyaltyAccounts promijenjen`);
+    assert.equal(await ukupnoDokumenata(), 2);
+  }
+});
+
 test('I02-T09 10 paralelnih init-a za isti uid → bez 500, najviše jedan 201, ista uspješna tijela, jedan users i jedan loyaltyAccounts (3 ponavljanja)', async (t) => {
   for (let ponavljanje = 0; ponavljanje < 3; ponavljanje += 1) {
     await ocistiEmulatore();
