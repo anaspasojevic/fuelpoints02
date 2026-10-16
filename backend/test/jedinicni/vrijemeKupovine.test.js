@@ -1,6 +1,8 @@
-// I03-T07 (a): strogo čitanje occurredAt (§8.4, i03/P-4) bez mreže.
+// I03-T07 (a): strogo čitanje occurredAt (§8.4, i03/P-4) bez mreže; (c) uključiva granica +5 min (i03 FIX LOOP 1, R-02).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { GreskaApi } from '../../src/greske/GreskaApi.js';
+import { provjeriTijeloKupovine } from '../../src/validacija/tijeloKupovine.js';
 import { procitajOccurredAt } from '../../src/validacija/vrijemeKupovine.js';
 
 const MIN_TIMESTAMP_MS = -62_135_596_800_000;
@@ -64,4 +66,24 @@ test('I03-T07 (a) neispravan format, nepostojeći datum ili van opsega Timestamp
   for (const vrijednost of [1_760_608_800_000, null, undefined, true, {}, ['2026-10-16T10:00:00Z']]) {
     assert.equal(procitajOccurredAt(vrijednost), null, JSON.stringify(vrijednost));
   }
+});
+
+test('I03-T07 (c) occurredAt tačno +5 min od vremena Backend-a prolazi, +5 min i 1 ms → INVALID_OCCURRED_AT (granica uključiva)', () => {
+  const sadaMs = Date.UTC(2026, 9, 16, 10, 0, 0, 0);
+  function tijelo(occurredAtMs) {
+    return {
+      loyaltyUid: 'korisnikA',
+      posTransactionId: '000184',
+      volumeMl: 42_730,
+      amountMinor: 7050,
+      currency: 'EUR',
+      occurredAt: new Date(occurredAtMs).toISOString(),
+    };
+  }
+  const naGranici = provjeriTijeloKupovine(tijelo(sadaMs + 300_000), sadaMs);
+  assert.equal(naGranici.occurredAtMs, sadaMs + 300_000);
+  assert.throws(
+    () => provjeriTijeloKupovine(tijelo(sadaMs + 300_001), sadaMs),
+    (greska) => greska instanceof GreskaApi && greska.kod === 'INVALID_OCCURRED_AT',
+  );
 });
