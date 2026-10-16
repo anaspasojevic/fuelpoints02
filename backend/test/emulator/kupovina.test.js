@@ -582,6 +582,9 @@ test('I03-T09 neispravan format loyaltyUid → 404 bez ikakvog pristupa bazi; ui
     ['.', '.'],
     ['..', '..'],
     ['__x__', '__x__'],
+    // i03 FIX LOOP 1, R-03: rezervisani oblici bez znakova između i sa prelomom reda (zastavica s, OD-8).
+    ['____', '____'],
+    ['__\\n__', '__\n__'],
     ['129 znakova', 'u'.repeat(129)],
     ['usamljen surogat', '\uD800'],
   ]) {
