@@ -256,6 +256,9 @@ test('I02-T06 neispravan displayName → 422 INVALID_DISPLAY_NAME, ništa upisan
     ['51 astralni znak (102 UTF-16 jedinice)', ASTRALNI_ZNAK.repeat(51)],
     ['100 astralnih znakova (200 UTF-16 jedinica)', ASTRALNI_ZNAK.repeat(100)],
     ['101 astralni znak', ASTRALNI_ZNAK.repeat(101)],
+    // FIX LOOP 1 R-04: neispravan UTF-16 (usamljeni surogat) nije validan displayName.
+    ['usamljeni visoki surogat \\uD800', '\uD800'],
+    ['usamljeni niski surogat a\\uDC00', 'a\uDC00'],
   ];
   for (const [opis, displayName] of neispravni) {
     const tijelo = { acceptedTermsVersion: '1.0' };

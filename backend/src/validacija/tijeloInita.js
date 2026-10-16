@@ -7,8 +7,14 @@ function jeObicanObjekat(vrijednost) {
 }
 
 // Dužina se broji kao string.size() u Security Rules (§31): UTF-16 jedinice, utvrđeno u I02-T15 (i02/P-3).
+// String mora biti ispravan UTF-16 (bez usamljenih surogata, FIX LOOP 1 R-04); bez trim-a i normalizacije.
 function jeIspravnoIme(displayName) {
-  return typeof displayName === 'string' && displayName.length >= 1 && displayName.length <= 100;
+  return (
+    typeof displayName === 'string' &&
+    displayName.isWellFormed() &&
+    displayName.length >= 1 &&
+    displayName.length <= 100
+  );
 }
 
 // Strogo tijelo API-01 (§3.2, §3.3, AUTH-10, O-11). Redoslijed provjera određuje kod greške.
