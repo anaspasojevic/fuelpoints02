@@ -1179,3 +1179,150 @@ postao sintaksno neispravan pa je test fajl pao u cjelini — rezultat odbačen)
 - `size()` utvrđen samo u emulatoru.
 - N-02 (backlog i01): seed CLI visi kad na `FIRESTORE_EMULATOR_HOST` sluša servis koji nije Firestore emulator — ne ispravlja se (odluka).
 - N-01 je izvodljiv bez izmjene produkcionog koda (spoljna Express aplikacija postavlja kodiranje toka), pa nema ograničenja po N-01.
+
+---
+
+## Iteracija 2 — FIX LOOP 1 (nalazi R-01 … R-08 iz `docs/iteracije/i02_review.md`, commit 1759848)
+
+Datum izvršavanja: 2026-10-16 (Windows 11 Pro 10.0.22621, Windows PowerShell 5.1). Uloga: BUILDER. Alati nepromijenjeni
+(`node -v` → `v24.21.0`, `npx firebase --version` → `15.32.1`). Pojedinačni emulator testovi su pokretani komandom
+`npx firebase emulators:exec --config ../firebase.json --project demo-fuelpoints --only firestore,auth "node --test --test-concurrency=1 [--test-name-pattern=<filter>] <fajl>"`
+iz `backend` (JBR prvi u PATH-u). Mutacije su bile privremene (primijenjene u radnom stablu, vraćene sa `git restore`; `git status` poslije
+svake bez izmjena u `backend/src`) i nisu commit-ovane.
+
+### R-01 — I02-T09 dozvoljava 503 uz provjeru konzistentnosti (samo test)
+
+Novi kriterijum: statusi ∈ {200, 201, 503} (nijedan 500; 503 sa tačnim tijelom `SERVICE_UNAVAILABLE`), najviše jedan 201, sva 200/201
+tijela identična, na kraju tačno 1 `users` i 1 `loyaltyAccounts`, 0/0, `loyaltyLedger` prazan, naknadni sekvencijalni init → 200 sa istim tijelom.
+Produkcioni kod nepromijenjen. Statusi u svih 5 završnih izvršavanja (3 × `npm run test:emu`, 2 × `provjera.ps1`; 15 ponavljanja):
+svaki put `200×9, 201×1`, nijedan 503 ni 500, npr. `ℹ ponavljanje 1: statusi 200,200,200,201,200,200,200,200,200,200`.
+503 nije izazvan u ovim izvršavanjima; ponašanje pod jačom kontencijom (30 paralelnih) je opisano u review-u (2.3 (f)) i u IMPLEMENTATION_LOG
+kao poznato ograničenje.
+
+### R-02 — jedan rok za cijeli zaštićeni zahtjev (I02-T11 (c))
+
+Test: `backend/test/emulator/nedostupnostServisa.test.js`, spawn `src/pokreni.js`; Auth emulator iza `sporProksi` (kašnjenje po komadu
+u oba smjera) + Firestore „crna rupa”; granica 12 s; tačno tri polja, bez stack-a, token nije u odgovoru ni u logu.
+
+Crveno (test dodat, produkcioni kod kao u `96df140`):
+
+```
+✖ I02-T11 (c) Auth spor (4000 ms po komadu) + Firestore crna rupa → 503 SERVICE_UNAVAILABLE za < 12 s (19012.9978ms)
+ℹ Auth spor 4000 ms + Firestore crna rupa: HTTP 503 za 18081 ms
+✖ I02-T11 (c) Auth spor (2000 ms po komadu) + Firestore crna rupa → 503 SERVICE_UNAVAILABLE za < 12 s (14891.2963ms)
+ℹ Auth spor 2000 ms + Firestore crna rupa: HTTP 503 za 14057 ms
+  AssertionError [ERR_ASSERTION]: odgovor je stigao za 18081 ms (rok 12000 ms)
+  AssertionError [ERR_ASSERTION]: odgovor je stigao za 14057 ms (rok 12000 ms)
+ℹ tests 6  ℹ pass 4  ℹ fail 2
+```
+
+Zeleno poslije ispravke (cijela emulator suita `ℹ tests 34` `ℹ pass 34` `ℹ fail 0`; unit `ℹ tests 34` `ℹ pass 34` `ℹ fail 0`):
+
+```
+✔ I02-T11 (c) Auth spor (4000 ms po komadu) + Firestore crna rupa → 503 SERVICE_UNAVAILABLE za < 12 s (10984.5983ms)
+ℹ Auth spor 4000 ms + Firestore crna rupa: HTTP 503 za 10037 ms
+✔ I02-T11 (c) Auth spor (2000 ms po komadu) + Firestore crna rupa → 503 SERVICE_UNAVAILABLE za < 12 s (10883.6108ms)
+ℹ Auth spor 2000 ms + Firestore crna rupa: HTTP 503 za 10029 ms
+```
+
+Završna izvršavanja (5 × po dvije varijante): 10 017 – 10 046 ms. Postojeće varijante I02-T11 (b) i dalje prolaze: Firestore 10 024 – 10 047 ms,
+Auth zatvoren port 24 – 43 ms, Auth crna rupa 10 021 – 10 042 ms.
+
+### R-04 — `displayName` mora biti ispravan UTF-16
+
+Dopuna I02-T06 („neispravan displayName”): `"\uD800"` i `"a\uDC00"` → 422 `INVALID_DISPLAY_NAME`, baza prazna.
+
+Crveno (test dodat, bez `isWellFormed()`):
+
+```
+✖ I02-T06 neispravan displayName → 422 INVALID_DISPLAY_NAME, ništa upisano (10738.0376ms)
+  AssertionError [ERR_ASSERTION]: usamljeni visoki surogat \uD800: status
+    actual: 503,
+    expected: 422,
+```
+
+U ovom okruženju ishod je bio 503 po isteku roka (~10,7 s), a ne 500 kao u review-u; u oba slučaja zahtjev nije odbijen validacijom.
+Zeleno poslije ispravke: `✔ I02-T06 neispravan displayName … (62.0518ms)` i `✔ I02-T06 granične vrijednosti displayName …`
+(postojeći granični slučajevi i dalje prolaze); `inicijalizacijaNaloga.test.js`: `ℹ tests 14` `ℹ pass 14` `ℹ fail 0`.
+
+### R-05 — UID se ne uzima iz query-ja ni zaglavlja (samo test)
+
+Novi test `I02-T04 uid u query-ju i u zaglavljima X-User-Id / X-Uid se ignoriše → nalog samo za korisnika iz token-a`:
+`?uid=<B>` → 201, `X-User-Id: <B>` → 200, `X-Uid: <B>` → 200, tijelo sa stanjem A; `users/B` i `loyaltyAccounts/B` ne postoje; ukupno 2 dokumenta.
+Bez mutacije: PASS. „Crveno” mutacijom M16 (`rute/nalog.js`: `{ uid: req.query.uid ?? res.locals.uid, ...ulaz }`):
+
+```
+✖ I02-T04 uid u query-ju i u zaglavljima X-User-Id / X-Uid se ignoriše → nalog samo za korisnika iz token-a (75.4923ms)
+  AssertionError [ERR_ASSERTION]: ?uid=<B>: users/B postoji
+ℹ tests 2  ℹ pass 1  ℹ fail 1      EXIT=1
+```
+
+### R-06 — init ne prepisuje postojeći dokument (samo test)
+
+Nova varijanta I02-T08: omotač transakcije čiji `tx.getAll` za postojeći dokument vraća snimak „ne postoji”, zasebno za `users/{uid}` i za
+`loyaltyAccounts/{uid}` (oba dokumenta postoje, 42 boda) → 500/503 bez stack-a, oba dokumenta `deepStrictEqual` nepromijenjena.
+Bez mutacije: `ℹ sakriven users/{uid}: HTTP 500 INTERNAL_ERROR`, `ℹ sakriven loyaltyAccounts/{uid}: HTTP 500 INTERNAL_ERROR`, PASS.
+
+M04 (oba `tx.create` → `tx.set`, uslovi `exists` zadržani), cijeli `inicijalizacijaNaloga.test.js`:
+
+```
+✖ I02-T08 getAll vraća „ne postoji” za postojeći dokument → 500/503 bez stack-a, users i loyaltyAccounts nepromijenjeni (83.0091ms)
+ℹ sakriven users/{uid}: HTTP 201 undefined
+  AssertionError [ERR_ASSERTION]: users: status 201
+ℹ tests 16  ℹ pass 15  ℹ fail 1      EXIT=1
+```
+
+Dodatno, M04-l (samo `tx.create(refNalog` → `tx.set(refNalog`): `ℹ sakriven users/{uid}: HTTP 500 INTERNAL_ERROR`,
+`ℹ sakriven loyaltyAccounts/{uid}: HTTP 201 undefined`, `AssertionError [ERR_ASSERTION]: loyaltyAccounts: status 201` — test obara i jednolinijsku mutaciju.
+
+### Mutacioni dokazi (sažetak)
+
+| Mutacija | Ciljani test | Rezultat |
+|---|---|---|
+| M16: UID iz `req.query.uid ?? res.locals.uid` | I02-T04 (query/zaglavlja) | UBIJENA: `?uid=<B>: users/B postoji` |
+| M04: oba `tx.create` → `tx.set` | I02-T08 (zastarjelo čitanje) | UBIJENA: `users: status 201` |
+| M04-l: samo `loyaltyAccounts` `tx.create` → `tx.set` | isto | UBIJENA: `loyaltyAccounts: status 201` |
+| Dva nezavisna roka (`git checkout 96df140 -- backend/src/posrednici/autentikacija.js backend/src/servisi/inicijalizacijaNaloga.js`) | I02-T11 (c) | UBIJENA: 18 056 ms i 14 076 ms (`odgovor je stigao za … ms (rok 12000 ms)`) |
+| Uklonjen `displayName.isWellFormed() &&` | I02-T06 | UBIJENA: `usamljeni visoki surogat \uD800: status`, `actual: 503`, `expected: 422` |
+
+Poslije svake: `git restore backend/src` (za checkout iz `96df140`: `git restore --source=HEAD --staged --worktree -- backend/src`);
+`git status --short` bez izmjena u `backend/src`.
+
+### Završno izvršavanje (checkpoint FIX LOOP 1)
+
+Kod na commit-u `be9ba49` (dokumentacija necommit-ovana u trenutku izvršavanja). Komande redom iz jedne PowerShell skripte, izlaz u fajlove;
+`provjera.ps1` kao zaseban proces (`Start-Process` + `$p.Handle` + `WaitForExit()`, kao u i02).
+
+| Komanda | Rezultat | Exit code | Trajanje |
+|---|---|---|---|
+| `backend: npm ci` | `added 713 packages, and audited 714 packages in 22s`; `11 vulnerabilities (4 moderate, 7 high)` | 0 | 22 s |
+| `backend: npm test` | `ℹ tests 34` `ℹ pass 34` `ℹ fail 0` | 0 | 2 s |
+| `backend: npm run test:emu` (1) | `ℹ tests 36` `ℹ pass 36` `ℹ fail 0` | 0 | 126 s |
+| `backend: npm run test:emu` (2) | `ℹ tests 36` `ℹ pass 36` `ℹ fail 0` | 0 | 130 s |
+| `backend: npm run test:emu` (3) | `ℹ tests 36` `ℹ pass 36` `ℹ fail 0` | 0 | 133 s |
+| `firebase\tests: npm ci` | `added 729 packages, and audited 730 packages in 28s`; `16 vulnerabilities (4 moderate, 12 high)` | 0 | 29 s |
+| `firebase\tests: npm test` | `ℹ tests 17` `ℹ pass 17` `ℹ fail 0` | 0 | 9 s |
+| `.\skripte\provjera.ps1` (1) | `SVE PROVJERE PROŠLE` (34/34, 36/36, 17/17, Android `BUILD SUCCESSFUL` ×2, smoke 404 i 401) | 0 | 198 s |
+| `.\skripte\provjera.ps1` (2) | `SVE PROVJERE PROŠLE` (isti brojevi) | 0 | 198 s |
+
+Emulator suita ima 36 testova (32 iz i02 + I02-T11 (c) × 2 + I02-T04 query/zaglavlja + I02-T08 zastarjelo čitanje).
+stderr `provjera.ps1` sadrži samo `npm warn deprecated …` i `npm warn install-scripts` (kao ranije).
+
+### Rezultat po ID-u (FIX LOOP 1)
+
+| ID | Rezultat | Izvor |
+|---|---|---|
+| I02-T04 | PASS (2 testa: tijelo; query i zaglavlja); M16 ubijena | `npm run test:emu` ×3, `provjera.ps1` ×2 |
+| I02-T06 | PASS (2 testa; dopuna: usamljeni surogati); mutacija `isWellFormed` ubijena | isto |
+| I02-T08 | PASS (2 testa; nova varijanta → 500 za oba dokumenta); M04 i M04-l ubijene | isto |
+| I02-T09 | PASS u 5/5 izvršavanja (15 ponavljanja, svaki put `200×9, 201×1`) | isto |
+| I02-T11 | PASS: (a) unit; (b) 4 varijante; (c) 2 varijante, 503 za 10 017 – 10 046 ms; dva nezavisna roka ubijena | `npm test`, `npm run test:emu` ×3, `provjera.ps1` ×2 |
+| Ostali i02 i regresija i01 | PASS (nepromijenjeni) | isto |
+
+### Poznata ograničenja (dopuna FIX LOOP 1)
+
+- **R-01:** 503 i latencija pod jakom kontencijom (30 paralelnih init-a za isti uid) su prihvaćeno ponašanje (i02/P-5); brojevi iz review-a
+  su u IMPLEMENTATION_LOG. U ovim izvršavanjima I02-T09 (10 paralelnih) nije dobio 503.
+- **R-03 (uz P-9):** van emulatora greška preuzimanja javnih ključeva (`KEY_FETCH_ERROR` → `auth/argument-error`) daje 401 `UNAUTHENTICATED`
+  umjesto 503. Neizvodljivo u emulatoru (emulator ne preuzima ključeve), pa nije testirano. Rješava se uz O-2 (demo okruženje), prije Iteracije 9.
+- **R-07:** `{}` ili prazno tijelo uz `application/json` → `INVALID_DISPLAY_NAME`; bez JSON Content-Type → `INVALID_REQUEST` (README, IMPLEMENTATION_LOG).

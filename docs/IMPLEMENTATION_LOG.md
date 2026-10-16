@@ -277,13 +277,15 @@ backend/test/jedinicni/aplikacija.test.js          (import presretača; N-01)
 .env.example
 README.md
 skripte/provjera.ps1
-docs/iteracije/i02_plan.md                         (samo sekcija 15)
 docs/TRACEABILITY.md                               (samo redovi Iteracije 2)
 docs/IMPLEMENTATION_LOG.md
 docs/TEST_REPORT.md
 ```
 
-Netaknuti: `docs/srs/*` (SHA-256 provjeren), `CLAUDE.md`, `docs/iteracije/i02_brief.md`, katalog grešaka, `GreskaApi.js`,
+`i02_brief.md` i `i02_plan.md` su dodati na grani u koracima Orchestrator-a i Planner-a; Builder je mijenjao samo sekciju 15 plana.
+(Ispravka FIX LOOP 1, R-08: ranije su `i02_plan.md` naveden kao „izmijenjen”, a `i02_brief.md` kao „netaknut”.)
+
+Netaknuti: `docs/srs/*` (SHA-256 provjeren), `CLAUDE.md`, katalog grešaka, `GreskaApi.js`,
 `obradaGresaka.js`, `dnevnik.js`, `korelacija.js`, `kolekcije.js`, `firebase/inicijalizacija.js`, seed, `package.json`/`package-lock.json`, Android.
 
 ### Odstupanja od plana
@@ -351,3 +353,46 @@ iz I02-T02/T03/T11 su već u listi); stvaran kod za nedostupan Auth (`app/networ
 - `provjera.ps1`: kad se skripta pokreće sa preusmjerenim izlazom u procesu koji čeka EOF, Gradle daemon (naslijeđen handle)
   zadržava pipe otvorenim i pozivalac čeka; skripta sama završava normalno (TEST_REPORT). Ne utiče na direktno pokretanje.
 - Ostala ograničenja iz i01 (ranjivosti razvojnih zavisnosti, `npm warn install-scripts`, putanja JBR-a) i dalje važe.
+
+### FIX LOOP 1 (nalazi iz `docs/iteracije/i02_review.md`, commit 1759848)
+
+Uloga: BUILDER, 2026-10-16. Opseg po odluci Orchestrator-a (2026-10-16): R-02 i R-04 ispraviti; R-01, R-05 i R-06 samo test;
+R-03, R-07 i R-08 samo dokumentacija. Nijedan novi paket, kod greške ni endpoint. Detalji izvršavanja (crveno/zeleno, mutacije):
+`docs/TEST_REPORT.md`, sekcija „Iteracija 2 — FIX LOOP 1”.
+
+| Nalaz | Izmjena | Fajlovi | Test |
+|---|---|---|---|
+| R-01 (P2) | Samo test. 503 pod kontencijom je dozvoljen ishod (i02/P-5, init je idempotentan). I02-T09: nijedan 500; statusi ∈ {200, 201, 503} (503 sa tačnim tijelom `SERVICE_UNAVAILABLE`); najviše jedan 201; sva 200/201 tijela identična; na kraju tačno 1 `users` i 1 `loyaltyAccounts`, 0/0, ledger prazan; naknadni sekvencijalni init → 200 sa istim tijelom. Produkcioni kod nepromijenjen. | `backend/test/emulator/inicijalizacijaNaloga.test.js` | I02-T09 |
+| R-02 (P2) | Jedan rok `ROK_ZAVISNOG_SERVISA_MS` (10 000 ms) za cijeli zaštićeni zahtjev: posrednik autentikacije na ulazu postavlja `res.locals.rokDo`; `verifyIdToken` dobija `rokDo − sada`; ruta prosljeđuje `res.locals.rokDo` servisu; `inicijalizujNalog` ne pokreće transakciju kad je preostalo vrijeme ≤ 0 (→ 503 `SERVICE_UNAVAILABLE`), a inače joj daje samo preostalo vrijeme. Komentar u `konfiguracija.js`: „za cijeli zaštićeni zahtjev”. Test pomoćnik `sporProksi` (TCP proksi sa kašnjenjem po komadu, oba smjera). | `backend/src/posrednici/autentikacija.js`, `backend/src/rute/nalog.js`, `backend/src/servisi/inicijalizacijaNaloga.js`, `backend/src/konfiguracija/konfiguracija.js`, `backend/test/pomocnici/procesBackenda.js`, `backend/test/emulator/nedostupnostServisa.test.js` | I02-T11 (c): Auth spor 4 000 / 2 000 ms + Firestore „crna rupa” → 503 za < 12 s. Prije: 18 081 / 14 057 ms (crveno); poslije: 10 037 / 10 029 ms. |
+| R-03 (P2) | Samo dokumentacija (poznato ograničenje, ispod). | ovaj fajl, `docs/TEST_REPORT.md` | — |
+| R-04 (P2) | `jeIspravnoIme` dodatno traži `displayName.isWellFormed()`; usamljeni surogat → 422 `INVALID_DISPLAY_NAME`, ništa upisano. Brojanje `.length` (OD-1), bez trim-a i normalizacije, nepromijenjeno. | `backend/src/validacija/tijeloInita.js`, `backend/test/emulator/inicijalizacijaNaloga.test.js` | I02-T06: `"\uD800"` i `"a\uDC00"` → 422. Prije: 503 poslije ~10 s (crveno; review je u svom okruženju dobio 500); poslije: PASS. |
+| R-05 (P2) | Samo test: korisnik A sa `?uid=<B>`, `X-User-Id: <B>`, `X-Uid: <B>` → 201/200 sa stanjem A; `users/B` i `loyaltyAccounts/B` ne postoje. | `backend/test/emulator/inicijalizacijaNaloga.test.js` | I02-T04 (novi test); mutacija M16 obara test. |
+| R-06 (P2) | Samo test: omotač transakcije čiji `getAll` za postojeći dokument vraća snimak „ne postoji”, zasebno za `users/{uid}` i za `loyaltyAccounts/{uid}` → 500 `INTERNAL_ERROR` bez stack-a, oba dokumenta nepromijenjena (`deepStrictEqual`). | `backend/test/emulator/inicijalizacijaNaloga.test.js` | I02-T08 (nova varijanta); M04 (oba `tx.create` → `tx.set`) i jednolinijska varijanta (samo `loyaltyAccounts`) obaraju test. |
+| R-07 (P3) | Samo dokumentacija (README, sekcija API; ovdje ispod). Ponašanje nepromijenjeno. | `README.md`, ovaj fajl | — |
+| R-08 (P3) | Ispravljena rečenica o `i02_brief.md` / `i02_plan.md` u sekciji „Fajlovi” iznad. | ovaj fajl | — |
+
+Commit-i FIX LOOP 1:
+
+| Commit | Nalaz |
+|---|---|
+| `96df140` i02 fix: R-01 I02-T09 dozvoljava 503 uz provjeru konzistentnosti | R-01 |
+| `a487c8a` i02 fix: R-02 jedan rok za cijeli zaštićeni zahtjev (I02-T11 c) | R-02 |
+| `6c0139a` i02 fix: R-04 displayName mora biti ispravan UTF-16 | R-04 |
+| `f351e1e` i02 fix: R-05 test da se UID ne uzima iz query-ja ni zaglavlja | R-05 |
+| `be9ba49` i02 fix: R-06 test da init ne prepisuje postojeći dokument | R-06 |
+| (ovaj commit) i02 fix: TEST_REPORT, IMPLEMENTATION_LOG, README i sljedivost za FIX LOOP 1 | R-01 ograničenje, R-03, R-07, R-08 |
+
+Poznata ograničenja (dopuna FIX LOOP 1):
+
+- **R-01 — latencija i 503 pod kontencijom (prihvaćeno ponašanje, i02/P-5).** Svaki init, i ponovljeni koji ništa ne piše, ide kroz
+  transakciju koja zaključava oba dokumenta (`maxAttempts: 5`, rok 10 s). Izmjereno u review-u (`docs/iteracije/i02_review.md`, 2.3 (f)):
+  30 paralelnih init-a za isti uid — u 1 od 12 serija 9 odgovora 503 poslije 10 063–10 153 ms; u ostalim serijama najduži odgovor
+  3,5–7,4 s (N=30) i 3,5–6,4 s (N=10); I02-T09 u `provjera.ps1` traje 10,8–18,4 s za 3 × 10 zahtjeva. Stanje je uvijek konzistentno
+  (1 `users`, 1 `loyaltyAccounts`, 0/0, nijedan 500); klijentski retry je bezbjedan jer je init idempotentan.
+- **R-03 — van emulatora greška preuzimanja javnih ključeva daje 401 umjesto 503.** Kad Admin SDK ne može preuzeti javne ključeve
+  (`KEY_FETCH_ERROR`), prijavljuje `auth/argument-error`, koji se mapira na `UNAUTHENTICATED` (i02/P-5 lista). U emulatoru je neizvodljivo
+  (emulator ne preuzima ključeve; klasa P-9). Rješava se uz otvoreno pitanje O-2 (demo okruženje), prije Iteracije 9. Kod nije mijenjan.
+- **R-07 — prazno JSON tijelo.** Tijelo `{}` (ili prazno tijelo) uz `Content-Type: application/json` → `422 INVALID_DISPLAY_NAME`
+  (odobreni redoslijed provjera: nepoznata polja, pa `displayName`, pa `acceptedTermsVersion`); tijelo bez JSON `Content-Type` → `422 INVALID_REQUEST`.
+- I02-T11 (c) zavisi od toga da spori proksi (kašnjenje po komadu u oba smjera) propusti verifikaciju token-a prije isteka roka;
+  izmjereno ukupno vrijeme do 503 je ~10,03 s, pa je granica testa 12 s.

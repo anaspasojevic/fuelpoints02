@@ -57,6 +57,8 @@ Base path `/api/v1` (§26). Greške imaju tijelo `{ "error": { "code", "message"
 tijelo `{ "displayName", "accountStatus", "acceptedTermsVersion", "availablePoints", "reservedPoints" }`.
 Greške: `401 UNAUTHENTICATED`, `409 ACCOUNT_DELETION_IN_PROGRESS`, `422 INVALID_DISPLAY_NAME`, `422 INVALID_REQUEST`,
 `500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`.
+Tijelo `{}` (ili prazno tijelo) uz `Content-Type: application/json` → `422 INVALID_DISPLAY_NAME` (odobreni redoslijed provjera),
+a tijelo bez JSON `Content-Type` → `422 INVALID_REQUEST`.
 
 ## Pokretanje
 
