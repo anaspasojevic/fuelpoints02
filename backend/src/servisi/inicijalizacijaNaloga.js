@@ -1,7 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { GreskaApi } from '../greske/GreskaApi.js';
 import { jeNedostupnostFirestore, saRokom } from '../greske/greskeServisa.js';
-import { ROK_ZAVISNOG_SERVISA_MS } from '../konfiguracija/konfiguracija.js';
 import { KOLEKCIJE } from '../podaci/kolekcije.js';
 
 const MAKSIMALNO_POKUSAJA = 5;
@@ -19,7 +18,12 @@ function stanjeNaloga(korisnik, nalog) {
 // AUTH-02 … AUTH-05, §7.1: users/{uid} i loyaltyAccounts/{uid} u JEDNOJ Firestore transakciji.
 // Kreira se samo dokument koji nedostaje (i02/P-2); postojeći dokument se nikad ne piše. Bez ledger eventa.
 // Callback nema sporednih efekata van tx, jer se može izvršiti više puta.
-export async function inicijalizujNalog(db, { uid, displayName, acceptedTermsVersion }) {
+// rokDo je kraj roka cijelog zahtjeva (res.locals.rokDo); transakcija dobija samo preostalo vrijeme, a bez njega se ne pokreće.
+export async function inicijalizujNalog(db, { uid, displayName, acceptedTermsVersion }, rokDo) {
+  const preostaloMs = rokDo - Date.now();
+  if (!(preostaloMs > 0)) {
+    throw new GreskaApi('SERVICE_UNAVAILABLE');
+  }
   const refKorisnik = db.collection(KOLEKCIJE.users).doc(uid);
   const refNalog = db.collection(KOLEKCIJE.loyaltyAccounts).doc(uid);
 
@@ -66,7 +70,7 @@ export async function inicijalizujNalog(db, { uid, displayName, acceptedTermsVer
   );
 
   try {
-    return await saRokom(transakcija, ROK_ZAVISNOG_SERVISA_MS);
+    return await saRokom(transakcija, preostaloMs);
   } catch (greska) {
     if (greska instanceof GreskaApi) {
       throw greska;

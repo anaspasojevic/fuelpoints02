@@ -7,7 +7,7 @@ import { provjeriTijeloInita } from '../validacija/tijeloInita.js';
 export function dodajRuteNaloga(ruter, { servisi, verzijaUslova }) {
   ruter.post('/account/init', napraviProvjeruTokena(servisi?.auth), async (req, res) => {
     const ulaz = provjeriTijeloInita(req.body, verzijaUslova);
-    const { kreirano, stanje } = await inicijalizujNalog(servisi.db, { uid: res.locals.uid, ...ulaz });
+    const { kreirano, stanje } = await inicijalizujNalog(servisi.db, { uid: res.locals.uid, ...ulaz }, res.locals.rokDo);
     res.status(kreirano ? 201 : 200).json(stanje);
   });
 }

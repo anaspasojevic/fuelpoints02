@@ -1,5 +1,5 @@
 // Pokretanje produkcione ulazne tačke (src/pokreni.js) kao zasebnog procesa, sa eksplicitno sastavljenim env-om.
-// Služi testovima starta (I02-T13) i nedostupnosti zavisnih servisa (I02-T11).
+// Služi testovima starta (I02-T13) i nedostupnosti ili sporosti zavisnih servisa (I02-T11).
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -90,6 +90,50 @@ export function slobodanPort() {
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       server.close(() => razrijesi(port));
+    });
+  });
+}
+
+// TCP proksi prema 127.0.0.1:ciljniPort koji svaki komad podataka, u oba smjera, prosljeđuje sa kašnjenjem kasnjenjeMs
+// (spor, ali dostupan servis). Redoslijed komada je očuvan jer svi tajmeri imaju isto kašnjenje.
+export function sporProksi(ciljniPort, kasnjenjeMs) {
+  return new Promise((razrijesi, odbij) => {
+    const soketi = new Set();
+    function prati(soket) {
+      soketi.add(soket);
+      soket.on('error', () => {});
+      soket.on('close', () => soketi.delete(soket));
+    }
+    function prosljedjuj(izvor, odrediste) {
+      izvor.on('data', (komad) => {
+        setTimeout(() => {
+          if (!odrediste.destroyed) {
+            odrediste.write(komad);
+          }
+        }, kasnjenjeMs);
+      });
+      izvor.on('end', () => setTimeout(() => odrediste.end(), kasnjenjeMs));
+    }
+    const server = net.createServer((klijent) => {
+      const cilj = net.connect({ host: '127.0.0.1', port: ciljniPort });
+      prati(klijent);
+      prati(cilj);
+      prosljedjuj(klijent, cilj);
+      prosljedjuj(cilj, klijent);
+      klijent.on('close', () => cilj.destroy());
+      cilj.on('close', () => setTimeout(() => klijent.destroy(), kasnjenjeMs));
+    });
+    server.once('error', odbij);
+    server.listen(0, '127.0.0.1', () => {
+      razrijesi({
+        port: server.address().port,
+        zatvori() {
+          for (const soket of soketi) {
+            soket.destroy();
+          }
+          return new Promise((gotovo) => server.close(() => gotovo()));
+        },
+      });
     });
   });
 }
