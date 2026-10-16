@@ -1,6 +1,45 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function ownResource() {
+      return signedIn()
+          && resource.data.uid == request.auth.uid;
+    }
+
+    function changedOnly(fields) {
+      return request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly(fields);
+    }
+
+    match /users/{uid} {
+      allow get: if isOwner(uid);
+      allow list, create, delete: if false;
+
+      allow update: if isOwner(uid)
+                    && changedOnly(['displayName', 'updatedAt'])
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() >= 1
+                    && request.resource.data.displayName.size() <= 100
+                    && request.resource.data.updatedAt == request.time;
+    }
+
+    match /loyaltyAccounts/{uid} {
+      allow get: if isOwner(uid);
+      allow list, create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

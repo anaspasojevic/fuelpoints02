@@ -1,7 +1,7 @@
 // Rules testovi nad Firestore emulatorom (projekat demo-fuelpoints).
 // RULE-T12 (preliminarno, §30): internal/unknown kolekcije → DENY. Konačan oblik u Iteraciji 8.
-// I01-T10 (privremen, odluka P-2): default deny za users i loyaltyLedger dok nemaju pravila;
-// users zamjenjuju RULE-T01–T05 (Iteracija 2), loyaltyLedger RULE-T11 (Iteracija 3).
+// I01-T10 (privremen, odluka P-2): default deny za loyaltyLedger dok nema pravila (zamjenjuje ga RULE-T11, Iteracija 3).
+// users dio je uklonjen u Iteraciji 2; zamjenjuju ga RULE-T01 … RULE-T05 i I02-T15 (korisnikINalog.test.js).
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import {
@@ -94,10 +94,6 @@ describe('RULE-T12 (preliminarno) client access nad internal/unknown kolekcijom 
 });
 
 describe('I01-T10 default deny za kolekcije još bez pravila', () => {
-  test('I01-T10 users: get, set, delete, list → DENY (i za vlasnika)', async () => {
-    await provjeriZabranu([`users/${VLASNIK}`]);
-  });
-
   test('I01-T10 loyaltyLedger: get, set, delete, list → DENY', async () => {
     await provjeriZabranu(['loyaltyLedger/dogadjaj1']);
   });
