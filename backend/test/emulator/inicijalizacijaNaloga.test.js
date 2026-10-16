@@ -197,6 +197,36 @@ test('I02-T04 uid u tijelu → 422 INVALID_REQUEST; dokument za uid iz tijela ni
   assert.equal(await podaci('loyaltyAccounts', b.uid), undefined);
 });
 
+// FIX LOOP 1 R-05 (§3.3): UID iz query-ja ili zaglavlja se ignoriše; nalog nastaje samo za UID iz token-a.
+test('I02-T04 uid u query-ju i u zaglavljima X-User-Id / X-Uid se ignoriše → nalog samo za korisnika iz token-a', async () => {
+  const a = await noviKorisnik();
+  const b = await noviKorisnik();
+  const ocekivanoA = {
+    displayName: 'Ana',
+    accountStatus: 'ACTIVE',
+    acceptedTermsVersion: '1.0',
+    availablePoints: 0,
+    reservedPoints: 0,
+  };
+  const pokusaji = [
+    ['?uid=<B>', 201, (zahtjev) => zahtjev, `/api/v1/account/init?uid=${encodeURIComponent(b.uid)}`],
+    ['X-User-Id: <B>', 200, (zahtjev) => zahtjev.set('X-User-Id', b.uid), '/api/v1/account/init'],
+    ['X-Uid: <B>', 200, (zahtjev) => zahtjev.set('X-Uid', b.uid), '/api/v1/account/init'],
+  ];
+  for (const [opis, status, dodaj, putanja] of pokusaji) {
+    const odgovor = await dodaj(request(aplikacija()).post(putanja).set('Authorization', `Bearer ${a.idToken}`)).send({
+      displayName: 'Ana',
+      acceptedTermsVersion: '1.0',
+    });
+    assert.equal(odgovor.status, status, opis);
+    assert.deepStrictEqual(odgovor.body, ocekivanoA, opis);
+    assert.equal(await podaci('users', b.uid), undefined, `${opis}: users/B postoji`);
+    assert.equal(await podaci('loyaltyAccounts', b.uid), undefined, `${opis}: loyaltyAccounts/B postoji`);
+    assert.equal((await podaci('users', a.uid)).displayName, 'Ana', opis);
+    assert.equal(await ukupnoDokumenata(), 2, opis);
+  }
+});
+
 test('I02-T05 server-controlled ili nepoznato polje u tijelu → 422 INVALID_REQUEST, ništa upisano', async () => {
   const { idToken } = await noviKorisnik();
   const dodaci = {
