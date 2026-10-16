@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { afterEach, mock, test } from 'node:test';
-import { format } from 'node:util';
 import request from 'supertest';
 import { napraviAplikaciju } from '../../src/aplikacija.js';
 import { KATALOG_GRESAKA } from '../../src/greske/katalogGresaka.js';
+import { presretniLog, tekstLoga } from '../pomocnici/presretanjeLoga.js';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const INTERNA_PORUKA = 'interna tajna poruka C:\\tajno\\putanja\\fajl.js';
@@ -11,31 +11,6 @@ const INTERNA_PORUKA = 'interna tajna poruka C:\\tajno\\putanja\\fajl.js';
 afterEach(() => {
   mock.restoreAll();
 });
-
-const METODE_KONZOLE = ['log', 'info', 'warn', 'error', 'debug'];
-
-// Bilježi sve izlazne kanale procesa da testovi mogu provjeriti šta se loguje: console.* se utišava,
-// a process.stdout/stderr.write se bilježi i prosljeđuje (njima piše i test runner).
-function presretniLog() {
-  const zapisi = [];
-  for (const metoda of METODE_KONZOLE) {
-    mock.method(console, metoda, (...argumenti) => {
-      zapisi.push(format(...argumenti));
-    });
-  }
-  for (const tok of [process.stdout, process.stderr]) {
-    const pisi = tok.write;
-    mock.method(tok, 'write', (komad, ...ostalo) => {
-      zapisi.push(String(komad));
-      return pisi.call(tok, komad, ...ostalo);
-    });
-  }
-  return zapisi;
-}
-
-function tekstLoga(zapisi) {
-  return zapisi.join('\n');
-}
 
 function provjeriTijeloGreske(odgovor, status, kod) {
   assert.equal(odgovor.status, status);
