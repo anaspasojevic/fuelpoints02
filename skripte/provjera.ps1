@@ -10,7 +10,7 @@ $ocekivaniHash = '7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C602
 $portSmoke = '3999'
 
 # Promjene env varijabli važe samo dok skripta radi; na kraju se vraćaju.
-$naziviEnv = @('PATH', 'JAVA_HOME', 'PORT', 'FIREBASE_PROJECT_ID', 'VERZIJA_USLOVA')
+$naziviEnv = @('PATH', 'JAVA_HOME', 'PORT', 'FIREBASE_PROJECT_ID', 'VERZIJA_USLOVA', 'POS_API_KLJUCEVI')
 $sacuvanEnv = @{}
 foreach ($naziv in $naziviEnv) {
     $sacuvanEnv[$naziv] = [Environment]::GetEnvironmentVariable($naziv, 'Process')
@@ -105,6 +105,10 @@ try {
         $env:PORT = $portSmoke
         $env:FIREBASE_PROJECT_ID = 'demo-fuelpoints'
         $env:VERZIJA_USLOVA = '1.0'
+        # POS ključ (§3.4, NFR-02) se generiše u toku izvršavanja (base64url od 32 slučajna bajta) i nikad se ne ispisuje.
+        $bajtovi = New-Object byte[] 32
+        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bajtovi)
+        $env:POS_API_KLJUCEVI = 'SIM01:' + [Convert]::ToBase64String($bajtovi).TrimEnd('=').Replace('+', '-').Replace('/', '_')
         $proces = Start-Process node -ArgumentList 'src/pokreni.js' -WorkingDirectory (Join-Path $korijen 'backend') -PassThru -NoNewWindow
         try {
             $odgovor = $null

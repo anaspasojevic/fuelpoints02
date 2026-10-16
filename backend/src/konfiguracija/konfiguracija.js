@@ -1,3 +1,5 @@
+import { procitajPosKljuceve } from './posKljucevi.js';
+
 // Konfiguracija isključivo iz environment varijabli, sa fail fast provjerom.
 // Poruke greške imenuju samo varijablu i razlog, nikad vrijednost.
 
@@ -48,9 +50,18 @@ export function ucitajKonfiguraciju(env) {
   if (verzijaUslova === undefined || verzijaUslova.trim() === '') {
     problemi.push('nedostaje obavezna varijabla VERZIJA_USLOVA');
   }
+  // §3.4, NFR-02: mapa POS ključ → stationId (i03/P-2); konfiguracija čuva samo otiske ključeva.
+  const pos = procitajPosKljuceve(env.POS_API_KLJUCEVI);
+  problemi.push(...pos.problemi);
   if (problemi.length > 0) {
     throw new GreskaKonfiguracije(problemi);
   }
 
-  return Object.freeze({ port: procitajPort(port), projectId, host: '127.0.0.1', verzijaUslova });
+  return Object.freeze({
+    port: procitajPort(port),
+    projectId,
+    host: '127.0.0.1',
+    verzijaUslova,
+    posStanice: pos.stanice,
+  });
 }
