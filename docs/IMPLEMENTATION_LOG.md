@@ -495,13 +495,15 @@ backend/test/emulator/nedostupnostServisa.test.js   (samo env spawn-ovanog proce
 .env.example
 README.md
 skripte/provjera.ps1                                (UTF-8 sa BOM-om, CRLF)
-docs/iteracije/i03_plan.md                          (samo sekcija 15)
 docs/TRACEABILITY.md                                (samo redovi Iteracije 3)
 docs/IMPLEMENTATION_LOG.md
 docs/TEST_REPORT.md
 ```
 
-Netaknuti: `docs/srs/*` (SHA-256 provjeren), `docs/iteracije/i03_brief.md`, `CLAUDE.md`, katalog grešaka, `GreskaApi.js`, `obradaGresaka.js`,
+`i03_brief.md` i `i03_plan.md` su dodati na grani u koracima Orchestrator-a i Planner-a; Builder je mijenjao samo sekciju 15 plana.
+(Ispravka FIX LOOP 1, R-05: ranije je `i03_plan.md` naveden kao „izmijenjen”, a `i03_brief.md` kao „netaknut”.)
+
+Netaknuti: `docs/srs/*` (SHA-256 provjeren), `CLAUDE.md`, katalog grešaka, `GreskaApi.js`, `obradaGresaka.js` (do FIX LOOP 1, R-04),
 `dnevnik.js`, `greskeServisa.js`, `korelacija.js`, `kolekcije.js`, `firebase/inicijalizacija.js`, `inicijalizacijaNaloga.js`,
 `posrednici/autentikacija.js`, `rute/nalog.js`, `validacija/tijeloInita.js`, seed, `package.json`/`package-lock.json`, Android.
 
@@ -585,3 +587,42 @@ ne propusti do Firestore-a; strože od doslovnog regex-a iz 5.3, isti smisao (re
   i02 testovi se po pravilima ne mijenjaju (napomena za Reviewer-a / FIX LOOP).
 - Ostala ograničenja iz i01/i02 (nepotpisani emulator token-i, `MetadataLookupWarning`, `npm warn install-scripts`, Gradle daemon i preusmjeren
   izlaz `provjera.ps1`, N-02) i dalje važe.
+
+### FIX LOOP 1 (nalazi iz `docs/iteracije/i03_review.md`, commit f3659f6)
+
+Uloga: BUILDER, 2026-10-16. Opseg po odluci Orchestrator-a (2026-10-16): R-01, R-02 i R-03 samo test; R-04 ispravka koda (odluka D-3);
+R-05 samo dokument; napomena review-a o kontenciji kao poznato ograničenje. Nijedan novi paket, kod greške ni endpoint. Detalji izvršavanja
+(crveno/zeleno, mutacije): `docs/TEST_REPORT.md`, sekcija „Iteracija 3 — FIX LOOP 1”.
+
+| Nalaz | Izmjena | Fajlovi | Test |
+|---|---|---|---|
+| R-01 (P2) | Samo test. Ključ SIM01 sa `?stationId=SIM02`, sa zaglavljem `X-Station-Id: SIM02` i sa zaglavljem `stationId: SIM02` (tri zasebna zahtjeva, `posTransactionId` Q1/Q2/Q3) → 201, `stationId` `SIM01`, `purchaseId` `SIM01__…`, `purchases/SIM01__…`.`stationId` = `SIM01`, `purchases/SIM02__…` ne postoji. Produkcioni kod nepromijenjen. | `backend/test/emulator/posAutentikacija.test.js` | I03-T01 (b) (novi test); M02 i M02b ubijene |
+| R-02 (P3) | Samo test. `provjeriTijeloKupovine(tijelo, sadaMs)` sa fiksnim `sadaMs`: `occurredAt` = `sadaMs + 300 000` ms → bez greške (`occurredAtMs` tačan); `+ 300 001` ms → `GreskaApi` `INVALID_OCCURRED_AT`. | `backend/test/jedinicni/vrijemeKupovine.test.js` | I03-T07 (c) (novi unit test); M06 ubijena |
+| R-03 (P3) | Samo test. I03-T09 (format, 0 pristupa bazi) dopunjen sa `"____"` i `"__\n__"` → 404 `LOYALTY_ACCOUNT_NOT_FOUND`. | `backend/test/emulator/kupovina.test.js` | I03-T09; M25 i M25s ubijene |
+| R-04 (P3) | Polje `putanja` u logu greške više ne sadrži sirovu putanju zahtjeva: za pogođenu rutu bilježi se `req.route.path` — šablon relativan na ruter `/api/v1` (utvrđeno probom nad Express 5.2.1: u centralnom rukovaocu je `req.route.path` = `/pos/purchases`, a `req.baseUrl` = `""`), za zahtjev bez pogođene rute (NOT_FOUND, greška JSON parsera prije rutera, nepodržan metod) fiksno `(nepoznata ruta)`. Ostala polja loga i `dnevnik.js` nepromijenjeni. README: rečenica o sadržaju loga. | `backend/src/greske/obradaGresaka.js`, `backend/test/emulator/logBezPosKljuca.test.js`, `README.md` | I03-T17 (a) i (b): `POST /api/v1/pos/purchases/<K1>` sa ispravnim zaglavljem i `POST /api/v1/pos/<K2>` bez zaglavlja → 404 `NOT_FOUND`, log bez K1/K2, `putanja` = `(nepoznata ruta)`; 401 na `/pos/purchases` → `putanja` = `/pos/purchases`. Prije: crveno (`log sadrži POS ključ`); poslije: PASS; mutacija `putanja: req.path` ubijena. |
+| R-05 (P3) | Ispravljena klasifikacija `i03_brief.md` / `i03_plan.md` u sekciji „Fajlovi” iznad. | ovaj fajl | — |
+
+Nijedan postojeći test i01/i02/i03 ne zavisi od sirove putanje u logu (`grep` po `putanja` u `backend/test`: samo lokalne promjenljive i
+putanje dokumenata), pa nijedna asercija nije uklonjena ni oslabljena. I03-T17 (b) očekivani statusi prošireni sa `[201, 401, 422]` na
+`[201, 401, 422, 404, 404]`.
+
+Commit-i FIX LOOP 1:
+
+| Commit | Nalaz |
+|---|---|
+| `45f6884` i03 fix: R-01 test da se stationId ne uzima iz query-ja ni zaglavlja | R-01 |
+| `4bd81da` i03 fix: R-02 test uključive granice +5 min za occurredAt | R-02 |
+| `235323f` i03 fix: R-03 test rezervisanih oblika loyaltyUid (____, __\n__) | R-03 |
+| `5b0cfa0` i03 fix: R-04 log greške bilježi šablon rute, ne sirovu putanju | R-04 |
+| (ovaj commit) i03 fix: TEST_REPORT, IMPLEMENTATION_LOG, README i sljedivost za FIX LOOP 1 | R-04 (README), R-05, poznato ograničenje |
+
+Poznata ograničenja (dopuna FIX LOOP 1):
+
+- **503 i latencija pod jakom kontencijom istog korisnika (prihvaćeno ponašanje po brief-u i i02/P-5).** Transakcije istog korisnika se u
+  emulatoru serijalizuju (zaključavanje). Izmjereno u review-u (`docs/iteracije/i03_review.md`, sekcija 3, napomena; 2.3 (f)): 20 paralelnih
+  različitih kupovina istog korisnika → 36–123 odgovora 503 (uz retry do uspjeha), trajanje 48–98 s (47,6 s i 98,2 s); 10–30 identičnih
+  paralelnih povremeno daje jedan 503 (1 od 3 serije) i latenciju do ~10 s. Stanje je uvijek konzistentno (nijedan dupli EARN ni
+  notifikacija, nijedan 500, zbir bodova tačan), a POS retry je bezbjedan jer je idempotency ključ `(stationId, posTransactionId)`. Za realan
+  POS (jedna kupovina po korisniku u trenutku) bez uticaja; ponašanje nad produkcionim Firestore-om nije provjerljivo u emulatoru. Kod nije mijenjan.
+- **R-04:** log bilježi šablon rute relativan na ruter `/api/v1` (bez prefiksa `/api/v1`), npr. `/pos/purchases`, `/account/init`; za
+  zahtjev na postojeću putanju sa nepodržanim metodom (npr. `GET /api/v1/pos/purchases`) ruta nije pogođena, pa je `putanja` `(nepoznata ruta)`.

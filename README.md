@@ -68,6 +68,8 @@ konfiguracija u memoriji čuva samo SHA-256 otiske ključeva.
 ## API
 
 Base path `/api/v1` (§26). Greške imaju tijelo `{ "error": { "code", "message", "correlationId" } }` (§27).
+Serverski log greške je JSON linija sa vremenom, `correlationId`, kodom, statusom, metodom i šablonom pogođene rute
+(npr. `/pos/purchases`, ili `(nepoznata ruta)`), a za 5xx i stack — nikad sirova putanja, query, zaglavlja ni tijelo zahtjeva.
 
 **API-01 `POST /api/v1/account/init`** — zaglavlje `Authorization: Bearer <Firebase ID token>`, tijelo tačno
 `{ "displayName", "acceptedTermsVersion" }`. U jednoj Firestore transakciji kreira `users/{uid}` i `loyaltyAccounts/{uid}`
