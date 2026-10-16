@@ -374,7 +374,8 @@ test('I02-T08 failure injection između dva upisa i prije commit-a → 500 bez s
   assert.equal(await ukupnoDokumenata(), 2);
 });
 
-test('I02-T09 10 paralelnih init-a za isti uid → jedan users i jedan loyaltyAccounts, bez 500, isto stanje (3 ponavljanja)', async () => {
+// 503 pod kontencijom je dozvoljen ishod (i02/P-5, init je idempotentan; FIX LOOP 1, R-01); konzistentnost se provjerava uvijek.
+test('I02-T09 10 paralelnih init-a za isti uid → bez 500, najviše jedan 201, ista uspješna tijela, jedan users i jedan loyaltyAccounts (3 ponavljanja)', async (t) => {
   for (let ponavljanje = 0; ponavljanje < 3; ponavljanje += 1) {
     await ocistiEmulatore();
     const { uid, idToken } = await noviKorisnik();
@@ -388,23 +389,43 @@ test('I02-T09 10 paralelnih init-a za isti uid → jedan users i jedan loyaltyAc
       ),
     );
     const statusi = odgovori.map((odgovor) => odgovor.status);
-    assert.ok(statusi.every((status) => status === 200 || status === 201), `statusi: ${statusi.join(',')}`);
-    const kreirani = odgovori.map((odgovor, i) => [odgovor, i]).filter(([odgovor]) => odgovor.status === 201);
-    assert.equal(kreirani.length, 1, `broj 201: ${kreirani.length}`);
-    for (const odgovor of odgovori) {
-      assert.deepStrictEqual(odgovor.body, odgovori[0].body);
+    t.diagnostic(`ponavljanje ${ponavljanje + 1}: statusi ${statusi.join(',')}`);
+    assert.ok(statusi.every((status) => [200, 201, 503].includes(status)), `statusi: ${statusi.join(',')}`);
+    for (const odgovor of odgovori.filter((o) => o.status === 503)) {
+      provjeriTijeloGreske(odgovor, 503, 'SERVICE_UNAVAILABLE', '503 pod kontencijom');
     }
-    const [pobjednik, indeks] = kreirani[0];
-    assert.equal(pobjednik.body.displayName, `Ime-${indeks}`);
-    assert.equal(pobjednik.body.availablePoints, 0);
-    assert.equal(pobjednik.body.reservedPoints, 0);
+    const kreirani = odgovori.map((odgovor, i) => [odgovor, i]).filter(([odgovor]) => odgovor.status === 201);
+    assert.ok(kreirani.length <= 1, `broj 201: ${kreirani.length}`);
+    const uspjesni = odgovori.filter((odgovor) => odgovor.status === 200 || odgovor.status === 201);
+    for (const odgovor of uspjesni) {
+      assert.deepStrictEqual(odgovor.body, uspjesni[0].body);
+    }
+    if (kreirani.length === 1) {
+      const [pobjednik, indeks] = kreirani[0];
+      assert.equal(pobjednik.body.displayName, `Ime-${indeks}`);
+    }
+
     assert.equal(await brojDokumenata('users'), 1);
     assert.equal(await brojDokumenata('loyaltyAccounts'), 1);
     assert.equal(await brojDokumenata('loyaltyLedger'), 0);
-    assert.equal((await podaci('users', uid)).displayName, `Ime-${indeks}`);
+    const korisnik = await podaci('users', uid);
+    assert.match(korisnik.displayName, /^Ime-\d$/);
     const nalog = await podaci('loyaltyAccounts', uid);
     assert.equal(nalog.availablePoints, 0);
     assert.equal(nalog.reservedPoints, 0);
+
+    const naknadni = await init(idToken, { displayName: 'Naknadno', acceptedTermsVersion: '1.0' });
+    assert.equal(naknadni.status, 200, 'naknadni sekvencijalni init');
+    assert.deepStrictEqual(naknadni.body, {
+      displayName: korisnik.displayName,
+      accountStatus: 'ACTIVE',
+      acceptedTermsVersion: '1.0',
+      availablePoints: 0,
+      reservedPoints: 0,
+    });
+    if (uspjesni.length > 0) {
+      assert.deepStrictEqual(naknadni.body, uspjesni[0].body);
+    }
   }
 });
 
