@@ -1,6 +1,9 @@
 // Konfiguracija isključivo iz environment varijabli, sa fail fast provjerom.
 // Poruke greške imenuju samo varijablu i razlog, nikad vrijednost.
 
+// Rok za jedan poziv zavisnog servisa (verifikacija token-a, Firestore transakcija); i02/P-5. Konstanta, nije env varijabla.
+export const ROK_ZAVISNOG_SERVISA_MS = 10_000;
+
 export class GreskaKonfiguracije extends Error {
   constructor(problemi) {
     super(problemi.join('; '));
