@@ -747,3 +747,41 @@ Svaki commit ima zelen `npm test`; emulator testovi zeleni najkasnije na commit-
 
 **Korak 10: Pull request**
 - `gh pr create --base main --head iteracija-03 --title "i03: Purchase / EARN"`, opis na srpskom (isporuka A–G, brief tačka 9), bez potpisa alata. BEZ merge-a i BEZ taga.
+
+## 15. Odluke Orchestrator-a (odobrenje plana)
+
+Plan je ODOBREN (Orchestrator, 2026-10-16) uz ispravke K-1 i K-2 ispod. Ana je odluke O-12 i O-13 donijela 2026-10-16 (brief, tačka 5).
+
+i03/P-1  Odobreno: 201 za prvi zahtjev, 200 za retry; tijelo TAČNO { purchaseId, stationId, posTransactionId, volumeMl, amountMinor,
+         currency, earnedPoints, occurredAt } tim redoslijedom ključeva, iz sačuvanog dokumenta; occurredAt = toISOString() sačuvanog
+         Timestamp-a; bez uid-a, balance-a, recordedAt-a, ID-eva ledger eventa/notifikacije i ključa.
+i03/P-2  Odobreno: POS_API_KLJUCEVI=stationId:ključ[,…], bez razmaka; ključ kanonski base64url od 32 bajta (43 znaka);
+         heuristika "najmanje 16 različitih znakova" ostaje; provjere i poruke tačno po 5.6.
+i03/P-3  Odobreno: SHA-256 + crypto.timingSafeEqual nad 32 bajta, petlja kroz sve stanice bez ranog izlaska, odluka poslije petlje;
+         konfiguracija čuva samo otiske, nikad sirov ključ.
+i03/P-4  Odobreno po 5.4 (RFC 3339, obavezna zona, veliko T/Z, 0–3 decimale, vlastita kalendarska provjera, opseg Timestamp-a).
+i03/P-5  Odobreno po 5.3 (string, isWellFormed, 1–128 UTF-16 jedinica, bez "/", nije "."/"..", ne ^__.*__$).
+i03/P-6  Odobreno po tabeli 5.3. Dopuna (obavezujuća): validacija ulaza, uključujući format loyaltyUid, UVIJEK prethodi provjeri
+         idempotentnosti — i kad purchase već postoji. Retry sa neispravnim poljem dobija kod tog polja (npr. occurredAt > +5 min →
+         422 INVALID_OCCURRED_AT; neispravan format loyaltyUid → 404 LOYALTY_ACCOUNT_NOT_FOUND), a ne prvi rezultat ni 409.
+         Upisati u README i IMPLEMENTATION_LOG; I03-T18 dopuniti sa ta dva slučaja nad postojećom kupovinom (dokumenti
+         deepStrictEqual prije/poslije, 0 pristupa bazi).
+i03/P-7  Odobreno: loyaltyLedger/earn_{purchaseId}. Prefiksi reserve_/redeem_/release_ za i04–i06 su samo prijedlog i ne obavezuju te iteracije.
+i03/P-8  Odobreno: title "Bodovi za kupovinu goriva"; body "Za kupovinu goriva dobili ste {p} {bod|boda|bodova}." po pravilu 5.7.
+i03/P-9  Odobreno: -0 → 0 za volumeMl i amountMinor.
+i03/P-10 Prihvaćene oznake I03-T01 … I03-T22.
+i03/P-11 Odobreno: aplikacija bez posStanice → POST /pos/purchases 500 INTERNAL_ERROR (fail closed).
+i03/P-12 Prihvaćeno: okolni whitespace uklanja HTTP parser; unutrašnji znakovi se porede tačno; duplo zaglavlje → 401.
+i03/P-13 Prihvaćeno: rok ostaje konstanta; I03-T13 traje ~11 s.
+i03/P-14 Prihvaćeno: poređenje Rules sa .docx privremenom skriptom van repoa; komanda i stvarni izlaz u TEST_REPORT.
+i03/P-15 Odobreno: neispravan loyaltyAccounts (vrijednost nije nenegativan siguran cijeli broj) → 500, ništa upisano.
+
+Ispravke plana (obavezujuće):
+K-1 I03-T10 (c) ne obara M17: kad su ledger event i notifikacija vidljivi, transakcija pada na provjeri nekonzistentnog stanja prije
+    upisa, a kad bi bili sakriveni, tx.create ledger-a bi oborio cijeli commit — pa tx.set za purchase tu ne pravi štetu.
+    Dodaje se I03-T10 (c2): Admin SDK pripremi SAMO purchases/SIM01__Z (kanonski, bez ledger eventa i notifikacije), omotač ga
+    sakrije pri čitanju (sakrijPostojece) → očekivano 500 INTERNAL_ERROR bez stack-a, purchase dokument deepStrictEqual pripremljenom,
+    0 ledger događaja, 0 notifikacija, balance nepromijenjen. M17 MORA oboriti (c2).
+K-2 provjera.ps1 ne smije biti crven između koraka 2 i 7. U koraku 2 se u skripte/provjera.ps1 dodaje POS_API_KLJUCEVI u $naziviEnv
+    i generisanje ključa (tehnika iz 11.2, bez ispisa) za postojeći smoke start; dokaz koraka 2 dopunjen sa
+    `.\skripte\provjera.ps1; $LASTEXITCODE` → 0. Korak 7 dodaje novi smoke 401 UNAUTHENTICATED_POS i README. Fajl ostaje UTF-8 sa BOM-om i CRLF.
