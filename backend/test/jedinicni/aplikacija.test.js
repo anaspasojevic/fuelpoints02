@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, mock, test } from 'node:test';
+import express from 'express';
 import request from 'supertest';
 import { napraviAplikaciju } from '../../src/aplikacija.js';
 import { KATALOG_GRESAKA } from '../../src/greske/katalogGresaka.js';
@@ -98,6 +99,25 @@ test('I01-T03 greška sa 4xx statusom koja ne dolazi iz JSON parsera → 500 INT
   });
   const odgovor = await request(aplikacija).get('/api/v1/test-greska-4xx');
   provjeriTijeloGreske(odgovor, 500, 'INTERNAL_ERROR');
+});
+
+// Backlog i01 N-01: greška JSON parsera sa 5xx statusom (stream.encoding.set, 500) ostaje INTERNAL_ERROR.
+// Spoljna aplikacija postavlja kodiranje toka prije parsera; produkcioni kod se ne mijenja.
+test('I01-T03 greška JSON parsera sa 5xx statusom → 500 INTERNAL_ERROR, ne INVALID_REQUEST (N-01)', async () => {
+  const presretac = presretniLog();
+  const spoljna = express();
+  spoljna.use((req, res, next) => {
+    req.setEncoding('utf8');
+    next();
+  });
+  spoljna.use(napraviAplikaciju());
+  const odgovor = await request(spoljna)
+    .post('/api/v1/nepostojeca')
+    .set('Content-Type', 'application/json')
+    .send('{"a":1}');
+  provjeriTijeloGreske(odgovor, 500, 'INTERNAL_ERROR');
+  assert.doesNotMatch(odgovor.text, /encoding|stream|JSON/i);
+  assert.ok(tekstLoga(presretac).includes('"status":500'), 'greška parsera nije logovana kao 500');
 });
 
 test('I01-T04 sinhroni i async izuzetak → 500 INTERNAL_ERROR bez stack-a, putanje i originalne poruke', async () => {
