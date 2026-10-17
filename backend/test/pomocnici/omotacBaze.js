@@ -5,6 +5,7 @@
 // - baciNaUpisu: n          → n-ti upis u transakciji (create/set/update/delete) baca grešku sa internim detaljima;
 // - baciPrijeCommita        → callback se izvrši do kraja, pa omotač baci grešku (commit se ne dešava);
 // - sakrijPostojece: [put]  → tx.get/tx.getAll za te putanje vraćaju snimak „ne postoji” (zastarjelo čitanje);
+//                             za tx.get(query) (i04/P-11) ti dokumenti se izostavljaju iz rezultata upita;
 // - zadrziPrijeCommitaMs    → callback se izvrši, pa omotač čeka prije commit-a (commitZavrsen je promise kraja transakcije);
 // - odbijTransakcijuSa      → runTransaction odmah odbija sa greškom koja nosi ta polja (npr. { code: 14 }).
 // sveTransakcijeZavrsene čeka kraj SVIH pokrenutih transakcija, i onih čiji je zahtjev već dobio 503 (kasni commit).
@@ -32,6 +33,21 @@ export function omotacBaze(
     return sakrijPostojece.includes(snimak.ref.path) ? lazanSnimakBezDokumenta(snimak.ref) : snimak;
   }
 
+  // Rezultat upita (QuerySnapshot nema ref, ima niz docs) bez dokumenata čija je putanja u sakrijPostojece.
+  function sakrijIzUpita(rezultat) {
+    if (sakrijPostojece.length === 0) {
+      return rezultat;
+    }
+    const docs = rezultat.docs.filter((dokument) => !sakrijPostojece.includes(dokument.ref.path));
+    return {
+      docs,
+      size: docs.length,
+      empty: docs.length === 0,
+      query: rezultat.query,
+      forEach: (funkcija, ovo) => docs.forEach(funkcija, ovo),
+    };
+  }
+
   function posrednikTransakcije(tx) {
     return new Proxy(tx, {
       get(cilj, svojstvo) {
@@ -39,6 +55,9 @@ export function omotacBaze(
         if (svojstvo === 'get') {
           return async (...argumenti) => {
             const rezultat = await vrijednost.apply(cilj, argumenti);
+            if (rezultat && rezultat.ref === undefined && Array.isArray(rezultat.docs)) {
+              return sakrijIzUpita(rezultat);
+            }
             return rezultat && rezultat.ref !== undefined ? sakrij(rezultat) : rezultat;
           };
         }

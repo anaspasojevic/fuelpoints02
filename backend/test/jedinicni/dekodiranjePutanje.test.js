@@ -91,6 +91,24 @@ test('I04-T03 (c) D-5: neispravno percent-kodiran parametar test rute → 404 NO
   await provjeriD5(aplikacijaSaTestRutom(), NEISPRAVNO_KODIRANI);
 });
 
+test('I04-T03 (c) D-5: neispravno percent-kodiran rewardId na produkcionoj ruti API-03 → 404 NOT_FOUND, log bez stack-a i sirove vrijednosti', async () => {
+  await provjeriD5(napraviAplikaciju(), [
+    ['post', '/api/v1/rewards/%E0%A4%A/issue'],
+    ['get', '/api/v1/rewards/%E0%A4%A/issue'],
+    ['post', '/api/v1/rewards/%ZZ/issue'],
+    ['post', `/api/v1/rewards/${SENTINEL}%E0/issue`],
+  ]);
+});
+
+test('I04-T03 (c) D-5: neispravan JSON uz neispravno kodiran rewardId produkcione rute → 422 INVALID_REQUEST (i04/P-8)', async () => {
+  presretniLog();
+  const odgovor = await request(napraviAplikaciju())
+    .post('/api/v1/rewards/%E0%A4%A/issue')
+    .set('Content-Type', 'application/json')
+    .send('{neispravan');
+  provjeriTijeloGreske(odgovor, 422, 'INVALID_REQUEST', 'neispravan JSON + D-5 na API-03');
+});
+
 test('I04-T03 (c) D-5: neispravan JSON uz neispravno kodiran parametar → 422 INVALID_REQUEST (stvaran redoslijed, i04/P-8)', async () => {
   presretniLog();
   const odgovor = await request(aplikacijaSaTestRutom())
