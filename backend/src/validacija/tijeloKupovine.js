@@ -1,4 +1,5 @@
 import { GreskaApi } from '../greske/GreskaApi.js';
+import { jeIspravanIdDokumenta } from './identifikator.js';
 import { procitajOccurredAt } from './vrijemeKupovine.js';
 
 // Strogo tijelo API-02 (§8.4, §8.5, §3.1): stationId, earnedPoints i recordedAt su isključivo serverski.
@@ -20,20 +21,6 @@ function jeIntegerUOpsegu(vrijednost, najmanje, najvise) {
 // JSON -0 je integer, ali bi ga Firestore upisao kao double (i03/P-9).
 function bezNegativneNule(vrijednost) {
   return vrijednost === 0 ? 0 : vrijednost;
-}
-
-// Format loyaltyUid (i03/P-5) prije bilo kakvog pristupa Firestore-u: ispravan UTF-16, 1–128 jedinica,
-// bez "/", nije "." ni "..", ne odgovara rezervisanom obliku __…__ (zaštita putanje dokumenta).
-function jeIspravanFormatUid(loyaltyUid) {
-  return (
-    loyaltyUid.isWellFormed() &&
-    loyaltyUid.length >= 1 &&
-    loyaltyUid.length <= 128 &&
-    !loyaltyUid.includes('/') &&
-    loyaltyUid !== '.' &&
-    loyaltyUid !== '..' &&
-    !/^__.*__$/s.test(loyaltyUid)
-  );
 }
 
 // Redoslijed provjera je obavezujući (i03/P-6, tabela 5.3); prvi neuspjeh određuje kod.
@@ -65,8 +52,8 @@ export function provjeriTijeloKupovine(tijelo, sadaMs) {
   if (occurredAtMs === null || occurredAtMs > sadaMs + NAJVISE_U_BUDUCNOSTI_MS) {
     throw new GreskaApi('INVALID_OCCURRED_AT');
   }
-  // O-10: neispravan format i nepostojeći nalog daju isti kod; ovdje bez pristupa bazi.
-  if (!jeIspravanFormatUid(loyaltyUid)) {
+  // O-10: neispravan format (i03/P-5) i nepostojeći nalog daju isti kod; ovdje bez pristupa bazi.
+  if (!jeIspravanIdDokumenta(loyaltyUid)) {
     throw new GreskaApi('LOYALTY_ACCOUNT_NOT_FOUND');
   }
   return {
