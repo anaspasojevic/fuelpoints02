@@ -1,4 +1,5 @@
 import { zabiljeziGresku } from '../dnevnik.js';
+import { KOLEKCIJE } from '../podaci/kolekcije.js';
 import { GreskaApi } from './GreskaApi.js';
 import { KATALOG_GRESAKA } from './katalogGresaka.js';
 
@@ -27,6 +28,34 @@ function putanjaZaLog(req) {
   return typeof req.route?.path === 'string' ? req.route.path : '(nepoznata ruta)';
 }
 
+// O-18 (i04 FIX LOOP 1, R-04): putanja dokumenta u poruci Firestore greške (npr. "path=/rewardRequests/<requestKey>",
+// "documents/…", "/loyaltyLedger/release_<voucherId>") može nositi requestKey ili voucherId, pa se u logu rediguje.
+const PUTANJA_DOKUMENTA = new RegExp(
+  [
+    String.raw`path=[^\s\]}),]*`,
+    String.raw`documents/[^\s\]}),]*`,
+    String.raw`\b(?:${Object.values(KOLEKCIJE).join('|')})/[^\s\]}),]*`,
+  ].join('|'),
+  'g',
+);
+
+function redigujPutanje(tekst) {
+  return tekst.replace(PUTANJA_DOKUMENTA, '[putanja dokumenta]');
+}
+
+// Opis neočekivane (5xx) greške za log: name, numerički code (gRPC, npr. 6 za ALREADY_EXISTS), poruka sa redigovanim
+// putanjama dokumenata i okviri stack-a ("at …"). Ostali redovi stack-a se ne bilježe (u njima se ponavlja poruka).
+function opisNeocekivaneGreske(err) {
+  if (!(err instanceof Error)) {
+    return redigujPutanje(String(err));
+  }
+  const kod = Number.isInteger(err.code) ? ` (code ${err.code})` : '';
+  const okviri = String(err.stack ?? '')
+    .split('\n')
+    .filter((linija) => /^\s+at /.test(linija));
+  return [`${err.name}${kod}: ${redigujPutanje(String(err.message))}`, ...okviri.map(redigujPutanje)].join('\n');
+}
+
 // Centralni rukovalac: tijelo tačno po §27, poruka uvijek iz kataloga, bez stack trace-a.
 export function centralniRukovalacGreskama(err, req, res, next) {
   if (res.headersSent) {
@@ -41,7 +70,7 @@ export function centralniRukovalacGreskama(err, req, res, next) {
     status: stavka.http,
     metod: req.method,
     putanja: putanjaZaLog(req),
-    stack: stavka.http >= 500 ? String(err?.stack ?? err) : undefined,
+    stack: stavka.http >= 500 ? opisNeocekivaneGreske(err) : undefined,
   });
   res.status(stavka.http).json({
     error: { code: stavka.kod, message: stavka.poruka, correlationId },

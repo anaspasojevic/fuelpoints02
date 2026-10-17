@@ -1,7 +1,8 @@
 // I04-T16 (NFR-07, D-3, D-5, §3.3): za svaki ishod API-03 (201, 200, 401, 404, 409, 422, 500, 503) log (svi kanali) ne sadrži token,
 // sentinel, requestId iz tijela, requestKey, voucherId ni sirovu putanju; nijedan odgovor nema stack, balance, uid ni requestKey.
+// FIX LOOP 1 (R-04, O-18): I04-T16 (c) — log 500 iz commit-a bez putanje dokumenta.
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
+import crypto, { createHash, randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, mock, test } from 'node:test';
 import { deleteApp } from 'firebase-admin/app';
 import { Timestamp } from 'firebase-admin/firestore';
@@ -162,6 +163,93 @@ test('I04-T16 (a) log (svi kanali) i odgovori za sve ishode API-03 bez token-a, 
   ]);
   assert.equal(ishodi[3][2].body.error.code, 'REWARD_NOT_FOUND');
   assert.equal(ishodi[5][2].body.error.code, 'NOT_FOUND');
+});
+
+// R-04 (review i04), O-18: 500 iz commit-a (ALREADY_EXISTS zbog zastarjelog čitanja, omotacBaze sakrijPostojece) loguje name, code i
+// okvire stack-a, ali ne putanju dokumenta: ni requestKey, ni voucherId, ni sirovo ni u putanji.
+test('I04-T16 (c) 500 ALREADY_EXISTS na rewardRequests/<requestKey> i loyaltyLedger/release_<voucherId> → log bez putanje, requestKey-a i voucherId-a, sa ALREADY_EXISTS', async () => {
+  const { uid, idToken } = await napraviKorisnika('log-500@primjer.test');
+  const FIKSNO = Buffer.alloc(32, 0xab);
+  const noviVoucherId = FIKSNO.toString('hex');
+  const V = '5'.repeat(64);
+  const R1 = randomUUID();
+  const R2 = randomUUID();
+  const kljuc1 = kljucZahtjeva(uid, R1);
+  const kljuc2 = kljucZahtjeva(uid, R2);
+  const izvorna = crypto.randomBytes;
+  mock.method(crypto, 'randomBytes', (n, ...ostalo) => (n === 32 ? FIKSNO : izvorna(n, ...ostalo)));
+  const izdaj = (rewardId, tijelo, db) =>
+    request(napraviAplikaciju({ servisi: { ...firebase, db }, verzijaUslova: '1.0' }))
+      .post(`/api/v1/rewards/${rewardId}/issue`)
+      .set('Authorization', `Bearer ${idToken}`)
+      .send(tijelo);
+
+  const scenariji = [
+    [
+      'mapping',
+      async () => {
+        await pripremiNalog(uid, 100, 0);
+        await firebase.db.doc(`rewardRequests/${kljuc1}`).set({ uid, requestId: R1, rewardId: 'CAR_WASH', voucherId: V, createdAt: VRIJEME_PRIPREME });
+        return `rewardRequests/${kljuc1}`;
+      },
+      'CAR_WASH',
+      R1,
+    ],
+    [
+      'release',
+      async () => {
+        await pripremiNalog(uid, 0, 50);
+        const expiresAtMs = Date.now() - 60_000;
+        await firebase.db.doc(`vouchers/${V}`).set({
+          uid,
+          rewardId: 'CAR_WASH',
+          costPoints: 50,
+          status: 'ACTIVE',
+          issuedAt: Timestamp.fromMillis(expiresAtMs - 900_000),
+          expiresAt: Timestamp.fromMillis(expiresAtMs),
+          redeemedAt: null,
+          cancelledAt: null,
+          redeemedAtStationId: null,
+        });
+        await firebase.db.doc(`loyaltyLedger/release_${V}`).set({ uid, type: 'REWARD_RELEASE', voucherId: V });
+        return `loyaltyLedger/release_${V}`;
+      },
+      'SHOWER',
+      R2,
+    ],
+  ];
+  for (const [opis, pripremi, rewardId, requestId] of scenariji) {
+    const putanja = await pripremi();
+    const zapisi = presretniLog();
+    const odgovor = await izdaj(rewardId, { requestId }, omotacBaze(firebase.db, { sakrijPostojece: [putanja] }));
+    const log = tekstLoga(zapisi);
+    mock.restoreAll();
+    mock.method(crypto, 'randomBytes', (n, ...ostalo) => (n === 32 ? FIKSNO : izvorna(n, ...ostalo)));
+
+    assert.equal(odgovor.status, 500, `${opis}: ${odgovor.text}`);
+    assert.equal(odgovor.body.error.code, 'INTERNAL_ERROR', opis);
+    const zapis = zapisLoga(log, odgovor.body.error.correlationId);
+    assert.equal(zapis.code, 'INTERNAL_ERROR', opis);
+    assert.equal(zapis.putanja, RUTA, opis);
+    assert.equal(typeof zapis.stack, 'string', `${opis}: log bez opisa greške`);
+    // Dijagnostika ostaje moguća: vrsta greške Firestore-a (ALREADY_EXISTS, gRPC code 6) i okviri stack-a.
+    assert.match(zapis.stack, /ALREADY_EXISTS|code 6/, `${opis}: log bez ALREADY_EXISTS / code 6`);
+    assert.match(zapis.stack, /\n\s+at /, `${opis}: log bez okvira stack-a`);
+    for (const [naziv, tajna] of [
+      ['requestKey (mapping)', kljuc1],
+      ['requestKey (release)', kljuc2],
+      ['voucherId (postojeći)', V],
+      ['voucherId (novi)', noviVoucherId],
+      ['requestId', requestId],
+      ['putanja dokumenta', putanja],
+    ]) {
+      assert.ok(!log.includes(tajna), `${opis}: log sadrži ${naziv}`);
+    }
+    assert.doesNotMatch(log, /path=\/|documents\/|\/(rewardRequests|loyaltyLedger|vouchers|loyaltyAccounts)\//, `${opis}: log sadrži putanju dokumenta`);
+    for (const zabranjeno of ZABRANJENO_U_ODGOVORU) {
+      assert.ok(!odgovor.text.includes(zabranjeno), `${opis}: odgovor sadrži "${zabranjeno}"`);
+    }
+  }
 });
 
 test('I04-T16 (b) produkcioni start (src/pokreni.js): stdout i stderr bez sentinel-a, token-a i sirove putanje', async () => {
