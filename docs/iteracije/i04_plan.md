@@ -888,4 +888,44 @@ Preživjela mutacija → dopuna testa u zasebnom commit-u `i04: ojačan test …
 
 ## 15. Odluke Orchestrator-a (odobrenje plana)
 
-(Popunjava Orchestrator.)
+Plan je ODOBREN (Orchestrator, 2026-10-17) uz ispravke K-1 … K-3 ispod. Ana je odluke O-14, O-15 i O-16 donijela 2026-10-17 (brief, tačka 5).
+
+i04/P-1  Odobreno: 201 za novi voucher, 200 za retry; tijelo TAČNO { voucherId, rewardId, costPoints, status, issuedAt, expiresAt } tim redoslijedom
+         ključeva, ista funkcija odgovorVaucera za 201 i 200 (201 iz upisanog objekta, 200 iz SAČUVANOG voucher dokumenta); issuedAt/expiresAt =
+         toDate().toISOString(); status = trenutni status sačuvanog voucher-a. Bez uid-a, requestId-a, requestKey-a, ID-eva ledger događaja, balance-a i
+         redeemedAt/cancelledAt/redeemedAtStationId.
+i04/P-2  Odobreno: sadaMs = Date.now() jednom po pokušaju transakcije, na početku callback-a; issuedAt = Timestamp.fromMillis(sadaMs), expiresAt =
+         Timestamp.fromMillis(sadaMs + 900 000); reconcile poredi isti sadaMs (jeIstekao: sadaMs ≥ expiresAt). Ledger createdAt, mapping createdAt i
+         loyaltyAccounts.updatedAt = jedan FieldValue.serverTimestamp() po transakciji. Razlika satova Backend/Firestore ide u poznata ograničenja.
+i04/P-3  Odobreno: voucherId = crypto.randomBytes(32).toString('hex') (64 znaka [0-9a-f], 256 bita), generisan u callback-u, poziv preko default
+         importa crypto; provjera zauzetosti (vouchers/{id} i reserve_{id}) prije upisa → 500.
+i04/P-4  Odobreno: requestKey = SHA-256 nad UTF-8 bajtovima uid + ":" + requestId, hex malim slovima; vektor C3 u unit testu.
+i04/P-5  Odobreno i OBAVEZUJE i05 i i06: loyaltyLedger/reserve_{voucherId} i loyaltyLedger/release_{voucherId}, samo tx.create, uz eksplicitnu
+         provjeru postojećeg release_{voucherId} prije upisa (→ 500). Prefiks redeem_ je rezervisan za i06.
+i04/P-6  Odobreno: release-i po expiresAt rastuće, pa po voucherId rastuće (poređenje stringova, bez localeCompare); po voucher-u prvo update statusa,
+         pa create release_; lanac release-i → RESERVE; svi događaji transakcije imaju isti createdAt.
+i04/P-7  Odobreno po tabeli 5.1 i pseudokodu 5.5, uključujući (a)–(e) i listu nekonzistentnih stanja na kraju 5.5. Redoslijed čitanja i redoslijed i broj
+         upisa (1 … 2k release-i, 2k+1 nalog, 2k+2 voucher, 2k+3 RESERVE, 2k+4 mapping; O-14 grana 1 … 2k, pa 2k+1 nalog) su obavezujući.
+i04/P-8  Odobrena opcija A: stvaran redoslijed je neispravan JSON (422 INVALID_REQUEST) → D-5 (404 NOT_FOUND). U odrediKod:
+         err instanceof URIError && err.status === 400 → NOT_FOUND, globalno; log "(nepoznata ruta)", bez stack-a i bez poruke greške. Vidi K-1.
+i04/P-9  Odobreno: zajednička jeIspravanIdDokumenta u validacija/identifikator.js (premještena iz tijeloKupovine.js bez promjene logike; I03-T09 je
+         regresioni dokaz) + zabrana \p{Cc} samo za rewardId. loyaltyUid se u i04 ne mijenja (backlog, K-2).
+i04/P-10 Potvrđeno: tx.get(query) radi nad emulatorom; firebase/firestore.indexes.json se ne mijenja; neprovjerljivost nad produkcijom ide u poznata ograničenja.
+i04/P-11 Odobreno: omotacBaze.sakrijPostojece važi i za dokumente u rezultatu tx.get(query); postojeće grane omotača nepromijenjene; mock
+         crypto.randomBytes samo iz testova.
+i04/P-12 Odobreno: prvo ispravnost definicije (costPoints siguran cijeli broj ≥ 1, active boolean) → 500, tek onda active === false → 409 REWARD_INACTIVE.
+i04/P-13 Prihvaćeno (informativno): neuspješan issue ne pravi mapping, pa isti requestId može kasnije uspjeti; O-14: 409 može doći uz već vraćene bodove.
+         Oboje upisati u README (API-03).
+i04/P-14 Prihvaćeno (informativno): Express ruter je case-insensitive i nije strict; ne mijenja se.
+i04/P-15 Prihvaćene oznake I04-T01 … I04-T17 sa podtačkama.
+i04/P-16 Prihvaćeno kao poznato ograničenje: broj ACTIVE voucher-a u upitu reconcile-a nije ograničen.
+
+Ispravke plana (obavezujuće):
+K-1 Brief i04, tačka 5, "Redoslijed provjera": umjesto "dekodiranje parametra (D-5) → neispravan JSON (422) → token (401)" važi
+    "neispravan JSON (422) → dekodiranje parametra (D-5, 404 NOT_FOUND) → token (401) → …" (i04/P-8). Brief se ne mijenja; ova odluka ima prednost.
+K-2 docs/ODLUKE.md (korak 8), sekcija "8. Backlog": nova stavka
+    "B-1 (i04/P-9) | P3 | loyaltyUid (API-02) sa NUL ili kontrolnim znakom prolazi provjeru formata i ide do Firestore-a (u emulatoru 404 iz transakcije;
+    produkcija neprovjerljiva) | odluka prije i08". Kod API-02 se u i04 ne mijenja.
+K-3 API-T07 dodatno: među 20 ponavljanja mora biti bar jedno sa ishodom tačno {201, 409 INSUFFICIENT_POINTS} — dokaz da je drugi zahtjev odbila
+    provjera bodova u transakciji, a ne samo kontencija (503); inače test pada. Ako se to ne postigne ni u jednom od 3 uzastopna izvršavanja,
+    Builder STAJE i javlja (kao R18).
