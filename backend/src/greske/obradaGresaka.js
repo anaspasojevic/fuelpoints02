@@ -8,10 +8,15 @@ export function nepoznataRuta(req, res, next) {
 }
 
 // Greške JSON parsera se klasifikuju na izvoru (aplikacija.js → parsirajJson);
-// ovdje je sve što nije GreskaApi INTERNAL_ERROR.
+// ovdje je sve što nije GreskaApi INTERNAL_ERROR, osim D-5.
+// D-5 (i04/P-8): Express 5 baca URIError sa status 400 kad parametar putanje nije ispravno percent-kodiran, prije bilo koje rute.
+// Zahtjev ne pogađa nijednu rutu → NOT_FOUND (O-1); kao 4xx bez stack-a, pa poruka sa sirovom vrijednošću ne ide u log.
 function odrediKod(err) {
   if (err instanceof GreskaApi) {
     return err.kod;
+  }
+  if (err instanceof URIError && err.status === 400) {
+    return 'NOT_FOUND';
   }
   return 'INTERNAL_ERROR';
 }
