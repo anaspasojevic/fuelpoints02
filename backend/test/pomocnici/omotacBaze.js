@@ -9,6 +9,7 @@
 // - zadrziPrijeCommitaMs    → callback se izvrši, pa omotač čeka prije commit-a (commitZavrsen je promise kraja transakcije);
 // - odbijTransakcijuSa      → runTransaction odmah odbija sa greškom koja nosi ta polja (npr. { code: 14 });
 // - prijeCommita            → callback se izvrši, pa omotač sačeka prijeCommita(pokusaj) prije commit-a (pokusaj od 1);
+// - prisiliPonovniPokusaj: n → prvih n pokušaja: callback se izvrši, pa omotač baci ABORTED (code 10), pa SDK ponavlja callback.
 // brojPokusaja broji pozive callback-a (svih transakcija omotača).
 // sveTransakcijeZavrsene čeka kraj SVIH pokrenutih transakcija, i onih čiji je zahtjev već dobio 503 (kasni commit).
 import { setTimeout as pauza } from 'node:timers/promises';
@@ -29,6 +30,7 @@ export function omotacBaze(
     zadrziPrijeCommitaMs,
     odbijTransakcijuSa,
     prijeCommita,
+    prisiliPonovniPokusaj = 0,
   } = {},
 ) {
   let brojPristupa = 0;
@@ -113,6 +115,9 @@ export function omotacBaze(
         brojPokusaja += 1;
         pokusajTransakcije += 1;
         const rezultat = await funkcija(posrednikTransakcije(tx));
+        if (pokusajTransakcije <= prisiliPonovniPokusaj) {
+          throw Object.assign(new Error('ubrizgan ABORTED'), { code: 10 });
+        }
         if (prijeCommita !== undefined) {
           await prijeCommita(pokusajTransakcije);
         }

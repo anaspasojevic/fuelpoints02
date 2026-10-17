@@ -1,5 +1,5 @@
 // Atomičnost, konkurentnost, idempotentnost i rok izdavanja nagrade (§13.2, §14, §18.1, NFR-04 … NFR-06, AC-05, AC-06, O-14):
-// API-T07 (uz K-3), I04-T10 … I04-T15; FIX LOOP 1: I04-T18 (R-01).
+// API-T07 (uz K-3), I04-T10 … I04-T15; FIX LOOP 1: I04-T18 (R-01), I04-T19 (R-02, i04/P-2).
 import assert from 'node:assert/strict';
 import crypto, { createHash, randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, mock, test } from 'node:test';
@@ -74,6 +74,17 @@ async function korisnik() {
 function fiksirajVoucherId() {
   const izvorna = crypto.randomBytes;
   mock.method(crypto, 'randomBytes', (n, ...ostalo) => (n === 32 ? FIKSNO : izvorna(n, ...ostalo)));
+}
+
+// Fajl iz kojeg je neposredno pozvana mock funkcija (prvi okvir steka van node: internih modula i ovog test fajla).
+function fajlPozivaoca() {
+  const izvorno = Error.prepareStackTrace;
+  Error.prepareStackTrace = (_, okviri) => okviri;
+  const okviri = new Error().stack;
+  Error.prepareStackTrace = izvorno;
+  return okviri
+    .map((okvir) => okvir.getFileName() ?? '')
+    .find((fajl) => fajl !== '' && !fajl.startsWith('node:') && !fajl.endsWith('/izdavanjeAtomicnost.test.js'));
 }
 
 function provjeriTijeloGreske(odgovor, status, kod, opis = '') {
@@ -675,6 +686,51 @@ test('I04-T18 kupovina istog korisnika dok izdavanje drži transakciju poslije �
     assert.equal(await brojKorisnika('vouchers', uid), 1, opis);
     assert.equal(await brojKorisnika('rewardRequests', uid), 1, opis);
   }
+});
+
+// R-02 (review i04), i04/P-2: sadaMs se čita na početku SVAKOG pokušaja callback-a. Date.now pozvan iz izdavanjeNagrade.js vraća
+// T0, T0 + 10 s, T0 + 20 s …; ostali pozivi (SDK, test) dobijaju stvarno vrijeme. Omotač prisiljava jedan ponovni pokušaj.
+test('I04-T19 prisiljen ponovni pokušaj transakcije → issuedAt, expiresAt i reconcile po Date.now() sa početka posljednjeg pokušaja', async () => {
+  const T0 = Date.now();
+  const uid = 'korisnikT19';
+  await pripremiNalog(uid, 50, 30);
+  const V = '7'.repeat(64);
+  // Ističe između prvog (T0 + 10 s) i drugog pokušaja (T0 + 20 s).
+  await pripremiVaucer(V, uid, { rewardId: 'SHOWER', costPoints: 30, expiresAtMs: T0 + 15_000 });
+  const omotac = omotacBaze(firebase.db, { prisiliPonovniPokusaj: 1 });
+  const izvorni = Date.now;
+  const ocitavanja = [];
+  mock.method(Date, 'now', () => {
+    if (!(fajlPozivaoca() ?? '').endsWith('/src/servisi/izdavanjeNagrade.js')) {
+      return izvorni.call(Date);
+    }
+    const vrijednost = T0 + 10_000 * ocitavanja.length;
+    ocitavanja.push({ vrijednost, pokusaj: omotac.brojPokusaja });
+    return vrijednost;
+  });
+
+  const rezultat = await izdajNagradu(omotac, { uid, rewardId: 'CAR_WASH', requestId: randomUUID() }, T0 + 60_000);
+  mock.restoreAll();
+
+  assert.equal(omotac.brojPokusaja, 2, 'broj pokušaja callback-a');
+  // Jedno čitanje pri ulasku (preostali rok), pa tačno jedno u svakom pokušaju.
+  assert.deepStrictEqual(
+    ocitavanja.map((o) => o.pokusaj),
+    [0, 1, 2],
+    `čitanja Date.now po pokušaju: ${JSON.stringify(ocitavanja)}`,
+  );
+  const sadaPosljednjeg = ocitavanja[2].vrijednost;
+  assert.equal(sadaPosljednjeg, T0 + 20_000);
+  assert.equal(rezultat.kreirano, true);
+  assert.equal(rezultat.odgovor.issuedAt, new Date(sadaPosljednjeg).toISOString(), 'issuedAt u odgovoru');
+  assert.equal(rezultat.odgovor.expiresAt, new Date(sadaPosljednjeg + TRAJANJE_MS).toISOString(), 'expiresAt u odgovoru');
+  const vaucer = await podaci(`vouchers/${rezultat.odgovor.voucherId}`);
+  assert.equal(vaucer.issuedAt.toMillis(), sadaPosljednjeg, 'issuedAt u dokumentu');
+  assert.equal(vaucer.expiresAt.toMillis(), sadaPosljednjeg + TRAJANJE_MS, 'expiresAt u dokumentu');
+  // Reconcile istim sadaMs: voucher istekao tek poslije prvog pokušaja je oslobođen.
+  assert.equal((await podaci(`vouchers/${V}`)).status, 'EXPIRED');
+  assert.ok(await podaci(`loyaltyLedger/release_${V}`), 'release_V ne postoji');
+  assert.deepStrictEqual(await nalog(uid), [30, 50]);
 });
 
 test('I04-T15 istekao rok prije transakcije → GreskaApi SERVICE_UNAVAILABLE, runTransaction se ne poziva, 0 pristupa bazi', async () => {
