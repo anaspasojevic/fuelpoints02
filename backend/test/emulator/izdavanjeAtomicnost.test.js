@@ -1,5 +1,5 @@
 // Atomičnost, konkurentnost, idempotentnost i rok izdavanja nagrade (§13.2, §14, §18.1, NFR-04 … NFR-06, AC-05, AC-06, O-14):
-// API-T07 (uz K-3), I04-T10 … I04-T15.
+// API-T07 (uz K-3), I04-T10 … I04-T15; FIX LOOP 1: I04-T18 (R-01).
 import assert from 'node:assert/strict';
 import crypto, { createHash, randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, mock, test } from 'node:test';
@@ -622,6 +622,59 @@ test('I04-T14 kasni commit poslije 503 → retry istim requestId vraća isti vou
   assert.equal(await brojDogadjaja(uid, 'REWARD_RESERVE'), 1);
   assert.equal(await brojKorisnika('rewardRequests', uid), 1);
   assert.deepStrictEqual(await nalog(uid), [0, 50]);
+});
+
+// R-01 (review i04), O-17: zaštita od double-spend-a ne smije zavisiti od brave upita nad vouchers. Kupovina (API-02) ne čita vouchers,
+// a mijenja isti loyaltyAccounts dok izdavanje drži svoju transakciju poslije svih čitanja. Ako bi se nalog čitao van transakcije,
+// kupovina bi se commit-ovala odmah, a izdavanje bi zatim prepisalo nalog zastarjelim stanjem (izgubljeni EARN).
+test('I04-T18 kupovina istog korisnika dok izdavanje drži transakciju poslije čitanja (10 ponavljanja) → tačan balance i lanac, bez izgubljenog upisa', async (t) => {
+  for (let ponavljanje = 1; ponavljanje <= 10; ponavljanje += 1) {
+    const opis = `ponavljanje ${ponavljanje}`;
+    const { uid, idToken } = await korisnik();
+    await pripremiNalog(uid, 50, 0);
+    const tijeloKupovine = {
+      loyaltyUid: uid,
+      posTransactionId: `I18-${ponavljanje}`,
+      volumeMl: 20_000,
+      amountMinor: 3000,
+      currency: 'EUR',
+      occurredAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    let kupovina;
+    let kupovinaUToku = false;
+    const omotac = omotacBaze(firebase.db, {
+      async prijeCommita(pokusaj) {
+        if (pokusaj !== 1) {
+          return;
+        }
+        kupovina = request(aplikacija()).post('/api/v1/pos/purchases').set('X-POS-API-Key', K1).send(tijeloKupovine).then((o) => o);
+        // Kupovina dobija do 2 s da se commit-uje dok je izdavanje zadržano prije svog commit-a.
+        const istekao = await Promise.race([kupovina.then(() => false), pauza(2000).then(() => true)]);
+        kupovinaUToku = istekao;
+      },
+    });
+    const izdavanje = await izdaj('CAR_WASH', { requestId: randomUUID() }, { token: idToken, db: omotac });
+    const odgovorKupovine = await kupovina;
+    await omotac.sveTransakcijeZavrsene;
+    t.diagnostic(`${opis}: izdavanje ${izdavanje.status}, kupovina ${odgovorKupovine.status}, pokušaja izdavanja ${omotac.brojPokusaja}, kupovina čekala izdavanje: ${kupovinaUToku}`);
+
+    assert.equal(izdavanje.status, 201, `${opis}: izdavanje ${izdavanje.text}`);
+    assert.equal(odgovorKupovine.status, 201, `${opis}: kupovina ${odgovorKupovine.text}`);
+    assert.equal(odgovorKupovine.body.earnedPoints, 20, opis);
+    assert.deepStrictEqual(await nalog(uid), [20, 50], `${opis}: balance (izgubljen upis kupovine ili izdavanja)`);
+    const dogadjaji = (await firebase.db.collection('loyaltyLedger').where('uid', '==', uid).get()).docs.map((d) => d.data());
+    assert.deepStrictEqual(dogadjaji.map((d) => d.type).sort(), ['EARN', 'REWARD_RESERVE'], `${opis}: događaji`);
+    dogadjaji.sort((x, y) => x.createdAt.toMillis() - y.createdAt.toMillis() || x.createdAt.nanoseconds - y.createdAt.nanoseconds);
+    let [a, r] = [50, 0];
+    for (const dogadjaj of dogadjaji) {
+      assert.equal(dogadjaj.availableAfter, a + dogadjaj.deltaAvailable, `${opis}: lanac availableAfter (${dogadjaj.type})`);
+      assert.equal(dogadjaj.reservedAfter, r + dogadjaj.deltaReserved, `${opis}: lanac reservedAfter (${dogadjaj.type})`);
+      [a, r] = [dogadjaj.availableAfter, dogadjaj.reservedAfter];
+    }
+    assert.deepStrictEqual([a, r], [20, 50], `${opis}: kraj lanca`);
+    assert.equal(await brojKorisnika('vouchers', uid), 1, opis);
+    assert.equal(await brojKorisnika('rewardRequests', uid), 1, opis);
+  }
 });
 
 test('I04-T15 istekao rok prije transakcije → GreskaApi SERVICE_UNAVAILABLE, runTransaction se ne poziva, 0 pristupa bazi', async () => {
