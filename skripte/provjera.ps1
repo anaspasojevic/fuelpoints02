@@ -101,7 +101,7 @@ try {
         }
     }
 
-    Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init bez token-a, 401 UNAUTHENTICATED_POS na /pos/purchases bez ključa)' {
+    Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init bez token-a, 401 UNAUTHENTICATED_POS na /pos/purchases bez ključa, 401 UNAUTHENTICATED na /rewards/CAR_WASH/issue bez token-a)' {
         $env:PORT = $portSmoke
         $env:FIREBASE_PROJECT_ID = 'demo-fuelpoints'
         $env:VERZIJA_USLOVA = '1.0'
@@ -158,6 +158,21 @@ try {
             if ($odgovor.status -ne 401) { throw "Očekivan status 401, dobijen $($odgovor.status)." }
             $greska = ($odgovor.tijelo | ConvertFrom-Json).error
             if ($greska.code -ne 'UNAUTHENTICATED_POS') { throw "Očekivan kod UNAUTHENTICATED_POS, dobijen $($greska.code)." }
+            Write-Host "Smoke: 401 $($greska.code), correlationId $($greska.correlationId)"
+
+            # API-03 bez Authorization zaglavlja (I04-T16, plan 11.2): ruta postoji u produkcionom startu i traži token.
+            $odgovor = $null
+            try {
+                Invoke-WebRequest "http://127.0.0.1:$portSmoke/api/v1/rewards/CAR_WASH/issue" -Method Post -UseBasicParsing `
+                    -ContentType 'application/json' -Body '{"requestId":"3b241101-e2bb-4255-8caf-4136c566a962"}' | Out-Null
+                throw 'Očekivan je status 401, a zahtjev je uspio.'
+            } catch [System.Net.WebException] {
+                if ($null -eq $_.Exception.Response) { throw 'Server nije odgovorio na POST /api/v1/rewards/CAR_WASH/issue.' }
+                $odgovor = @{ status = [int]$_.Exception.Response.StatusCode; tijelo = $_.ErrorDetails.Message }
+            }
+            if ($odgovor.status -ne 401) { throw "Očekivan status 401, dobijen $($odgovor.status)." }
+            $greska = ($odgovor.tijelo | ConvertFrom-Json).error
+            if ($greska.code -ne 'UNAUTHENTICATED') { throw "Očekivan kod UNAUTHENTICATED, dobijen $($greska.code)." }
             Write-Host "Smoke: 401 $($greska.code), correlationId $($greska.correlationId)"
         } finally {
             Stop-Process -Id $proces.Id -Force -ErrorAction SilentlyContinue

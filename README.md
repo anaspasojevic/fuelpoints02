@@ -70,6 +70,8 @@ konfiguracija u memoriji čuva samo SHA-256 otiske ključeva.
 Base path `/api/v1` (§26). Greške imaju tijelo `{ "error": { "code", "message", "correlationId" } }` (§27).
 Serverski log greške je JSON linija sa vremenom, `correlationId`, kodom, statusom, metodom i šablonom pogođene rute
 (npr. `/pos/purchases`, ili `(nepoznata ruta)`), a za 5xx i stack — nikad sirova putanja, query, zaglavlja ni tijelo zahtjeva.
+Neispravno percent-kodiran parametar putanje (npr. `/api/v1/rewards/%E0%A4%A/issue`) → `404 NOT_FOUND`, bez stack-a i bez
+sirove vrijednosti u logu (D-5); neispravan JSON ima prednost (`422 INVALID_REQUEST`).
 
 **API-01 `POST /api/v1/account/init`** — zaglavlje `Authorization: Bearer <Firebase ID token>`, tijelo tačno
 `{ "displayName", "acceptedTermsVersion" }`. U jednoj Firestore transakciji kreira `users/{uid}` i `loyaltyAccounts/{uid}`
@@ -107,6 +109,33 @@ Greške: `401 UNAUTHENTICATED_POS`, `404 LOYALTY_ACCOUNT_NOT_FOUND`, `409 IDEMPO
 `422 INVALID_TRANSACTION_ID`, `422 INVALID_VOLUME`, `422 INVALID_AMOUNT`, `422 UNSUPPORTED_CURRENCY`, `422 INVALID_OCCURRED_AT`,
 `500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`. Kad klijent dobije `503`, kupovina je možda ipak upisana: POS ponavlja isti
 zahtjev i dobija prvi rezultat bez ponovnog dodavanja bodova.
+
+**API-03 `POST /api/v1/rewards/{rewardId}/issue`** — zaglavlje `Authorization: Bearer <Firebase ID token>` (UID samo iz
+verifikovanog token-a), tijelo tačno `{ "requestId" }`: kanonski UUID v4 malim slovima (O-15), generisan jednom po logičkom
+pokušaju izdavanja i ponovljen pri svakom retry-ju. Bilo koje drugo polje (`uid`, `costPoints`, `voucherId`, `status`, …),
+velika slova ili drugi oblik UUID-a → `422 INVALID_REQUEST`. `rewardId` iz putanje (npr. `CAR_WASH`, `SHOWER`) mora biti
+ispravan ID dokumenta bez kontrolnih znakova; inače `404 REWARD_NOT_FOUND` bez pristupa bazi.
+U JEDNOJ Firestore transakciji: istekli ACTIVE voucher-i korisnika prelaze u `EXPIRED` i vraćaju bodove (`REWARD_RELEASE`,
+najviše jednom po voucher-u), pa se `availablePoints` umanjuje i `reservedPoints` uvećava za `costPoints` iz definicije, nastaje
+ACTIVE voucher (`expiresAt = issuedAt + 15 min` po satu Backend-a), `REWARD_RESERVE` i `rewardRequests` zapis
+(`SHA-256(uid:requestId)`). Odgovor: `201` za novi voucher, `200` za ponovljeni isti `(uid, requestId)` i isti `rewardId`
+(ništa se ne upisuje, bez obzira na trenutno stanje naloga, nagrade i bodova — O-16); tijelo uvijek iz sačuvanog voucher-a:
+`{ "voucherId", "rewardId", "costPoints", "status", "issuedAt", "expiresAt" }` (`status` je trenutni status voucher-a,
+vremena UTC `YYYY-MM-DDTHH:mm:ss.sssZ`). Bodove Android čita iz `loyaltyAccounts`.
+
+- Redoslijed provjera: neispravan JSON (`422`) → neispravno kodiran parametar (`404 NOT_FOUND`) → token (`401`) → tijelo i
+  `requestId` (`422`) → format `rewardId` (`404`) → rok (`503`) → u transakciji: postojeći zahtjev (isti reward → `200`, drugi →
+  `409 IDEMPOTENCY_CONFLICT`) → nalog (`409 ACCOUNT_NOT_INITIALIZED`, `409 ACCOUNT_DELETION_IN_PROGRESS`) → nagrada
+  (`404 REWARD_NOT_FOUND`, `409 REWARD_INACTIVE`) → oslobađanje isteklih voucher-a → bodovi (`409 INSUFFICIENT_POINTS`).
+  Validacija ulaza uvijek prethodi provjeri idempotentnosti.
+- `409 INSUFFICIENT_POINTS` može doći uz već vraćene bodove isteklih voucher-a (O-14): oslobađanje se upisuje, novi voucher ne.
+- Neuspješan zahtjev (`404`, `409`, `500`) ne ostavlja zapis o zahtjevu, pa isti `requestId` može kasnije uspjeti (npr. poslije
+  nove kupovine).
+
+Greške: `401 UNAUTHENTICATED`, `404 REWARD_NOT_FOUND`, `404 NOT_FOUND`, `409 ACCOUNT_NOT_INITIALIZED`,
+`409 ACCOUNT_DELETION_IN_PROGRESS`, `409 REWARD_INACTIVE`, `409 INSUFFICIENT_POINTS`, `409 IDEMPOTENCY_CONFLICT`,
+`422 INVALID_REQUEST`, `500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`. Kad klijent dobije `503`, voucher je možda ipak izdat:
+klijent ponavlja zahtjev ISTIM `requestId` i dobija isti voucher bez nove rezervacije.
 
 ## Pokretanje
 
