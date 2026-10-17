@@ -1940,7 +1940,7 @@ testova bez mutacija: svi `ℹ fail 0`, exit 0. Poslije svih mutacija `git statu
 | # | Mutacija | Ciljani test(ovi) | Ishod (`tests` / `fail`, exit) | Pao test |
 |---|---|---|---|---|
 | M01 | uklonjena provjera `dostupno < cijena` | API-T05 | 1 / 1, exit 1 | API-T05 |
-| M02 | bodovi pročitani van transakcije; nalog se u transakciji ne čita | API-T07; I04-T13 | 1 / 1; 1 / 1 | API-T07, I04-T13 |
+| M02 | bodovi pročitani van transakcije; nalog se u transakciji ne čita | API-T07; I04-T13; I04-T18 (FIX LOOP 1) | ispravka (FIX LOOP 1, R-01): prvobitni red „1 / 1; 1 / 1” nije ponovljiv — po reviewu (`i04_review.md` 4.2) API-T07 obara M02 u 1 od 7 izvršavanja, I04-T13 u 4 od 5; I04-T18 10 od 10 | I04-T18 (pouzdano); API-T07 nad emulatorom ne razlikuje M02 (brava `tx.get(query)` serijalizuje izdavanja, O-17) |
 | M03 | `tx.create` → `tx.set` za novi voucher | I04-T11 (z1)–(z4) | 1 / 1 | I04-T11 (z1)–(z4) |
 | M04 | `tx.create` → `tx.set` za mapping | I04-T11 (z1)–(z4) | 1 / 1 | I04-T11 (z1)–(z4) |
 | M05 | `tx.create` → `tx.set` za RESERVE | I04-T11 (z1)–(z4) | 1 / 1 | I04-T11 (z1)–(z4) |
@@ -1982,6 +1982,8 @@ testova bez mutacija: svi `ℹ fail 0`, exit 0. Poslije svih mutacija `git statu
 | M39 | Rules: `/rewardDefinitions` `allow read: if true;` | I04-T17 | 3 / 1 | I04-T17 rewardDefinitions |
 | M40 | Rules: `/vouchers` `allow update: if ownResource();` | RULE-T09 | 2 / 1 | RULE-T09 voucher write |
 | M41 | Rules: `/rewardRequests` `allow read: if signedIn();` | I04-T17 | 3 / 1 | I04-T17 rewardRequests |
+| M42 (= MA21, FIX LOOP 1) | `const sadaMs = rokDo - 10000;` (jednom po zahtjevu, ne po pokušaju; krši i04/P-2) | I04-T19 | 10 izvršavanja: 10 × 1 / 1, exit 1 | I04-T19 |
+| M43 (FIX LOOP 1) | `redigujPutanje` bez redakcije (`return tekst;`) u `obradaGresaka.js` | I04-T16 (c) | 10 izvršavanja: 10 × 1 / 1, exit 1 | I04-T16 (c) |
 
 Ubijeno 43/43 (M01 … M41 + M13b, M15b); svaka je oborila ciljani test imenovan ID-em (nijedna nije „ubijena” greškom učitavanja fajla).
 Nijedna mutacija nije preživjela, pa korak 7 nema commit ojačanja testova.
@@ -2024,3 +2026,84 @@ Nijedna mutacija nije preživjela, pa korak 7 nema commit ojačanja testova.
 ### Poznata ograničenja
 
 - Vidi `docs/IMPLEMENTATION_LOG.md`, Iteracija 4, „Poznata ograničenja” (satovi, emulator vs produkcija, P-14, P-16, `ALREADY_EXISTS` u logu).
+
+## Iteracija 4 — FIX LOOP 1 (nalazi R-01 … R-04 iz `docs/iteracije/i04_review.md`, commit d3e6d6a)
+
+Odluke Orchestrator-a O-17 i O-18 (`docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 1 — odluke Orchestrator-a”). Proizvodni kod je
+izmijenjen samo u `backend/src/greske/obradaGresaka.js` (R-04); `izdavanjeNagrade.js` nije mijenjan.
+
+Polazno stanje (vrh `d3e6d6a`, `git status` čist): `.\skripte\provjera.ps1` → `SVE PROVJERE PROŠLE`, `EXIT=0`; `ℹ tests 63 / pass 63 / fail 0`
+(unit), `ℹ tests 99 / pass 99 / fail 0` (emulator), `ℹ tests 30 / pass 30 / fail 0` (Rules).
+
+Ponavljanja i mutacije: privremena skripta van repoa (`ponovi.mjs`), unutar
+`npx firebase emulators:exec --config ../firebase.json --project demo-fuelpoints --only firestore,auth` (JBR prvi u PATH-u), pokreće
+`node --test --test-concurrency=1 --test-name-pattern=<ID> <fajl>` N puta i bilježi exit, `ℹ pass`, `ℹ fail` i prvu poruku greške.
+Mutacije M02 i M42 (`izdavanjeNagrade.js`) su vraćene sa `git restore`; M43 je vraćena na tekst ispravke prije commit-a koraka 3.
+Na kraju `git status --short` prazan.
+
+### R-01 — I04-T18 (`izdavanjeAtomicnost.test.js`): stanje se čita u transakciji, nezavisno od brave upita
+
+Mehanizam: nova opcija `omotacBaze({ prijeCommita })` — callback izdavanja se izvrši (sva čitanja gotova), pa omotač u prvom pokušaju
+pokrene kupovinu (API-02, isti korisnik, 20 bodova) i čeka njen ishod najviše 2 s prije commit-a izdavanja. Kupovina ne čita `vouchers`,
+pa brava `tx.get(query)` ne utiče na ishod (O-17). Asercije: 201 + 201, balance `[20, 50]`, tačno EARN + REWARD_RESERVE, lanac od 50/0 do
+20/50, 1 voucher, 1 mapping; 10 ponavljanja po izvršavanju.
+
+| Izvršavanje | Kod | Rezultat |
+|---|---|---|
+| proba ×1 sa dijagnostikom | M02 | `exit=1 pass=0 fail=1`: `ponavljanje 1: balance (izgubljen upis kupovine ili izdavanja)`; `izdavanje 201, kupovina 201, pokušaja izdavanja 1, kupovina čekala izdavanje: false` |
+| 10 izvršavanja | M02 | 10 × `exit=1 pass=0 fail=1` (`ponavljanje 1: balance …`) — **pao 10/10** |
+| proba ×1 sa dijagnostikom | nemutiran | `exit=0 pass=1 fail=0`; u svih 10 ponavljanja `izdavanje 201, kupovina 201, pokušaja izdavanja 1, kupovina čekala izdavanje: true` |
+| 10 izvršavanja | nemutiran | 10 × `exit=0 pass=1 fail=0` (35 747 – 38 992 ms) — **prošao 10/10** |
+
+Napomena: API-T07 nad emulatorom ne razlikuje M02 (review: 1 od 7 izvršavanja pada), jer brava `tx.get(query)` serijalizuje dva izdavanja;
+dokaz za M02 je I04-T18.
+
+### R-02 — I04-T19 (`izdavanjeAtomicnost.test.js`): `sadaMs` po pokušaju (i04/P-2)
+
+Mehanizam: nova opcija `omotacBaze({ prisiliPonovniPokusaj: 1 })` — poslije prvog pokušaja callback-a omotač baci ABORTED (code 10), pa
+Admin SDK ponavlja callback. `mock.method(Date, 'now', …)`: pozivi neposredno iz `src/servisi/izdavanjeNagrade.js` dobijaju T0, T0 + 10 s,
+T0 + 20 s; ostali stvarno vrijeme; `mock.restoreAll()` u testu i u `afterEach`. Asercije: 2 pokušaja, čitanja `Date.now` po pokušaju
+`[0, 1, 2]`, `issuedAt` = T0 + 20 s i `expiresAt` = T0 + 20 s + 900 000 ms (odgovor i dokument), voucher sa `expiresAt` T0 + 15 s
+oslobođen (EXPIRED, `release_`), balance `[30, 50]`.
+
+| Izvršavanje | Kod | Rezultat |
+|---|---|---|
+| 10 izvršavanja | nemutiran | 10 × `exit=0 pass=1 fail=0` — **prošao 10/10** |
+| 10 izvršavanja | M42 (= MA21) `const sadaMs = rokDo - 10000;` | 10 × `exit=1 pass=0 fail=1`: `čitanja Date.now po pokušaju: [{"vrijednost":…,"pokusaj":0}]` — **pao 10/10** |
+
+### R-04 — I04-T16 (c) (`logIzdavanja.test.js`) i redakcija u `obradaGresaka.js` (O-18)
+
+Ispravka: za 5xx log polje `stack` = `name (code N): poruka` sa redigovanim putanjama dokumenata (`path=…`, `documents/…`,
+`<kolekcija §24>/…` → `[putanja dokumenta]`) + samo okviri `at …`. Odgovor klijentu i statusni kod nepromijenjeni.
+Poruka Firestore greške u emulatoru (proba van repoa): `6 ALREADY_EXISTS: entity already exists: EntityRef[partitionRef=dev~demo-fuelpoints, path=/rewardRequests/<ID>]`.
+Test: dva slučaja (`sakrijPostojece` za `rewardRequests/<requestKey>` i za `loyaltyLedger/release_<voucherId>`) → 500 `INTERNAL_ERROR`;
+log bez oba requestKey-a, postojećeg i novog voucherId-a, requestId-a i putanje; log sadrži `ALREADY_EXISTS` ili `code 6` i okvire `at`.
+
+| Izvršavanje | Kod | Rezultat |
+|---|---|---|
+| ×1 prije ispravke (test-first) | zatečen `obradaGresaka.js` | `exit=1 pass=0 fail=1`: `mapping: log sadrži requestKey (mapping)` |
+| 10 izvršavanja (prva verzija testa) | ispravka | 10 × `fail=1`: `release: … UNAUTHENTICATED` — greška u testu (`ocistiEmulatore()` u pripremi drugog slučaja brisao je i Auth korisnika); uklonjeno iz testa, kod nepromijenjen |
+| 10 izvršavanja | ispravka | 10 × `exit=0 pass=1 fail=0` — **prošao 10/10** |
+| 10 izvršavanja | M43 (bez redakcije) | 10 × `exit=1 pass=0 fail=1`: `mapping: log sadrži requestKey (mapping)` — **pao 10/10** |
+
+### `.\skripte\provjera.ps1` poslije svakog koraka
+
+| Korak (commit) | Rezultat |
+|---|---|
+| 0 `1811463` odluke | `EXIT=0`; 63 / 99 / 30, `fail 0` |
+| 1 `070a1fc` R-01 | `EXIT=0`; 63 / 100 / 30, `fail 0`; I04-T18 ✔ (31 747 ms) |
+| 2 `b562245` R-02 | `EXIT=0`; 63 / 101 / 30, `fail 0`; I04-T19 ✔ |
+| 3 `5678e58` R-04 | `EXIT=0`; 63 / 102 / 30, `fail 0` (emulator `duration_ms 386181.965`); API-T07 `raspodjela ishoda: {"201 + 409 INSUFFICIENT_POINTS":19,"201 + 503 SERVICE_UNAVAILABLE":1}`; I04-T16 (a), (b), (c) ✔ |
+
+Izvod završnog izvršavanja (korak 3): `ℹ tests 63` `ℹ pass 63` `ℹ fail 0`; `ℹ tests 102` `ℹ pass 102` `ℹ fail 0`; smoke `404 NOT_FOUND`,
+`401 UNAUTHENTICATED`, `401 UNAUTHENTICATED_POS`, `401 UNAUTHENTICATED` (`/rewards/:rewardId/issue`); `ℹ tests 30` `ℹ pass 30` `ℹ fail 0`;
+Android `BUILD SUCCESSFUL`; `SVE PROVJERE PROŠLE`.
+
+### Rezultat po ID-u (FIX LOOP 1)
+
+| ID | Rezultat | Izvor |
+|---|---|---|
+| I04-T18 (R-01; NFR-06, AC-06, API-T07) | PASS 10/10; obara M02 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` koraci 1–3 |
+| I04-T19 (R-02; i04/P-2) | PASS 10/10; obara M42 (= MA21) 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` koraci 2–3 |
+| I04-T16 (c) (R-04; D-3, O-18) | PASS 10/10; obara M43 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` korak 3 |
+| Svi ostali (API-T05 … T07, RULE-T09, I04-T01 … T17, regresija I01–I03) | PASS, postojeći testovi nisu mijenjani | `provjera.ps1` korak 3 |

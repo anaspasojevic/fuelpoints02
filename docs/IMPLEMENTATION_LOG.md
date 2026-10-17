@@ -794,7 +794,51 @@ Mutacije su izvršene nad jednim dugo pokrenutim emulatorom (`firebase emulators
 - **Otvoreno pitanje (uočeno tokom rada, kod nije mijenjan jer je van plana):** kad transakcija padne na `ALREADY_EXISTS` (samo nekonzistentno
   stanje ili zastarjelo čitanje — I04-T11 (z1)–(z4)), 500 u serverski log upisuje stack sa porukom Firestore-a koja sadrži putanju dokumenta
   (npr. `vouchers/<voucherId>` ili `rewardRequests/<requestKey>`). Odgovor je ne sadrži; u normalnom toku nije uočeno. Odnosi se na ograničenje (h)
-  za i05/i06 — za odluku Orchestrator-a.
+  za i05/i06 — za odluku Orchestrator-a. **Zatvoreno u FIX LOOP 1 (R-04, O-18), vidi niže.**
 - Pod kontencijom istog korisnika: 503 i latencija do ~10 s (I04-T12: jedan 503 u nekim serijama; I04-T13 do ~18 s zbog ponavljanja na 409),
-  kao u i03; stanje uvijek konzistentno, nijedan 500.
+  kao u i03; stanje uvijek konzistentno, nijedan 500. **Ispravljeno u FIX LOOP 1 (R-03, O-17): važi i za RAZLIČITE korisnike, vidi niže.**
 - Ostala ograničenja iz i01–i03 (nepotpisani emulator token-i, `MetadataLookupWarning`, `npm warn install-scripts`, Gradle daemon, N-02) i dalje važe.
+
+### FIX LOOP 1 (nalazi iz `docs/iteracije/i04_review.md`, commit d3e6d6a)
+
+Review: ITERATION REJECTED (R-01, R-02 blokirajući; R-03, R-04 po odluci Orchestrator-a). Odluke Orchestrator-a O-17 i O-18 i napomene
+N-01, N-08 upisane u `docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 1 — odluke Orchestrator-a”.
+
+| Nalaz | Ispravka | Test | Dokaz |
+|---|---|---|---|
+| R-01 (MAJOR) API-T07 ne obara M02 pouzdano | Novi deterministički test: kupovina istog korisnika (ne čita `vouchers`) se pokreće dok izdavanje drži transakciju poslije čitanja (`omotacBaze({ prijeCommita })`); tačan balance i lanac. Kod nije mijenjan. | I04-T18 | nemutiran 10/10 prošao; M02 10/10 pao |
+| R-02 (MINOR, blokira) MA21 preživljava | Test sa prisiljenim ponovnim pokušajem (`omotacBaze({ prisiliPonovniPokusaj })`, ABORTED code 10) i `mock.method(Date, 'now', …)` samo za pozive iz `izdavanjeNagrade.js`. Kod nije mijenjan. | I04-T19 | nemutiran 10/10 prošao; M42 (= MA21) 10/10 pao |
+| R-03 (MINOR) netačno ograničenje kontencije | Samo dokumentacija (O-17): tehnika `tx.get(query)` se zadržava; ograničenje ispravljeno (važi i za različite korisnike u emulatoru); backlog B-2. | — | — |
+| R-04 (MINOR) 500 iz commit-a upisuje requestKey / voucherId u log | `backend/src/greske/obradaGresaka.js`: za 5xx log nosi `name (code N): poruka` sa redakcijom putanja dokumenata (`path=…`, `documents/…`, `<kolekcija>/…` → `[putanja dokumenta]`) i samo okvire `at …` (O-18). Odgovor i status nepromijenjeni. | I04-T16 (c) | crveno prije ispravke; poslije 10/10 prošao; M43 10/10 pao |
+
+Commit-i FIX LOOP-a 1:
+
+| Commit | Poruka |
+|---|---|
+| `1811463` | i04 fix: odluke Orchestrator-a (FIX LOOP 1) |
+| `070a1fc` | i04 fix: R-01 deterministički test čitanja stanja u transakciji (obara M02) |
+| `b562245` | i04 fix: R-02 test sadaMs po pokušaju (obara MA21) |
+| `5678e58` | i04 fix: R-04 redakcija putanja dokumenata u logu 5xx grešaka |
+| (ovaj) | i04 fix: dokumentacija FIX LOOP-a 1 |
+
+Fajlovi: `backend/src/greske/obradaGresaka.js` [I], `backend/test/pomocnici/omotacBaze.js` [I] (opcije `prijeCommita`, `prisiliPonovniPokusaj`,
+brojač `brojPokusaja`; postojeće opcije nepromijenjene), `backend/test/emulator/izdavanjeAtomicnost.test.js` [I] (I04-T18, I04-T19),
+`backend/test/emulator/logIzdavanja.test.js` [I] (I04-T16 (c)), `docs/iteracije/i04_plan.md`, `docs/TEST_REPORT.md`, `docs/IMPLEMENTATION_LOG.md`,
+`docs/ODLUKE.md`, `docs/TRACEABILITY.md`. Postojeći testovi nisu oslabljeni; nijedan novi paket.
+
+Odluke:
+- **O-17** — `tx.get(query)` nad `vouchers` se zadržava (brief, tačka 5); opcija B (upit van transakcije + `tx.getAll` kandidata) se ne uvodi.
+  Zaštita od double-spend-a se ne smije oslanjati na bravu upita (zato I04-T18). Backlog B-2.
+- **O-18** — serverski log 5xx grešaka ne smije sadržati putanje dokumenata, requestKey ni voucherId (ni u poruci ni u stack-u); popravljeno
+  globalno u centralnom rukovaocu greškama.
+- **N-08** — u `docs/ODLUKE.md` §6 duple oznake „(f) potvrđeno” i „(g) potvrđeno” zamijenjene novim oznakama (m) i (l); N-01 upisano kao (n).
+
+Poznata ograničenja (ispravka / dopuna):
+- **Kontencija (R-03, O-17; zamjenjuje stavku „Pod kontencijom istog korisnika” gore):** u emulatoru `tx.get(query)` serijalizuje izdavanja i
+  RAZLIČITIH korisnika — izmjereno u reviewu (K korisnika, po jedan SHOWER zahtjev, paralelno): K=2 → 3,6 s; K=5 → 9 pokušaja; K=10 → 2×503;
+  K=15 → 11×503 (63 pokušaja); stanje uvijek konzistentno. Ponašanje produkcionog Firestore-a nije provjereno. Backlog B-2 (i09).
+- **Log 5xx (R-04, O-18; zamjenjuje „Otvoreno pitanje” o `ALREADY_EXISTS` gore):** zatvoreno; log i dalje omogućava dijagnostiku
+  (`Error (code 6): 6 ALREADY_EXISTS: … path=[putanja dokumenta]` + okviri `at …`). Redakcija se oslanja na oblik poruke Firestore-a
+  (`path=…`, `documents/…`, naziv kolekcije §24 + `/`) utvrđen nad emulatorom.
+- **N-01 (za i05):** O-16 retry vraća sačuvani `status: "ACTIVE"` i za voucher kojem je `expiresAt` prošao (ništa se ne upisuje); i05 (API-06)
+  to zatvara; Android (i10) odlučuje po `expiresAt`.
