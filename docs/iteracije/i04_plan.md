@@ -929,3 +929,19 @@ K-2 docs/ODLUKE.md (korak 8), sekcija "8. Backlog": nova stavka
 K-3 API-T07 dodatno: među 20 ponavljanja mora biti bar jedno sa ishodom tačno {201, 409 INSUFFICIENT_POINTS} — dokaz da je drugi zahtjev odbila
     provjera bodova u transakciji, a ne samo kontencija (503); inače test pada. Ako se to ne postigne ni u jednom od 3 uzastopna izvršavanja,
     Builder STAJE i javlja (kao R18).
+
+### FIX LOOP 1 — odluke Orchestrator-a
+
+Odgovor na review i04 (`docs/iteracije/i04_review.md`, ITERATION REJECTED, commit `d3e6d6a`). Builder ispravlja tačno R-01, R-02 i R-04 i
+dokumentaciju usklađuje sa stvarnim stanjem (R-03).
+
+O-17 (odgovor na review P-1 / R-03): tehnika tx.get(query) nad vouchers ZADRŽAVA SE (propisana brief-om, tačka 5). Opcija B (upit van
+     transakcije + tx.getAll kandidata) se NE uvodi: mijenja zamrznutu tehniku, otvara prozor između upita i sadaMs i nije potrebna za SRS
+     (NFR-06 je ispunjen, stanje je uvijek konzistentno). Ispravlja se samo dokumentovano ograničenje: u emulatoru tx.get(query) serijalizuje
+     izdavanja i RAZLIČITIH korisnika (izmjereno u reviewu: K=2 → 3,6 s; K=5 → 9 pokušaja; K=10 → 2×503; K=15 → 11×503); ponašanje
+     produkcionog Firestore-a nije provjereno. Novi backlog B-2: ako se kontencija pokaže u demu (i09), razmotriti opciju B uz novu odluku.
+     Posljedica: zaštita od double-spend-a se NE smije oslanjati na bravu upita, pa R-01 test mora raditi nezavisno od nje.
+O-18 (odgovor na review P-2 / R-04): serverski log za neočekivane (5xx) greške transakcije NE SMIJE sadržati putanje dokumenata,
+     requestKey ni voucherId, ni u poruci ni u stack-u. Popravlja se u ovom FIX LOOP-u, globalno u centralnom rukovaocu greškama.
+Napomene N-01…N-08 iz reviewa ne blokiraju. Obavezno: N-08 (duple oznake (f) i (g) u ODLUKE §6) ispraviti; N-01 (O-16 retry vraća
+     sačuvani status ACTIVE i za voucher kojem je expiresAt prošao; i05/API-06 to zatvara) upisati kao ograničenje za i05.
