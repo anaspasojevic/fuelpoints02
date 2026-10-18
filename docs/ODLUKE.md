@@ -17,7 +17,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i01 Bootstrap i test infrastruktura | ITERATION ACCEPTED | tag `i01` (commit `dabe3c0`) |
 | i02 Account lifecycle + auth boundary | ITERATION ACCEPTED | tag `i02` (merge `700b155`) |
 | i03 Purchase / EARN | ITERATION ACCEPTED | tag `i03` (merge `43e604a`, PR #3) |
-| i04 Reward issue | review: ITERATION REJECTED (R-01, R-02); FIX LOOP 1 završen, čeka ponovni review | grana `iteracija-04` (PR → main, bez merge-a i taga) |
+| i04 Reward issue | review: ITERATION REJECTED (R-01, R-02); FIX LOOP 1 završen; re-review: ITERATION REJECTED (R-06, R-05); FIX LOOP 2 završen, čeka ponovni review | grana `iteracija-04` (PR → main, bez merge-a i taga) |
 | i05 – i11 | nije počelo | — |
 
 ## 2. Odluke Ane (O-n)
@@ -44,7 +44,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | D-3 | Log greške bilježi šablon pogođene rute (npr. `/pos/purchases`) ili `(nepoznata ruta)`, nikad sirovu putanju, query, zaglavlja ni tijelo (tajne iz URL-a ne smiju u log). | i03 FIX LOOP 1 (R-04) |
 | D-4 | `rewardId` iz putanje se provjerava općom provjerom ID-a (tehnika, tačka 5) prije upotrebe kao putanja; neispravan → 404 `REWARD_NOT_FOUND` bez pristupa bazi. Status: implementirano u i04 (`validacija/identifikator.js` + zabrana kontrolnih znakova, i04/P-9), I04-T03 (a), (b). | i04 brief |
 | O-17 (Orchestrator) | Odgovor na review i04 P-1 / R-03: tehnika `tx.get(query)` nad `vouchers` se ZADRŽAVA (brief i04, tačka 5); opcija B (upit van transakcije + `tx.getAll` kandidata) se NE uvodi. Ispravlja se samo dokumentovano ograničenje (kontencija i RAZLIČITIH korisnika u emulatoru, §7). Zaštita od double-spend-a ne smije zavisiti od brave upita (I04-T18). Backlog B-2. | i04 FIX LOOP 1 |
-| O-18 (Orchestrator) | Odgovor na review i04 P-2 / R-04: serverski log 5xx grešaka NE SMIJE sadržati putanje dokumenata, requestKey ni voucherId, ni u poruci ni u stack-u; globalno u centralnom rukovaocu greškama. Status: implementirano u i04 FIX LOOP 1 (`greske/obradaGresaka.js`), I04-T16 (c). | i04 FIX LOOP 1 |
+| O-18 (Orchestrator) | Odgovor na review i04 P-2 / R-04: serverski log 5xx grešaka NE SMIJE sadržati putanje dokumenata, requestKey ni voucherId, ni u poruci ni u stack-u; globalno u centralnom rukovaocu greškama. Status: implementirano u i04 FIX LOOP 1 (`greske/obradaGresaka.js`), I04-T16 (c). Dopuna FIX LOOP 2 (P-3): vidi red P-3 ispod. | i04 FIX LOOP 1 |
+| P-3 (Orchestrator, re-review i04) | R-05 se ispravlja u FIX LOOP-u 2 zajedno sa R-06 (opcija A). Redakcija loga 5xx grešaka NE SMIJE zavisiti od oblika poruke Firestore greške (emulator i produkcija se razlikuju); O-18 ostaje globalan. Status: implementirano — gRPC greške (numerički `code`) bez poruke, ne-gRPC poruke sa redakcijom putanja i hex nizova ≥ 32 (§6 (h)); I04-T16 (c), I04-T20. | i04 FIX LOOP 2 |
+| P-4 (Orchestrator, re-review i04) | N-09: obaveza za i07 — test konkurentne promjene `accountStatus` / brisanja naloga za vrijeme izdavanja; isto za čitanje `users` i `rewardDefinitions` u transakciji čim ih neki API mijenja (§6 (o)). | i04 FIX LOOP 2 |
 | D-5 | Neispravno percent-kodiran parametar putanje (Express 5 `URIError`, status 400) mora dati deterministički 4xx bez stack-a i bez sirove vrijednosti u logu i odgovoru; ispravka globalna. Kod predlaže Planner i04 (preporuka 404 `NOT_FOUND`). Status: implementirano u i04 — 404 `NOT_FOUND` u `odrediKod` (i04/P-8, K-1), I04-T03 (c), I04-T16. | i04 brief |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
@@ -118,17 +120,28 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - **(h) i05, i06** — `voucherId` u putanji je podatak kojim se voucher iskorišćava: ne smije u log ni u poruku greške (D-3, D-5).
   Ažurirano u i04 FIX LOOP 1 (O-18): i log 5xx grešaka rediguje putanje dokumenata (`greske/obradaGresaka.js`); nove kolekcije i oblici
   poruka moraju ostati pokriveni redakcijom (test po uzoru na I04-T16 (c)).
+  Ažurirano u i04 FIX LOOP 2 (R-05, P-3; O-18 ostaje globalan): greška sa numeričkim gRPC `code` (Firestore) se u log 5xx upisuje BEZ
+  poruke — samo `name`, `code`, ime gRPC statusa (npr. `Error (code 5 NOT_FOUND)`) i okviri `at …`, pa zaštita ne zavisi od oblika
+  poruke (emulator i produkcija se razlikuju). Poruka ne-gRPC greške (i bačen ne-Error) se bilježi sa redigovanim putanjama dokumenata
+  i svakim nizom od ≥ 32 uzastopna hex znaka (`[hex]`; heuristika). Testovi: I04-T16 (c), I04-T20 (`logGresaka5xx.test.js`).
 - **(i) i10** — Android upit nad `vouchers` mora imati `where('uid', '==', auth.uid)` i `limit ≤ 20` (§31); prikaz aktivnih voucher-a
   filtrira `status == 'ACTIVE'` (nema ekrana istorije voucher-a, §1.3); `rewardDefinitions` čita samo prijavljen korisnik.
-- **(l) potvrda (g) u i04 (i04/P-5)** — mehanizam je `loyaltyLedger/release_{voucherId}` + `tx.create` + eksplicitna provjera postojećeg
-  release-a; ledger `createdAt` = `serverTimestamp()`.
 - **(j) i05, i06 (vrijeme)** — istek se procjenjuje `jeIstekao(expiresAt.toMillis(), sadaMs)` (`servisi/vauceri.js`) sa jednim
   `sadaMs = Date.now()` po pokušaju transakcije (isti izvor kao `issuedAt`, i04/P-2).
 - **(k) i05, i06 (voucherId u putanji)** — format je `^[0-9a-f]{64}$`; neispravan oblik → odgovarajući 404 bez pristupa bazi; D-5 već
   pokriva neispravno percent-kodiranje; vrijednost nikad u log ni poruku (h).
+- **(l) potvrda (g) u i04 (i04/P-5)** — mehanizam je `loyaltyLedger/release_{voucherId}` + `tx.create` + eksplicitna provjera postojećeg
+  release-a; ledger `createdAt` = `serverTimestamp()`.
 - **(m) potvrda (f) u i04** — retry issue-a kad mapping postoji a voucher ne → 500 (i04); i07 određuje redoslijed brisanja.
 - **(n) i05 (N-01, review i04)** — O-16 retry vraća sačuvani `status: "ACTIVE"` i za voucher kojem je `expiresAt` prošao (ništa se ne
   upisuje); i05 (API-06) to zatvara; Android (i10) odlučuje po `expiresAt`.
+- **(o) i07 — OBAVEZA (P-4, N-09 re-review i04)** — poseban test po uzoru na I04-T18: konkurentna promjena `accountStatus` naloga ili
+  brisanje naloga dok izdavanje (API-03) drži transakciju; voucher ne smije biti izdat poslije početka brisanja. Jednako za čitanje
+  `users` i `rewardDefinitions` u transakciji: čim neki API počne mijenjati te dokumente, mora postojati test koji pokazuje da se čitaju
+  u transakciji (u i04 obilaznice V1-b/V1-c iz re-reviewa nijedan test ne obara, jer nijedan API ne mijenja te dokumente).
+- **(p) i05, i06 (N-12)** — I04-T19 je vezan za implementaciju: mock `Date.now` prepoznaje pozivaoca po fajlu
+  `src/servisi/izdavanjeNagrade.js` i očekuje tačno jedno čitanje pri ulasku. Refaktor sata (npr. pomoćna funkcija u `vauceri.js`) mora
+  u istom koraku uskladiti I04-T19, bez slabljenja njegove provjere (`sadaMs` po pokušaju).
 
 ## 7. Poznata ograničenja (sažetak)
 
@@ -150,6 +163,11 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - i04: 500 pri `ALREADY_EXISTS` (samo nekonzistentno stanje / zastarjelo čitanje) upisuje u serverski log stack sa porukom Firestore-a
   koja sadrži putanju dokumenta (može biti `voucherId` ili `requestKey`); odgovor ga ne sadrži. Nije uočeno u normalnom toku; za odluku.
   ZATVORENO u i04 FIX LOOP 1 (O-18): putanje dokumenata se u logu rediguju, I04-T16 (c).
+  i04 FIX LOOP 2 (R-05): gRPC greške se bilježe bez poruke (ne zavisi od oblika poruke); hex redakcija ne-gRPC poruka je heuristika
+  (niz < 32 hex znaka ili tajna drugog oblika ostaje); format grešaka produkcionog Firestore-a nije provjeren.
+- N-11 (re-review i04): kad je `res.headersSent`, centralni rukovalac prosljeđuje grešku Express-ovom `finalhandler`-u, koji van
+  `NODE_ENV=test` ispisuje cijeli `err.stack` bez redakcije. Nije dostižno: nijedna ruta ne šalje zaglavlja prije greške; ruta koja bi
+  to radila (npr. streaming) mora to riješiti uz novu odluku.
 
 ## 8. Backlog
 

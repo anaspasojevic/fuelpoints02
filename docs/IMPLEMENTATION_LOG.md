@@ -842,3 +842,39 @@ Poznata ograničenja (ispravka / dopuna):
   (`path=…`, `documents/…`, naziv kolekcije §24 + `/`) utvrđen nad emulatorom.
 - **N-01 (za i05):** O-16 retry vraća sačuvani `status: "ACTIVE"` i za voucher kojem je `expiresAt` prošao (ništa se ne upisuje); i05 (API-06)
   to zatvara; Android (i10) odlučuje po `expiresAt`.
+
+### FIX LOOP 2 (nalazi iz `docs/iteracije/i04_review_fix1.md`, commit 54b2e0b)
+
+Re-review: ITERATION REJECTED (R-06 blokirajući; R-05 po odluci Orchestrator-a P-3). R-01 … R-04 zatvoreni i nisu dirani. Odluke P-3, P-4 i
+napomene N-10 … N-13 upisane doslovno u `docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 2 — odluke Orchestrator-a”.
+
+| Nalaz | Ispravka | Test | Dokaz |
+|---|---|---|---|
+| R-06 (MINOR, blokira) M43-vr preživljava I04-T16 (c) | Samo test: I04-T16 (c) proširen slučajevima ALREADY_EXISTS na `vouchers/<noviVoucherId>` i `loyaltyLedger/reserve_<noviVoucherId>` (fiksiran `crypto.randomBytes`, dokument drugog uid-a pod tim ID-em, `omotacBaze({ sakrijPostojece })`). | I04-T16 (c) | nemutiran 10/10 prošao; M43-vr 10/10 pao (prije koraka 2); poslije koraka 2 ekvivalent M43-vr-g 10/10 pao |
+| R-05 (MINOR) stvarni emulatorski NOT_FOUND (`name: "<id>"`) prolazi redakciju | `backend/src/greske/obradaGresaka.js`: greška sa numeričkim gRPC `code` se u log 5xx upisuje BEZ poruke — `name (code N IME_STATUSA)` (statička mapa 0 … 16) + okviri `at …`; ne-gRPC greške i bačeni ne-Error: poruka sa redakcijom putanja (kao FIX LOOP 1) i svakog niza od ≥ 32 hex znaka (`[hex]`, N-10). Odgovor klijentu i statusi nepromijenjeni (§27). | I04-T20 (a)–(c) (`logGresaka5xx.test.js`) | crveno prije ispravke (3/3 testa); poslije 10/10 prošao; M44, M45, M43-vr po 10/10 pali |
+| P-4 (N-09) | Samo dokumentacija: obaveza za i07 u `docs/ODLUKE.md` §6 (o). | — | — |
+| N-11, N-12, N-13 | `docs/ODLUKE.md`: N-11 u §7, N-12 kao §6 (p), N-13 redoslijed oznaka (j), (k), (l) ispravljen. | — | — |
+
+Commit-i FIX LOOP-a 2:
+
+| Commit | Poruka |
+|---|---|
+| `0c80582` | i04 fix2: odluke Orchestrator-a (FIX LOOP 2) |
+| `458e720` | i04 fix2: R-06 test loga za vouchers/ i reserve_ (obara M43-vr) |
+| `f27ab90` | i04 fix2: R-05 log 5xx bez poruke gRPC grešaka i redakcija hex nizova |
+| (ovaj) | i04 fix2: dokumentacija FIX LOOP-a 2 |
+
+Fajlovi: `backend/src/greske/obradaGresaka.js` [I] (jedini proizvodni fajl), `backend/test/emulator/logIzdavanja.test.js` [I] (I04-T16 (c)),
+`backend/test/emulator/logGresaka5xx.test.js` [D] (I04-T20), `docs/iteracije/i04_plan.md`, `docs/TEST_REPORT.md`, `docs/IMPLEMENTATION_LOG.md`,
+`docs/ODLUKE.md`, `docs/TRACEABILITY.md`. `omotacBaze.js` nije mijenjan. Nijedan novi paket, nijedna nova ruta, nijedan test oslabljen.
+
+Odluke:
+- **P-3** — R-05 u FIX LOOP-u 2 (opcija A); log 5xx ne smije zavisiti od oblika poruke Firestore greške; O-18 ostaje globalan.
+- **P-4** — N-09 kao obaveza za i07 (ODLUKE §6 (o)).
+
+Poznata ograničenja (dopuna):
+- **Log 5xx (R-05, zamjenjuje rečenicu „Redakcija se oslanja na oblik poruke Firestore-a” iz FIX LOOP-a 1):** za gRPC greške (Firestore,
+  numerički `code`) poruka se više ne bilježi, pa zaštita ne zavisi od njenog oblika; dijagnostika je `Error (code 6 ALREADY_EXISTS)` /
+  `Error (code 5 NOT_FOUND)` + okviri. Redakcija hex nizova (≥ 32) za ne-gRPC poruke je heuristika: tajna kraća od 32 hex znaka ili
+  drugog oblika (npr. putanja kolekcije van §24) bi ostala. Format grešaka produkcionog Firestore-a nije provjeren (samo emulator).
+- **N-11:** Express `finalhandler` za `res.headersSent` ispisuje cijeli `err.stack` bez redakcije; nedostižno u i04 (ODLUKE §7).

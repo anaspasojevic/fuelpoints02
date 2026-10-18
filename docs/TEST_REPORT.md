@@ -2107,3 +2107,111 @@ Android `BUILD SUCCESSFUL`; `SVE PROVJERE PROŠLE`.
 | I04-T19 (R-02; i04/P-2) | PASS 10/10; obara M42 (= MA21) 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` koraci 2–3 |
 | I04-T16 (c) (R-04; D-3, O-18) | PASS 10/10; obara M43 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` korak 3 |
 | Svi ostali (API-T05 … T07, RULE-T09, I04-T01 … T17, regresija I01–I03) | PASS, postojeći testovi nisu mijenjani | `provjera.ps1` korak 3 |
+
+## Iteracija 4 — FIX LOOP 2 (nalazi R-06 i R-05 iz `docs/iteracije/i04_review_fix1.md`, commit 54b2e0b)
+
+Odluke Orchestrator-a P-3 i P-4 (`docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 2 — odluke Orchestrator-a”). Proizvodni kod je
+izmijenjen samo u `backend/src/greske/obradaGresaka.js` (R-05); `omotacBaze.js` nije mijenjan.
+
+Polazno stanje (vrh `54b2e0b`, `git status` čist): `.\skripte\provjera.ps1` → `SVE PROVJERE PROŠLE`, `EXIT=0`; `ℹ tests 63 / pass 63 / fail 0`
+(unit), `ℹ tests 102 / pass 102 / fail 0` (emulator), `ℹ tests 30 / pass 30 / fail 0` (Rules), Android `BUILD SUCCESSFUL`.
+Napomena: za vrijeme ovog izvršavanja (prije emulatorskog dijela) radno stablo je već sadržalo proširenje `logIzdavanja.test.js` iz koraka 1,
+pa je u njemu izvršena proširena I04-T16 (c) (✔ 365 ms) nad nemutiranim kodom iz `54b2e0b`.
+
+Ponavljanja i mutacije: privremena skripta van repoa (`ponovi.mjs` u scratchpad-u sesije), uz ručno pokrenut
+`npx firebase emulators:start --config ../firebase.json --project demo-fuelpoints --only firestore,auth` (JBR prvi u PATH-u). Skripta primijeni
+zamjenu teksta u `obradaGresaka.js`, N puta pokrene `node --test --test-concurrency=1 [--test-name-pattern=<ID>] <fajl>` (env
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`, `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099`, `GCLOUD_PROJECT=demo-fuelpoints`), zabilježi exit,
+`ℹ pass`, `ℹ fail` i prvu poruku greške, pa vrati fajl. Poslije svake serije `git restore backend/src`; `git status --short` bez izmjena u `backend/src`.
+
+### R-06 — I04-T16 (c) (`logIzdavanja.test.js`): slučajevi `vouchers/<voucherId>` i `loyaltyLedger/reserve_<voucherId>`
+
+Mehanizam: kao postojeći slučajevi — `mock.method(crypto, 'randomBytes')` vraća fiksnih 32 bajta (`ab…`), pa je novi voucherId poznat unaprijed;
+dokument drugog uid-a pod tim ID-em (`vouchers/<noviVoucherId>`, odnosno `loyaltyLedger/reserve_<noviVoucherId>`) je pripremljen i sakriven
+`omotacBaze({ sakrijPostojece })`, pa `tx.create` pada na commit-u sa ALREADY_EXISTS. Priprema slučaja `voucher` briše istekli voucher i
+`release_` iz slučaja `release` (inače bi reconcile pao na postojećem `release_` prije commit-a); slučaj `reserve` briše `vouchers/<noviVoucherId>`.
+Asercije po slučaju (iste kao za postojeće): 500 `INTERNAL_ERROR` po §27; log bez requestKey-a (četiri), postojećeg i novog voucherId-a,
+requestId-a i putanje (sirovo ni u putanji); log sadrži `ALREADY_EXISTS` ili `code 6` i okvire `at`.
+
+Mutacija M43-vr (tačno iz re-reviewa) u `redigujPutanje`:
+`return tekst.replace(PUTANJA_DOKUMENTA, '[putanja dokumenta]');` →
+`return tekst.replace(PUTANJA_DOKUMENTA, (m) => (/vouchers\/|reserve_/.test(m) ? m : '[putanja dokumenta]'));`
+
+| Izvršavanje (kod iz `0c80582` = `54b2e0b` u `src/`) | Kod | Rezultat |
+|---|---|---|
+| 10 × `--test-name-pattern=I04-T16 \(c\)` | nemutiran | 10 × `exit=0 pass=1 fail=0` — **prošao 10/10** |
+| 10 × isto | M43-vr | 10 × `exit=1 pass=0 fail=1`: `voucher: log sadrži voucherId (novi)` — **pao 10/10** |
+| 3 × isto (dopuna) | M43-r: redakcija isključena samo za `reserve_` | 3 × `exit=1`: `reserve: log sadrži voucherId (novi)` — pao 3/3 (slučaj `reserve` sam obara) |
+| 3 × isto (dopuna) | M43-v: redakcija isključena samo za `vouchers/` | 3 × `exit=1`: `voucher: log sadrži voucherId (novi)` — pao 3/3 |
+
+### R-05 — I04-T20 (`logGresaka5xx.test.js`) i log 5xx bez poruke gRPC grešaka (`obradaGresaka.js`)
+
+Ispravka: greška sa numeričkim gRPC `code` (`Number.isInteger(err.code)`) → polje `stack` = `name (code N IME_STATUSA)` (statička mapa
+0 OK … 16 UNAUTHENTICATED) + okviri `at …`; poruka se NE bilježi. Ostale greške (Error bez numeričkog `code`, bačen ne-Error) → poruka uz
+redakciju putanja (FIX LOOP 1) i svakog niza od ≥ 32 uzastopna hex znaka (`[hex]`); `name` i okviri idu kroz istu redakciju. Odgovor
+klijentu i statusni kodovi nepromijenjeni (§27, poruka iz kataloga).
+
+Test (grešku obrađuje `centralniRukovalacGreskama` direktno, `req.route.path = '/rewards/:rewardId/issue'`; log se presreće `presretniLog`):
+- **(a)** stvarna emulatorska NOT_FOUND: `db.runTransaction` sa `tx.update` nad nepostojećim `vouchers/<id>`, za `<id>` = 64 hex i za
+  `TAJNA-<uuid>` (ID koji nije hex niz, pa ga ne hvata hex redakcija). Preduslov: `code === 5` i sirova poruka emulatora sadrži ID.
+  Asercije: odgovor 500 `{ error: { code: 'INTERNAL_ERROR', message: <katalog>, correlationId } }`; log bez ID-a; prvi red
+  `Error (code 5 NOT_FOUND)`; nijedan red poruke emulatora (≥ 6 znakova) u `stack`; okviri `at`.
+- **(b)** isto van transakcije: `db.doc('rewardRequests/<id>').update(…)`.
+- **(c)** ne-gRPC: `Error` sa golim 64-hex, `release_<hex>` bez kolekcije, `vouchers/<hex>`, `loyaltyLedger/reserve_<hex>`,
+  `vouchers/TAJNA-<uuid>`, `loyaltyLedger/reserve_TAJNA-<uuid>`, `Error` sa string `code`; bačen string sa golim hex-om i sa `vouchers/TAJNA-…`.
+  Asercije: 500 `INTERNAL_ERROR` po §27; log bez tajne; za `Error` poruka ostaje (`Error: neočekivan…`) i okviri `at`.
+
+Stvarna poruka emulatora (iz pada testa prije ispravke): `Error (code 5): 5 NOT_FOUND: no entity to update: app: "dev~demo-fuelpoints"` + redovi
+`path < Element { type: … name: "<id>" } >` (potvrđen oblik iz re-reviewa).
+
+Mutacije u `obradaGresaka.js` (kod iz `f27ab90`):
+- **M44** — grana (a) uklonjena: `  if (Number.isInteger(err.code)) {` → `  if (false) {` (gRPC poruka se opet loguje, sa redakcijom).
+- **M44b** (dopuna) — grana (a) zadržava prvi red, ali dodaje redigovanu poruku: `[…, rediguj(String(err.message)), ...okviri]`.
+- **M45** — bez hex redakcije: `return redigujPutanje(tekst).replace(HEX_NIZ, '[hex]');` → `return redigujPutanje(tekst);`.
+- **M43-vr** — tekst iz koraka 1, nepromijenjen (važi za ne-gRPC putanje).
+- **M43-vr-g** — ekvivalent M43-vr za novu gRPC granu (vidi ispod): `return [`${ime} (code ${err.code} ${status})`, ...okviri].join('\n');` →
+  `return [`${ime} (code ${err.code} ${status})`, ...(/vouchers\/|reserve_/.test(String(err.message)) ? [String(err.message)] : []), ...okviri].join('\n');`
+- **M43** (FIX LOOP 1, ponovljena) — `redigujPutanje`: `return tekst;`.
+
+| Izvršavanje (kod iz `f27ab90`) | Test | Kod | Rezultat |
+|---|---|---|---|
+| ×1 prije ispravke (test-first; `obradaGresaka.js` iz `458e720`) | I04-T20 cijeli fajl | zatečen | `pass 0 fail 3`: (a) `vouchers/aeadcd…: prvi red opisa: Error (code 5): 5 NOT_FOUND: no entity to update: app: "dev~demo-fuelpoints"`; (b) isto za `rewardRequests/…`; (c) `goli hex: log sadrži tajnu` |
+| 10 izvršavanja | I04-T20 cijeli fajl | nemutiran | `REZULTAT … pao 0/10` (svako izvršavanje exit 0, fail 0) — **prošao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | nemutiran | `pao 0/10` (exit 0, fail 0) — **prošao 10/10** |
+| 10 izvršavanja | I04-T20 | M44 | `pao 10/10`, prva poruka: `vouchers/b67b4a…: prvi red opisa: Error: 5 NOT_FOUND: no entity to update: …` — **pao 10/10** |
+| 3 izvršavanja (dopuna) | I04-T20 | M44b | `pao 3/3`, prva poruka: `vouchers/6deaf4…: log sadrži red poruke gRPC greške ("5 NOT_FOUND: no entity to upda…")` — pao 3/3 |
+| 10 izvršavanja | I04-T20 | M45 | `pao 10/10`, prva poruka: `goli hex: log sadrži tajnu` — **pao 10/10** |
+| 10 izvršavanja | I04-T20 | M43-vr | `pao 10/10`, prva poruka: `vouchers/<id bez hex-a>: log sadrži tajnu` — **pao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | M43-vr-g | `pao 10/10`, prva poruka: `voucher: log sadrži voucherId (novi)` — **pao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | M43-vr | `pao 0/10` (exit 0, fail 0) — 0/10 (očekivano, vidi ispod) |
+| 10 izvršavanja | I04-T20 | M43 | `pao 10/10`, prva poruka: `vouchers/<id bez hex-a>: log sadrži tajnu` — **pao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | M43 | `pao 0/10` (exit 0, fail 0) — 0/10 (očekivano, vidi ispod) |
+| ×1 | `logIzdavanja.test.js` + `logGresaka5xx.test.js` cijeli | nemutiran | `exit=0`, `fail 0` |
+
+**M43-vr i M43 poslije koraka 2.** Greške u I04-T16 (c) su stvarne Firestore ALREADY_EXISTS (gRPC `code 6`), a njihova poruka se više ne
+bilježi. Zato `redigujPutanje` za njih nije na putu podataka, pa M43-vr i M43 nad I04-T16 (c) više ne mijenjaju ponašanje (0/10, ekvivalentne
+mutacije za taj test). Obje i dalje obara I04-T20 (c) 10/10, preko ne-gRPC poruka `vouchers/TAJNA-<uuid>` i `loyaltyLedger/reserve_TAJNA-<uuid>`.
+Taj ID nije hex niz, pa ga hex redakcija ne prikriva. Ekvivalent M43-vr na novom mjestu (selektivno puštanje `vouchers/` i `reserve_` kroz
+gRPC granu) je M43-vr-g, koju I04-T16 (c) obara 10/10.
+
+**Ispravka napomena o redakciji iz FIX LOOP-a 1 (R-04):** opis „`name (code N): poruka` sa redigovanim putanjama” više ne važi za gRPC
+greške. One se bilježe kao `Error (code 6 ALREADY_EXISTS)` / `Error (code 5 NOT_FOUND)` + okviri, bez poruke, i ne zavise od njenog oblika.
+Redakcija putanja i hex nizova važi samo za ne-gRPC poruke. Primjer iz FIX LOOP-a 1 (`… path=/rewardRequests/<ID>`) je ostao tačan opis
+sirove poruke emulatora, ali ta poruka više ne ide u log.
+
+### `.\skripte\provjera.ps1` poslije svakog koraka
+
+| Korak (commit) | Rezultat |
+|---|---|
+| polazno `54b2e0b` | `EXIT=0`; 63 / 102 / 30, `fail 0` (vidi napomenu gore) |
+| 0 `0c80582` odluke | samo dokumentacija; nije izvršavano zasebno (polazno izvršavanje je trajalo preko ovog commit-a) |
+| 1 `458e720` R-06 | `EXIT=0`; 63 / 102 / 30, `fail 0` |
+| 2 `f27ab90` R-05 | `EXIT=0`; 63 / 105 / 30, `fail 0` (emulator `duration_ms 382289.2735`); API-T07 `raspodjela ishoda: {"201 + 409 INSUFFICIENT_POINTS":20}`; I04-T20 (a) ✔ 3 162 ms, (b) ✔, (c) ✔; I04-T16 (c) ✔ 353 ms |
+
+### Rezultat po ID-u (FIX LOOP 2)
+
+| ID | Rezultat | Izvor |
+|---|---|---|
+| I04-T16 (c) (R-06; D-3, O-18) | PASS 10/10; obara M43-vr 10/10 (kod prije koraka 2) i M43-vr-g 10/10 (kod poslije) | `ponovi.mjs`; `provjera.ps1` koraci 1–2 |
+| I04-T20 (a)–(c) (R-05, P-3; D-3, O-18, NFR-07) | PASS 10/10; obara M44, M45, M43-vr, M43 po 10/10 | `ponovi.mjs`; `provjera.ps1` korak 2 |
+| Svi ostali (API-T05 … T07, RULE-T09, I04-T01 … T19, regresija I01–I03) | PASS, postojeći testovi nisu mijenjani (I04-T16 (c) samo proširen) | `provjera.ps1` korak 2 |
