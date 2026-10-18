@@ -72,24 +72,48 @@ const GRPC_STATUSI = [
   'UNAUTHENTICATED',
 ];
 
-// Opis neočekivane (5xx) greške za log, sa okvirima stack-a ("at …"); ostali redovi stack-a se ne bilježe (u njima se ponavlja poruka).
-// R-05 (i04 FIX LOOP 2, P-3): greška sa numeričkim gRPC code (Firestore) se bilježi BEZ poruke, jer oblik poruke zavisi od
-// emulatora/produkcije i može nositi ID dokumenta (npr. NOT_FOUND: path < Element { name: "<voucherId>" } >):
-// name, code i ime statusa (npr. "Error (code 6 ALREADY_EXISTS)"). Ostale greške: poruka sa redigovanim putanjama i hex nizovima.
-function opisNeocekivaneGreske(err) {
-  if (!(err instanceof Error)) {
-    return rediguj(String(err));
+// O-19 (R-07): okviri stack-a ("at …") se uzimaju tek POSLIJE zaglavlja "<name>: <message>" (ili "<name>" za praznu poruku) kojim
+// V8 počinje stack, pa nijedan red poruke (ni red poruke koji počinje sa "at ") ne ulazi u log. Stack koji ne počinje tim zaglavljem
+// (ručno postavljen) → bez okvira. Okviri se rediguju kao i poruka (R-08).
+function okviriStacka(err) {
+  const stack = String(err.stack ?? '');
+  const poruka = String(err.message);
+  const zaglavlje = poruka === '' ? String(err.name) : `${String(err.name)}: ${poruka}`;
+  if (!stack.startsWith(zaglavlje)) {
+    return [];
   }
-  const okviri = String(err.stack ?? '')
+  return stack
+    .slice(zaglavlje.length)
     .split('\n')
     .filter((linija) => /^\s+at /.test(linija))
     .map(rediguj);
+}
+
+// Opis neočekivane (5xx) greške za log, sa okvirima stack-a; ostali redovi stack-a se ne bilježe (u njima se ponavlja poruka).
+// R-05 (i04 FIX LOOP 2, P-3): greška sa numeričkim gRPC code (Firestore) se bilježi BEZ poruke, jer oblik poruke zavisi od
+// emulatora/produkcije i može nositi ID dokumenta (npr. NOT_FOUND: path < Element { name: "<voucherId>" } >):
+// name, code i ime statusa (npr. "Error (code 6 ALREADY_EXISTS)"). Ostale greške: poruka sa redigovanim putanjama i hex nizovima.
+function opisGreske(err) {
+  if (!(err instanceof Error)) {
+    return rediguj(String(err));
+  }
+  const okviri = okviriStacka(err);
   const ime = rediguj(String(err.name));
   if (Number.isInteger(err.code)) {
     const status = GRPC_STATUSI[err.code] ?? 'nepoznat status';
     return [`${ime} (code ${err.code} ${status})`, ...okviri].join('\n');
   }
   return [`${ime}: ${rediguj(String(err.message))}`, ...okviri].join('\n');
+}
+
+// O-19 (R-10): opis nikad ne baca (ne-Error bez primitivne vrijednosti, toString ili stack getter koji baca); zapis i odgovor po §27
+// tada dobijaju statički opis, bez ičega iz izuzetka.
+function opisNeocekivaneGreske(err) {
+  try {
+    return opisGreske(err);
+  } catch {
+    return '(opis greške nedostupan)';
+  }
 }
 
 // Centralni rukovalac: tijelo tačno po §27, poruka uvijek iz kataloga, bez stack trace-a.
