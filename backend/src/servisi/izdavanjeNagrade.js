@@ -2,29 +2,18 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { GreskaApi } from '../greske/GreskaApi.js';
 import { jeNedostupnostFirestore, saRokom } from '../greske/greskeServisa.js';
 import { KOLEKCIJE } from '../podaci/kolekcije.js';
-import { TRAJANJE_VAUCERA_MS, generisiVoucherId, izracunajRequestKey, jeIstekao, poredakOslobadjanja } from './vauceri.js';
+import { pripremiOslobadjanja, procitajIstekleAktivne, upisiOslobadjanja } from './oslobadjanjeVaucera.js';
+import { procitajStanjeNaloga } from './stanjeNaloga.js';
+import {
+  FORMAT_VOUCHER_ID,
+  TRAJANJE_VAUCERA_MS,
+  generisiVoucherId,
+  izracunajRequestKey,
+  jeIspravanSacuvaniVaucer,
+  jePozitivanCijeliBroj,
+} from './vauceri.js';
 
 const MAKSIMALNO_POKUSAJA = 5;
-const FORMAT_VOUCHER_ID = /^[0-9a-f]{64}$/;
-// §15: enum statusa voucher-a.
-const STATUSI_VAUCERA = new Set(['ACTIVE', 'REDEEMED', 'EXPIRED', 'CANCELLED']);
-
-function jeNenegativanCijeliBroj(vrijednost) {
-  return Number.isSafeInteger(vrijednost) && vrijednost >= 0;
-}
-
-function jePozitivanCijeliBroj(vrijednost) {
-  return Number.isSafeInteger(vrijednost) && vrijednost >= 1;
-}
-
-function jeIspravanSacuvaniVaucer(vaucer) {
-  return (
-    jePozitivanCijeliBroj(vaucer.costPoints) &&
-    STATUSI_VAUCERA.has(vaucer.status) &&
-    vaucer.issuedAt instanceof Timestamp &&
-    vaucer.expiresAt instanceof Timestamp
-  );
-}
 
 // Tijelo uspješnog odgovora API-03 (i04/P-1): ista funkcija za 201 (upisani objekat) i 200 (SAČUVANI voucher dokument).
 // status je trenutni status voucher-a. Bez uid-a, requestId-a, requestKey-a, ID-eva ledger događaja i balance-a.
@@ -37,24 +26,6 @@ function odgovorVaucera(voucherId, vaucer) {
     issuedAt: vaucer.issuedAt.toDate().toISOString(),
     expiresAt: vaucer.expiresAt.toDate().toISOString(),
   };
-}
-
-// §18.1, i04/P-5, i04/P-6: po voucher-u prvo status EXPIRED (jedina izmjena voucher-a), pa REWARD_RELEASE (samo tx.create).
-function upisiOslobadjanja(tx, refLedger, oslobadjanja, uid, vrijeme) {
-  for (const o of oslobadjanja) {
-    tx.update(o.ref, { status: 'EXPIRED' });
-    tx.create(refLedger(`release_${o.voucherId}`), {
-      uid,
-      type: 'REWARD_RELEASE',
-      deltaAvailable: o.cijena,
-      deltaReserved: -o.cijena,
-      availableAfter: o.availableAfter,
-      reservedAfter: o.reservedAfter,
-      purchaseId: null,
-      voucherId: o.voucherId,
-      createdAt: vrijeme,
-    });
-  }
 }
 
 // §13, §13.1, §13.2, §14, §15, §17, §18.1: reconcile isteklih voucher-a, rezervacija bodova, ACTIVE voucher, REWARD_RESERVE i
@@ -74,7 +45,6 @@ export async function izdajNagradu(db, { uid, rewardId, requestId }, rokDo) {
   const refKorisnik = db.collection(KOLEKCIJE.users).doc(uid);
   const refNalog = db.collection(KOLEKCIJE.loyaltyAccounts).doc(uid);
   const refNagrada = db.collection(KOLEKCIJE.rewardDefinitions).doc(rewardId);
-  const upitAktivnih = db.collection(KOLEKCIJE.vouchers).where('uid', '==', uid).where('status', '==', 'ACTIVE');
   const refVaucer = (voucherId) => db.collection(KOLEKCIJE.vouchers).doc(voucherId);
   const refLedger = (eventId) => db.collection(KOLEKCIJE.loyaltyLedger).doc(eventId);
 
@@ -107,27 +77,9 @@ export async function izdajNagradu(db, { uid, rewardId, requestId }, rokDo) {
         return { ishod: 'POSTOJECI', odgovor: odgovorVaucera(mapping.voucherId, vaucer) };
       }
 
-      // §13.1, AUTH-03 … AUTH-05: stanje naloga, pa definicija nagrade.
+      // §13.1, AUTH-03 … AUTH-05: stanje naloga (zajednička provjera, stanjeNaloga.js), pa definicija nagrade.
       const [snimakKorisnika, snimakNaloga, snimakNagrade] = await tx.getAll(refKorisnik, refNalog, refNagrada);
-      if (!snimakKorisnika.exists) {
-        throw new GreskaApi('ACCOUNT_NOT_INITIALIZED');
-      }
-      const status = snimakKorisnika.get('accountStatus');
-      if (status === 'DELETION_IN_PROGRESS') {
-        throw new GreskaApi('ACCOUNT_DELETION_IN_PROGRESS');
-      }
-      if (status !== 'ACTIVE') {
-        throw new Error('Neočekivan accountStatus u users dokumentu.');
-      }
-      if (!snimakNaloga.exists) {
-        throw new GreskaApi('ACCOUNT_NOT_INITIALIZED');
-      }
-      let dostupno = snimakNaloga.get('availablePoints');
-      let rezervisano = snimakNaloga.get('reservedPoints');
-      // §7.2, i03/P-15: neispravan nalog se ne „popravlja”.
-      if (!jeNenegativanCijeliBroj(dostupno) || !jeNenegativanCijeliBroj(rezervisano)) {
-        throw new Error('Neispravan loyaltyAccounts dokument.');
-      }
+      const nalog = procitajStanjeNaloga(snimakKorisnika, snimakNaloga);
       if (!snimakNagrade.exists) {
         throw new GreskaApi('REWARD_NOT_FOUND');
       }
@@ -141,37 +93,14 @@ export async function izdajNagradu(db, { uid, rewardId, requestId }, rokDo) {
         throw new GreskaApi('REWARD_INACTIVE');
       }
 
-      // §18.1, D-1: reconcile — čitanja.
-      const snimakAktivnih = await tx.get(upitAktivnih);
-      const aktivni = snimakAktivnih.docs.map((dokument) => {
-        const expiresAt = dokument.get('expiresAt');
-        const costPoints = dokument.get('costPoints');
-        if (
-          dokument.get('uid') !== uid ||
-          dokument.get('status') !== 'ACTIVE' ||
-          !(expiresAt instanceof Timestamp) ||
-          !jePozitivanCijeliBroj(costPoints)
-        ) {
-          throw new Error('Nekonzistentno stanje: neispravan ACTIVE voucher.');
-        }
-        return { ref: dokument.ref, voucherId: dokument.id, expiresAtMs: expiresAt.toMillis(), cijena: costPoints };
+      // §18.1, D-1: reconcile — čitanja (upit, postojeći release-i) i lanac release-a u memoriji (zajednički mehanizam, oslobadjanjeVaucera.js);
+      // upisi tek poslije svih čitanja.
+      const istekli = await procitajIstekleAktivne(tx, db, { uid, sadaMs });
+      const { oslobadjanja, dostupno, rezervisano } = await pripremiOslobadjanja(tx, db, {
+        vauceri: istekli,
+        dostupno: nalog.dostupno,
+        rezervisano: nalog.rezervisano,
       });
-      const istekli = aktivni.filter((v) => jeIstekao(v.expiresAtMs, sadaMs)).sort(poredakOslobadjanja);
-      const snimciRelease = istekli.length > 0 ? await tx.getAll(...istekli.map((v) => refLedger(`release_${v.voucherId}`))) : [];
-      if (snimciRelease.some((snimak) => snimak.exists)) {
-        throw new Error('Nekonzistentno stanje: release postoji za ACTIVE voucher.');
-      }
-
-      // Lanac release-a u memoriji (i04/P-6); upisi tek poslije svih čitanja.
-      const oslobadjanja = [];
-      for (const v of istekli) {
-        if (rezervisano - v.cijena < 0) {
-          throw new Error('Nekonzistentno stanje: reservedPoints bi pao ispod 0.');
-        }
-        dostupno += v.cijena;
-        rezervisano -= v.cijena;
-        oslobadjanja.push({ ...v, availableAfter: dostupno, reservedAfter: rezervisano });
-      }
 
       // i04/P-2: jedan serverTimestamp po transakciji za ledger, mapping i updatedAt.
       const vrijeme = FieldValue.serverTimestamp();
@@ -179,7 +108,7 @@ export async function izdajNagradu(db, { uid, rewardId, requestId }, rokDo) {
       // O-14: nedovoljno bodova poslije reconcile-a → release-i se commit-uju, 409 se baca POSLIJE transakcije.
       if (dostupno < cijena) {
         if (oslobadjanja.length > 0) {
-          upisiOslobadjanja(tx, refLedger, oslobadjanja, uid, vrijeme);
+          upisiOslobadjanja(tx, db, oslobadjanja, { uid, vrijeme });
           tx.update(refNalog, { availablePoints: dostupno, reservedPoints: rezervisano, updatedAt: vrijeme });
         }
         return { ishod: 'NEDOVOLJNO' };
@@ -207,7 +136,7 @@ export async function izdajNagradu(db, { uid, rewardId, requestId }, rokDo) {
         redeemedAtStationId: null,
       };
 
-      upisiOslobadjanja(tx, refLedger, oslobadjanja, uid, vrijeme);
+      upisiOslobadjanja(tx, db, oslobadjanja, { uid, vrijeme });
       tx.update(refNalog, { availablePoints: availableAfter, reservedPoints: reservedAfter, updatedAt: vrijeme });
       tx.create(refNovi, vaucer);
       tx.create(refReserve, {
