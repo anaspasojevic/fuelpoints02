@@ -28,7 +28,7 @@ function putanjaZaLog(req) {
   return typeof req.route?.path === 'string' ? req.route.path : '(nepoznata ruta)';
 }
 
-// O-18 (i04 FIX LOOP 1, R-04): putanja dokumenta u poruci Firestore greške (npr. "path=/rewardRequests/<requestKey>",
+// O-18 (i04 FIX LOOP 1, R-04): putanja dokumenta u poruci ne-gRPC greške (npr. "path=/rewardRequests/<requestKey>",
 // "documents/…", "/loyaltyLedger/release_<voucherId>") može nositi requestKey ili voucherId, pa se u logu rediguje.
 const PUTANJA_DOKUMENTA = new RegExp(
   [
@@ -39,21 +39,57 @@ const PUTANJA_DOKUMENTA = new RegExp(
   'g',
 );
 
+// i04 FIX LOOP 2 (R-05, N-10): requestKey i voucherId su 64 hex znaka; svaki niz od ≥ 32 uzastopna hex znaka se rediguje
+// i bez kolekcije ispred (goli hex, release_<hex>, bačen string). Heuristika samo za poruke ne-gRPC grešaka.
+const HEX_NIZ = /[0-9a-fA-F]{32,}/g;
+
 function redigujPutanje(tekst) {
   return tekst.replace(PUTANJA_DOKUMENTA, '[putanja dokumenta]');
 }
 
-// Opis neočekivane (5xx) greške za log: name, numerički code (gRPC, npr. 6 za ALREADY_EXISTS), poruka sa redigovanim
-// putanjama dokumenata i okviri stack-a ("at …"). Ostali redovi stack-a se ne bilježe (u njima se ponavlja poruka).
+function rediguj(tekst) {
+  return redigujPutanje(tekst).replace(HEX_NIZ, '[hex]');
+}
+
+// Imena gRPC statusa po numeričkom code (0 … 16), za dijagnostiku bez poruke.
+const GRPC_STATUSI = [
+  'OK',
+  'CANCELLED',
+  'UNKNOWN',
+  'INVALID_ARGUMENT',
+  'DEADLINE_EXCEEDED',
+  'NOT_FOUND',
+  'ALREADY_EXISTS',
+  'PERMISSION_DENIED',
+  'RESOURCE_EXHAUSTED',
+  'FAILED_PRECONDITION',
+  'ABORTED',
+  'OUT_OF_RANGE',
+  'UNIMPLEMENTED',
+  'INTERNAL',
+  'UNAVAILABLE',
+  'DATA_LOSS',
+  'UNAUTHENTICATED',
+];
+
+// Opis neočekivane (5xx) greške za log, sa okvirima stack-a ("at …"); ostali redovi stack-a se ne bilježe (u njima se ponavlja poruka).
+// R-05 (i04 FIX LOOP 2, P-3): greška sa numeričkim gRPC code (Firestore) se bilježi BEZ poruke, jer oblik poruke zavisi od
+// emulatora/produkcije i može nositi ID dokumenta (npr. NOT_FOUND: path < Element { name: "<voucherId>" } >):
+// name, code i ime statusa (npr. "Error (code 6 ALREADY_EXISTS)"). Ostale greške: poruka sa redigovanim putanjama i hex nizovima.
 function opisNeocekivaneGreske(err) {
   if (!(err instanceof Error)) {
-    return redigujPutanje(String(err));
+    return rediguj(String(err));
   }
-  const kod = Number.isInteger(err.code) ? ` (code ${err.code})` : '';
   const okviri = String(err.stack ?? '')
     .split('\n')
-    .filter((linija) => /^\s+at /.test(linija));
-  return [`${err.name}${kod}: ${redigujPutanje(String(err.message))}`, ...okviri.map(redigujPutanje)].join('\n');
+    .filter((linija) => /^\s+at /.test(linija))
+    .map(rediguj);
+  const ime = rediguj(String(err.name));
+  if (Number.isInteger(err.code)) {
+    const status = GRPC_STATUSI[err.code] ?? 'nepoznat status';
+    return [`${ime} (code ${err.code} ${status})`, ...okviri].join('\n');
+  }
+  return [`${ime}: ${rediguj(String(err.message))}`, ...okviri].join('\n');
 }
 
 // Centralni rukovalac: tijelo tačno po §27, poruka uvijek iz kataloga, bez stack trace-a.
