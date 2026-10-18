@@ -2207,6 +2207,10 @@ sirove poruke emulatora, ali ta poruka više ne ide u log.
 | 0 `0c80582` odluke | samo dokumentacija; nije izvršavano zasebno (polazno izvršavanje je trajalo preko ovog commit-a) |
 | 1 `458e720` R-06 | `EXIT=0`; 63 / 102 / 30, `fail 0` |
 | 2 `f27ab90` R-05 | `EXIT=0`; 63 / 105 / 30, `fail 0` (emulator `duration_ms 382289.2735`); API-T07 `raspodjela ishoda: {"201 + 409 INSUFFICIENT_POINTS":20}`; I04-T20 (a) ✔ 3 162 ms, (b) ✔, (c) ✔; I04-T16 (c) ✔ 353 ms |
+| 3 `00cf0c1` dokumentacija (vrh grane poslije commit-a) | `EXIT=0`, `SVE PROVJERE PROŠLE`; `ℹ tests 63` `ℹ pass 63` `ℹ fail 0`; `ℹ tests 105` `ℹ pass 105` `ℹ fail 0` (emulator `duration_ms 372633.2719`); API-T07 `raspodjela ishoda: {"201 + 409 INSUFFICIENT_POINTS":20}`; I04-T20 (a) ✔ 3 159 ms, (b) ✔, (c) ✔; I04-T16 (c) ✔ 364 ms; smoke `404 NOT_FOUND`, `401 UNAUTHENTICATED`, `401 UNAUTHENTICATED_POS`, `401 UNAUTHENTICATED`; `ℹ tests 30` `ℹ pass 30` `ℹ fail 0`; Android `BUILD SUCCESSFUL` ×2 |
+
+Ishod koraka 3 je upisan posebnim commit-om („i04 fix2: TEST_REPORT ishod završne provjere”), jer se provjera izvršava tek poslije commit-a
+dokumentacije; taj commit mijenja samo ovaj red i ovu napomenu.
 
 ### Rezultat po ID-u (FIX LOOP 2)
 
