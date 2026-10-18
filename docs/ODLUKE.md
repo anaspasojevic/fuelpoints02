@@ -47,6 +47,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-18 (Orchestrator) | Odgovor na review i04 P-2 / R-04: serverski log 5xx grešaka NE SMIJE sadržati putanje dokumenata, requestKey ni voucherId, ni u poruci ni u stack-u; globalno u centralnom rukovaocu greškama. Status: implementirano u i04 FIX LOOP 1 (`greske/obradaGresaka.js`), I04-T16 (c). Dopuna FIX LOOP 2 (P-3): vidi red P-3 ispod. | i04 FIX LOOP 1 |
 | P-3 (Orchestrator, re-review i04) | R-05 se ispravlja u FIX LOOP-u 2 zajedno sa R-06 (opcija A). Redakcija loga 5xx grešaka NE SMIJE zavisiti od oblika poruke Firestore greške (emulator i produkcija se razlikuju); O-18 ostaje globalan. Status: implementirano — gRPC greške (numerički `code`) bez poruke, ne-gRPC poruke sa redakcijom putanja i hex nizova ≥ 32 (§6 (h)); I04-T16 (c), I04-T20. | i04 FIX LOOP 2 |
 | P-4 (Orchestrator, re-review i04) | N-09: obaveza za i07 — test konkurentne promjene `accountStatus` / brisanja naloga za vrijeme izdavanja; isto za čitanje `users` i `rewardDefinitions` u transakciji čim ih neki API mijenja (§6 (o)). | i04 FIX LOOP 2 |
+| O-19 (Orchestrator, re-review 2 i04) | P-5 (opcija B): R-07, R-08, R-09 su OBAVEZA za i05. Prvi korak i05, PRIJE koda koji stavlja `voucherId` u putanju (API-05 / API-06): u `backend/src/greske/obradaGresaka.js` za gRPC grane odsjeći poruku tako da se iz `err.stack` ne uzima nijedan red poruke (samo okviri stack-a; R-07: npr. ako `stack` počinje sa `${name}: ${message}`, odsjeći taj prefiks, inače odbaciti okvire); testovi koji obaraju mutacije R-M47 (okviri bez redakcije) i R-M48 (`err.name` bez redakcije), uključujući red `\n    at <hex>` / `\n    at <ne-hex ID>` u poruci gRPC greške; R-08: `err.name` sa hex-om i ručno postavljen `err.stack` sa hex-om / putanjom u okviru; R-09: slučajevi sa tačno 32 hex znaka i sa velikim slovima (obaraju R-M46 i R-M53). Testovi u I04-T20 (c) ili prvi test i05 po uzoru na njega. P-6: R-10, R-11, R-12 se upisuju kao poznata ograničenja (§7); uz to pravilo statičkih poruka loga 5xx (§6 (h)). Status: §6 (h), §7 ažurirani; kod i testovi u i05. | i04 re-review 2 |
 | D-5 | Neispravno percent-kodiran parametar putanje (Express 5 `URIError`, status 400) mora dati deterministički 4xx bez stack-a i bez sirove vrijednosti u logu i odgovoru; ispravka globalna. Kod predlaže Planner i04 (preporuka 404 `NOT_FOUND`). Status: implementirano u i04 — 404 `NOT_FOUND` u `odrediKod` (i04/P-8, K-1), I04-T03 (c), I04-T16. | i04 brief |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
@@ -124,6 +125,11 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   poruke — samo `name`, `code`, ime gRPC statusa (npr. `Error (code 5 NOT_FOUND)`) i okviri `at …`, pa zaštita ne zavisi od oblika
   poruke (emulator i produkcija se razlikuju). Poruka ne-gRPC greške (i bačen ne-Error) se bilježi sa redigovanim putanjama dokumenata
   i svakim nizom od ≥ 32 uzastopna hex znaka (`[hex]`; heuristika). Testovi: I04-T16 (c), I04-T20 (`logGresaka5xx.test.js`).
+  Ažurirano poslije re-review 2 i04 (O-19, P-5, P-6): poruke za 5xx greške u logu su STATIČKI tekstovi — identifikatori (`requestKey`,
+  `voucherId`, `uid`, `requestId`) se ne umeću u poruku loga (ni u poruku `new Error` u servisima; provjerava se u review-u).
+  OBAVEZA i05 (R-07, R-08, R-09), prvi korak, PRIJE koda koji stavlja `voucherId` u putanju (API-05 / API-06): gRPC grana u
+  `greske/obradaGresaka.js` iz `err.stack` ne uzima nijedan red poruke (samo okvire stack-a; danas filter `/^\s+at /` propušta red poruke
+  koji počinje sa `at `), uz testove koji obaraju R-M47 i R-M48 i slučajeve praga 32 hex i velikih slova (R-09); detalji u O-19.
 - **(i) i10** — Android upit nad `vouchers` mora imati `where('uid', '==', auth.uid)` i `limit ≤ 20` (§31); prikaz aktivnih voucher-a
   filtrira `status == 'ACTIVE'` (nema ekrana istorije voucher-a, §1.3); `rewardDefinitions` čita samo prijavljen korisnik.
 - **(j) i05, i06 (vrijeme)** — istek se procjenjuje `jeIstekao(expiresAt.toMillis(), sadaMs)` (`servisi/vauceri.js`) sa jednim
@@ -168,6 +174,17 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - N-11 (re-review i04): kad je `res.headersSent`, centralni rukovalac prosljeđuje grešku Express-ovom `finalhandler`-u, koji van
   `NODE_ENV=test` ispisuje cijeli `err.stack` bez redakcije. Nije dostižno: nijedna ruta ne šalje zaglavlja prije greške; ruta koja bi
   to radila (npr. streaming) mora to riješiti uz novu odluku.
+- R-10 (re-review 2 i04, O-19 / P-6): centralni rukovalac baca za ne-Error bez primitivne vrijednosti (`Object.create(null)`, `toString`
+  koji baca): `opisNeocekivaneGreske` baca iz `String(err)`, zapis se ne upisuje, odgovor po §27 izostaje, a Express grešku predaje
+  `finalhandler`-u (ne-§27 odgovor; van `NODE_ENV=test` nerediguje `err.stack`). Nedostižno: kod i04 baca samo `Error` / `GreskaApi`;
+  Firestore i Express bacaju `Error`. Predlog: `try { … } catch { return '(opis greške nedostupan)'; }` oko opisa, sa testom.
+- R-11 (re-review 2 i04, O-19 / P-6): numerički `code` na ne-gRPC grešci daje pogrešnu dijagnozu (obični `Error` sa `code = 5` →
+  `Error (code 5 NOT_FOUND)`, poruka izostavljena). Smjer je bezbjedan (manje u logu). Nedostižno u i04 (nijedan kod ne postavlja
+  numerički `code`; Node errno je string).
+- R-12 (re-review 2 i04, O-19 / P-6): identifikatori koji nisu niz ≥ 32 hex (requestId UUID, uid, 64 hex razdvojen crticama ili
+  razmacima) ostaju u poruci ne-gRPC greške u logu; veličina loga nije ograničena (poruka od ~1 MB se upisuje cijela). requestId i uid
+  nisu u opsegu O-18, ali I04-T16 (a) zabranjuje requestId u logu za sve ishode API-03. Nedostižno: sve ne-gRPC poruke u i04 su
+  statičke; za i05+ važi pravilo statičkih poruka (§6 (h)); opciono ograničiti dužinu opisa u logu.
 
 ## 8. Backlog
 
