@@ -137,6 +137,46 @@ Greške: `401 UNAUTHENTICATED`, `404 REWARD_NOT_FOUND`, `404 NOT_FOUND`, `409 AC
 `422 INVALID_REQUEST`, `500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`. Kad klijent dobije `503`, voucher je možda ipak izdat:
 klijent ponavlja zahtjev ISTIM `requestId` i dobija isti voucher bez nove rezervacije.
 
+**API-05 `POST /api/v1/vouchers/{voucherId}/cancel`** — zaglavlje `Authorization: Bearer <Firebase ID token>` (UID samo iz
+verifikovanog token-a; `?uid=`, `X-User-Id` i slično se ignorišu). Bez tijela: zahtjev bez tijela (i `Content-Length: 0` bez
+`Content-Type`, kako šalje Retrofit `@POST` bez `@Body`) ili tijelo `{}`; svako drugo tijelo → `422 INVALID_REQUEST`, i kada
+`Content-Type` nije JSON (O-21). `voucherId` je tačno 64 mala hex znaka; svaki drugi oblik → `404 VOUCHER_NOT_FOUND` bez pristupa
+bazi (O-22). U JEDNOJ Firestore transakciji ACTIVE voucher prelazi u `CANCELLED` (`cancelledAt` po satu Backend-a), bodovi se
+vraćaju (`reservedPoints −= costPoints`, `availablePoints += costPoints`) i nastaje `REWARD_RELEASE` (§19.1). Odgovor `200` i za
+prvi i za ponovljeni cancel (§19.2: ponovljen cancel ništa ne upisuje i ne vraća bodove ponovo); tijelo uvijek iz sačuvanog
+voucher-a: `{ "voucherId", "rewardId", "costPoints", "status": "CANCELLED", "issuedAt", "expiresAt", "cancelledAt" }`.
+
+- Voucher kome je rok istekao (`expiresAt` ≤ sat Backend-a), a još je ACTIVE: u istoj transakciji prelazi u `EXPIRED` i bodovi se
+  vraćaju, pa odgovor `409 VOUCHER_EXPIRED` (O-5) — klijent osvježava stanje (bodovi su već vraćeni). Ishod nikad nije `CANCELLED`.
+- `REDEEMED` → `409 VOUCHER_ALREADY_REDEEMED`; `EXPIRED` → `409 VOUCHER_EXPIRED`; ništa se ne upisuje (§19.3).
+- Voucher drugog korisnika → `403 FORBIDDEN` (O-6), tijelo bez ikakvih podataka o voucher-u. `403` (umjesto `404`) svjesno otkriva
+  da voucher postoji (i05/P-13); `voucherId` ima 256 bita i nije pogodljiv. Nepostojeći voucher → `404 VOUCHER_NOT_FOUND`.
+- Redoslijed provjera: neispravan JSON ili JSON skalar/`null` (`422`, i bez token-a) → neispravno kodiran parametar
+  (`404 NOT_FOUND`) → token (`401`) → tijelo (`422`; objekat sa poljem ili niz bez token-a daje `401`, i05/P-11) → format
+  `voucherId` (`404`) → rok (`503`) → u transakciji: postoji (`404`) → vlasnik (`403`) → `CANCELLED` (`200`) / `REDEEMED` /
+  `EXPIRED` (`409`) → tek za ACTIVE voucher stanje naloga (`409 ACCOUNT_NOT_INITIALIZED`, `409 ACCOUNT_DELETION_IN_PROGRESS`;
+  O-20) → istek (O-5) → oslobađanje. Ponovljen cancel vraća `200` i kad je nalog u brisanju (ništa se ne mijenja).
+- `/api/v1/vouchers//cancel` (prazan segment) nije ruta → `404 NOT_FOUND`, ne `VOUCHER_NOT_FOUND` (i05/P-12).
+
+Greške: `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `404 VOUCHER_NOT_FOUND`, `404 NOT_FOUND`, `409 VOUCHER_EXPIRED`,
+`409 VOUCHER_ALREADY_REDEEMED`, `409 ACCOUNT_NOT_INITIALIZED`, `409 ACCOUNT_DELETION_IN_PROGRESS`, `422 INVALID_REQUEST`,
+`500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`. Kad klijent dobije `503`, cancel je možda ipak upisan: isti poziv je bezbjedan retry
+(stanje voucher-a je ključ idempotentnosti) i vraća sačuvano stanje.
+
+**API-06 `POST /api/v1/account/vouchers/reconcile`** — isto zaglavlje i isto pravilo tijela kao API-05. U JEDNOJ Firestore
+transakciji svaki ACTIVE voucher korisnika kome je rok istekao prelazi u `EXPIRED` sa `REWARD_RELEASE` (najviše jednom po voucher-u,
+redom po `expiresAt`, pa `voucherId`); ostali voucher-i se ne diraju (§18.1). Odgovor `200 { "reconciledCount" }` — broj voucher-a
+koje je oslobodio OVAJ poziv; pod istovremenim pozivima broji samo ono što je ta transakcija zaista oslobodila (i05/P-14), pa se ne
+koristi za balance. Stanje naloga se provjerava prvo (`409 ACCOUNT_NOT_INITIALIZED`, `409 ACCOUNT_DELETION_IN_PROGRESS`).
+Gornja granica broja voucher-a ne postoji (§18.1 traži jednu transakciju; vidi poznata ograničenja). Greške: `401 UNAUTHENTICATED`,
+`404 NOT_FOUND`, `409 ACCOUNT_NOT_INITIALIZED`, `409 ACCOUNT_DELETION_IN_PROGRESS`, `422 INVALID_REQUEST`, `500 INTERNAL_ERROR`,
+`503 SERVICE_UNAVAILABLE` (retry je bezbjedan; ponovljen poziv vraća `0` za već oslobođene).
+
+**Preporučeni tok klijenta** (ODLUKE §6 (n)): na Home ekranu Android poziva API-06, pa čita `loyaltyAccounts` i ACTIVE voucher-e iz
+Firestore-a (bodovi se nikad ne računaju iz odgovora). Retry API-03 može vratiti `"status": "ACTIVE"` za voucher kome je `expiresAt`
+prošao (sačuvano stanje, O-16) — klijent tada odlučuje po `expiresAt` i poziva API-06. Cancel: poziv API-05; na
+`409 VOUCHER_EXPIRED` klijent osvježava stanje, jer su bodovi već vraćeni.
+
 ## Pokretanje
 
 ```powershell

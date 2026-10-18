@@ -17,8 +17,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i01 Bootstrap i test infrastruktura | ITERATION ACCEPTED | tag `i01` (commit `dabe3c0`) |
 | i02 Account lifecycle + auth boundary | ITERATION ACCEPTED | tag `i02` (merge `700b155`) |
 | i03 Purchase / EARN | ITERATION ACCEPTED | tag `i03` (merge `43e604a`, PR #3) |
-| i04 Reward issue | review: ITERATION REJECTED (R-01, R-02); FIX LOOP 1 završen; re-review: ITERATION REJECTED (R-06, R-05); FIX LOOP 2 završen, čeka ponovni review | grana `iteracija-04` (PR → main, bez merge-a i taga) |
-| i05 – i11 | nije počelo | — |
+| i04 Reward issue | ITERATION ACCEPTED (re-review 2, poslije FIX LOOP-a 2) | tag `i04` (merge `d445fe8`, PR #4) |
+| i05 Voucher cancel i account reconcile | BUILDER završio, čeka review | grana `iteracija-05` (PR → main, bez merge-a i taga) |
+| i06 – i11 | nije počelo | — |
 
 ## 2. Odluke Ane (O-n)
 
@@ -34,6 +35,8 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-14 | Interni reconcile isteklih voucher-a ide u ISTU transakciju kao reward issue, redoslijedom §13.1 (nalog → reward postoji → active → reconcile → bodovi); kad issue padne na `INSUFFICIENT_POINTS`, release-i se commit-uju, pa 409 (obrazac §20.5). Status: implementirano u i04 (`servisi/izdavanjeNagrade.js`), I04-T09 (e), I04-T11 (c). | 2026-10-17, i04 | i04_brief |
 | O-15 | `requestId` (§13) je samo kanonski UUID v4 malim slovima; velika slova i svaki drugi oblik → 422 `INVALID_REQUEST`. Status: implementirano u i04 (`validacija/zahtjevIzdavanja.js`), I04-T02. | 2026-10-17, i04 | i04_brief |
 | O-16 | Reward issue: `rewardRequests` mapping se provjerava PRIJE preduslova §13.1 (analogno O-12); retry istog `(uid, requestId)` za isti reward vraća isti voucher i ništa ne upisuje, bez obzira na stanje naloga, nagrade, bodova i voucher-a; drugi reward → 409 `IDEMPOTENCY_CONFLICT`. Status: implementirano u i04, I04-T07, I04-T08. | 2026-10-17, i04 | i04_brief |
+| O-5 | Cancel voucher-a koji je u bazi ACTIVE, a `serverTime ≥ expiresAt`, tretira se kao §20.5: u ISTOJ transakciji ACTIVE → EXPIRED, `reservedPoints −= cost`, `availablePoints += cost`, `REWARD_RELEASE`; poslije commit-a 409 `VOUCHER_EXPIRED`. Ishod nikad nije CANCELLED za voucher kome je istekao rok. Status: implementirano u i05 (`servisi/otkazivanjeVaucera.js`), I05-T07, I05-T12 (b), AC-08. | 2026-10-18, i05 | i05_brief |
+| O-6 | Voucher postoji, ali pripada drugom korisniku → 403 `FORBIDDEN`, ništa upisano ni otkriveno u tijelu odgovora; voucher koji ne postoji → 404 `VOUCHER_NOT_FOUND`. Status: implementirano u i05, I05-T05. | 2026-10-18, i05 | i05_brief |
 
 ## 3. Odluke Orchestrator-a (D-n)
 
@@ -47,7 +50,10 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-18 (Orchestrator) | Odgovor na review i04 P-2 / R-04: serverski log 5xx grešaka NE SMIJE sadržati putanje dokumenata, requestKey ni voucherId, ni u poruci ni u stack-u; globalno u centralnom rukovaocu greškama. Status: implementirano u i04 FIX LOOP 1 (`greske/obradaGresaka.js`), I04-T16 (c). Dopuna FIX LOOP 2 (P-3): vidi red P-3 ispod. | i04 FIX LOOP 1 |
 | P-3 (Orchestrator, re-review i04) | R-05 se ispravlja u FIX LOOP-u 2 zajedno sa R-06 (opcija A). Redakcija loga 5xx grešaka NE SMIJE zavisiti od oblika poruke Firestore greške (emulator i produkcija se razlikuju); O-18 ostaje globalan. Status: implementirano — gRPC greške (numerički `code`) bez poruke, ne-gRPC poruke sa redakcijom putanja i hex nizova ≥ 32 (§6 (h)); I04-T16 (c), I04-T20. | i04 FIX LOOP 2 |
 | P-4 (Orchestrator, re-review i04) | N-09: obaveza za i07 — test konkurentne promjene `accountStatus` / brisanja naloga za vrijeme izdavanja; isto za čitanje `users` i `rewardDefinitions` u transakciji čim ih neki API mijenja (§6 (o)). | i04 FIX LOOP 2 |
-| O-19 (Orchestrator, re-review 2 i04) | P-5 (opcija B): R-07, R-08, R-09 su OBAVEZA za i05. Prvi korak i05, PRIJE koda koji stavlja `voucherId` u putanju (API-05 / API-06): u `backend/src/greske/obradaGresaka.js` za gRPC grane odsjeći poruku tako da se iz `err.stack` ne uzima nijedan red poruke (samo okviri stack-a; R-07: npr. ako `stack` počinje sa `${name}: ${message}`, odsjeći taj prefiks, inače odbaciti okvire); testovi koji obaraju mutacije R-M47 (okviri bez redakcije) i R-M48 (`err.name` bez redakcije), uključujući red `\n    at <hex>` / `\n    at <ne-hex ID>` u poruci gRPC greške; R-08: `err.name` sa hex-om i ručno postavljen `err.stack` sa hex-om / putanjom u okviru; R-09: slučajevi sa tačno 32 hex znaka i sa velikim slovima (obaraju R-M46 i R-M53). Testovi u I04-T20 (c) ili prvi test i05 po uzoru na njega. P-6: R-10, R-11, R-12 se upisuju kao poznata ograničenja (§7); uz to pravilo statičkih poruka loga 5xx (§6 (h)). Status: §6 (h), §7 ažurirani; kod i testovi u i05. | i04 re-review 2 |
+| O-19 (Orchestrator, re-review 2 i04) | P-5 (opcija B): R-07, R-08, R-09 su OBAVEZA za i05. Prvi korak i05, PRIJE koda koji stavlja `voucherId` u putanju (API-05 / API-06): u `backend/src/greske/obradaGresaka.js` za gRPC grane odsjeći poruku tako da se iz `err.stack` ne uzima nijedan red poruke (samo okviri stack-a; R-07: npr. ako `stack` počinje sa `${name}: ${message}`, odsjeći taj prefiks, inače odbaciti okvire); testovi koji obaraju mutacije R-M47 (okviri bez redakcije) i R-M48 (`err.name` bez redakcije), uključujući red `\n    at <hex>` / `\n    at <ne-hex ID>` u poruci gRPC greške; R-08: `err.name` sa hex-om i ručno postavljen `err.stack` sa hex-om / putanjom u okviru; R-09: slučajevi sa tačno 32 hex znaka i sa velikim slovima (obaraju R-M46 i R-M53). Testovi u I04-T20 (c) ili prvi test i05 po uzoru na njega. P-6: R-10, R-11, R-12 se upisuju kao poznata ograničenja (§7); uz to pravilo statičkih poruka loga 5xx (§6 (h)). Status: §6 (h), §7 ažurirani; IZVRŠENO u i05, korak 1 (commit `9b28b06`, prije koda sa `voucherId` u putanji): okviri tek poslije zaglavlja `${name}: ${message}` (R-07), redakcija `name` i okvira (R-08), prag 32 hex i velika slova testirani (R-09), opis greške nikad ne baca (R-10); I05-T01 obara R-M46, R-M47, R-M48, R-M53, N40 … N43 10/10; I05-T02 (statička analiza poruka). | i04 re-review 2 |
+| O-20 (Orchestrator, brief i05) | Stanje naloga za API-05 / API-06 (po uzoru na O-16): CANCEL — voucher CANCELLED → 200 sa postojećim stanjem bez upisa i REDEEMED / EXPIRED → 409 bez upisa, bez obzira na stanje naloga; tek za ACTIVE voucher nalog mora biti ACTIVE (DELETION_IN_PROGRESS → 409 `ACCOUNT_DELETION_IN_PROGRESS`, users ili loyaltyAccounts ne postoji → 409 `ACCOUNT_NOT_INITIALIZED`, neispravno stanje → 500; ništa upisano, ni O-5 release). RECONCILE — provjera naloga prva (409 / 409 / 500), nalog ACTIVE bez isteklih → 200, brojač 0. Status: implementirano u i05 (`servisi/stanjeNaloga.js`, `otkazivanjeVaucera.js`, `uskladjivanjeVaucera.js`), I05-T08, I05-T16. | i05 brief |
+| O-21 (Orchestrator, brief i05) | Politika tijela za endpoint-e bez business input-a: bez tijela i `{}` su ispravni; svako drugo tijelo → 422 `INVALID_REQUEST`; neispravan JSON → 422 i bez token-a. Tačno pravilo: i05/P-2. Status: implementirano (`validacija/zahtjevVaucera.js`), I05-T03. | i05 brief |
+| O-22 (Orchestrator, brief i05) | `voucherId` iz putanje: `^[0-9a-f]{64}$`; neispravan → 404 `VOUCHER_NOT_FOUND` bez pristupa Firestore-u; neispravno percent-kodiran → D-5 (404 `NOT_FOUND`); vrijednost nikad u log ni u odgovor greške. Status: implementirano (`validacija/zahtjevVaucera.js`, `FORMAT_VOUCHER_ID` u `servisi/vauceri.js`), I05-T03, I05-T20. | i05 brief |
 | D-5 | Neispravno percent-kodiran parametar putanje (Express 5 `URIError`, status 400) mora dati deterministički 4xx bez stack-a i bez sirove vrijednosti u logu i odgovoru; ispravka globalna. Kod predlaže Planner i04 (preporuka 404 `NOT_FOUND`). Status: implementirano u i04 — 404 `NOT_FOUND` u `odrediKod` (i04/P-8, K-1), I04-T03 (c), I04-T16. | i04 brief |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
@@ -90,6 +96,22 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i04/P-13 … P-16 | Informativno: neuspješan issue ne pravi mapping (isti `requestId` može kasnije uspjeti); 409 uz već vraćene bodove (O-14); Express ruter case-insensitive i nije strict; oznake I04-T01 … I04-T17; broj ACTIVE voucher-a u upitu nije ograničen. |
 | i04/K-1 | Redoslijed: neispravan JSON (422) → D-5 (404 `NOT_FOUND`) → token (401) → …; ima prednost nad brief-om i04, tačka 5. |
 | i04/K-3 | API-T07 traži bar jedno ponavljanje sa ishodom tačno {201, 409 `INSUFFICIENT_POINTS`}. |
+| i05/P-1 | API-05: 200 i za prvi cancel i za retry; tijelo tačno `{ voucherId, rewardId, costPoints, status, issuedAt, expiresAt, cancelledAt }` tim redoslijedom, ista funkcija za prvi odgovor (upisani objekat) i retry (SAČUVANI dokument). API-06: 200 `{ reconciledCount }`. |
+| i05/P-2 | O-21: prazno tijelo ili `{}` je valjano, sve ostalo 422 `INVALID_REQUEST`; kad je `req.body === undefined`, zahtjev ne smije nositi nepročitan sadržaj (`Transfer-Encoding` prisutan ili `Content-Length` različit od `'0'` → 422). Retrofit oblik (`Content-Length: 0`, bez `Content-Type`) se prihvata. |
+| i05/P-3 | `cancelledAt = Timestamp.fromMillis(sadaMs)`; jedan `sadaMs` po pokušaju transakcije (i04/P-2, §6 (j)). |
+| i05/P-4 | Redoslijed provjera (O-20): cancel — postoji (404) → `uid` ispravan (500) → vlasnik (403) → ispravan voucher (500) → CANCELLED (200) / REDEEMED / EXPIRED (409) → nalog (samo ACTIVE) → istek (O-5) → `release_` postoji (500) → `reserved < cost` (500) → upisi; API-06 — nalog prvi. Na retry-ju CANCELLED / EXPIRED se NE provjerava postojanje `release_{voucherId}`. |
+| i05/P-5 | Raspored: `servisi/oslobadjanjeVaucera.js` (jedini kod koji piše `release_`), `servisi/stanjeNaloga.js`, `servisi/otkazivanjeVaucera.js`, `servisi/uskladjivanjeVaucera.js`, `validacija/zahtjevVaucera.js`, `rute/vauceri.js`. Refaktor zajedničkog mehanizma ne mijenja ponašanje API-03; I04-T19 i test kod i01–i04 netaknuti. |
+| i05/P-6 | O-19 u koraku 1 (okviri bez linija poruke; opis nikad ne baca) uz I05-T01 i I05-T02 (statička analiza: identifikatori se ne interpoliraju u `new Error` poruke ni u logove). |
+| i05/P-7 | Informativno: 503 `GreskaApi` zapis zadržava zaglavlje `GreskaApi: SERVICE_UNAVAILABLE` i okvire. |
+| i05/P-8 | API-06 bez gornje granice broja voucher-a (§18.1 jedna transakcija); ograničenje (Firestore 10 MiB / 270 s po transakciji) u poznatim ograničenjima. |
+| i05/P-9 | `firestore.indexes.json` i `firestore.rules` se ne mijenjaju. |
+| i05/P-10 | `omotacBaze.js` bez proširenja (u i05 nije bilo potrebe). |
+| i05/P-11 | Dva oblika 422: JSON skalar / `null` / neispravan JSON → 422 i bez token-a; objekat sa poljem / niz / ne-JSON tijelo → 401 bez token-a, 422 sa token-om. |
+| i05/P-12 | DOKUMENTOVANO ODSTUPANJE od brief-a: `/api/v1/vouchers//cancel` → 404 `NOT_FOUND` (ne `VOUCHER_NOT_FOUND`), jer prazan segment nije ruta. U README. |
+| i05/P-13 | Informativno: 403 otkriva postojanje tuđeg voucher-a (O-6); `voucherId` ima 256 bita. U README. |
+| i05/P-14 | Informativno: `reconciledCount` pod kontencijom broji samo voucher-e koje je ta transakcija zaista oslobodila. U README. |
+| i05/K-1 | I05-T14 dokazuje ishod bez oslanjanja na kontenciju / 503 i bez oslanjanja na to da upit nad `vouchers` serijalizuje transakcije (pouka i04 R-01). |
+| i05/K-3 | Test pod kontencijom sa 500 (R19) ili test koji nije 10/10 u oba smjera → Builder staje i javlja. |
 
 ## 5. Tehnika (obavezujuća za sve iteracije, i02–i03)
 
@@ -118,6 +140,8 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   (u i04 → 500); i07 određuje redoslijed brisanja i ponašanje issue-a u tom međustanju.
 - **(g) i05, i06** — svaki prelaz u EXPIRED / CANCELLED (uključujući istekao redeem, §20.5) koristi isti mehanizam „release najviše
   jednom” koji odobri plan i04 (preporuka `release_{voucherId}` + `tx.create`).
+  ZATVORENO za i05: jedna implementacija `servisi/oslobadjanjeVaucera.js` koju koriste API-03, API-05 (CANCELLED i O-5) i API-06
+  (`git grep "release_"` u `backend/src` → kod samo u tom modulu); i06 nastavlja po (q).
 - **(h) i05, i06** — `voucherId` u putanji je podatak kojim se voucher iskorišćava: ne smije u log ni u poruku greške (D-3, D-5).
   Ažurirano u i04 FIX LOOP 1 (O-18): i log 5xx grešaka rediguje putanje dokumenata (`greske/obradaGresaka.js`); nove kolekcije i oblici
   poruka moraju ostati pokriveni redakcijom (test po uzoru na I04-T16 (c)).
@@ -130,24 +154,44 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   OBAVEZA i05 (R-07, R-08, R-09), prvi korak, PRIJE koda koji stavlja `voucherId` u putanju (API-05 / API-06): gRPC grana u
   `greske/obradaGresaka.js` iz `err.stack` ne uzima nijedan red poruke (samo okvire stack-a; danas filter `/^\s+at /` propušta red poruke
   koji počinje sa `at `), uz testove koji obaraju R-M47 i R-M48 i slučajeve praga 32 hex i velikih slova (R-09); detalji u O-19.
+  ZATVORENO u i05 (korak 1, `9b28b06`): O-19 izvršen PRIJE koda sa `voucherId` u putanji; pravilo statičkih poruka se provjerava
+  automatski (I05-T02 skenira cijeli `backend/src`: poruka svakog `new …Error(` je jedan string literal, `console.*` / `zabiljeziGresku`
+  ne pominju identifikatore), pa važi i za i06; log API-05 / API-06 bez `voucherId`-a, `uid`-a i token-a (I05-T20).
 - **(i) i10** — Android upit nad `vouchers` mora imati `where('uid', '==', auth.uid)` i `limit ≤ 20` (§31); prikaz aktivnih voucher-a
   filtrira `status == 'ACTIVE'` (nema ekrana istorije voucher-a, §1.3); `rewardDefinitions` čita samo prijavljen korisnik.
 - **(j) i05, i06 (vrijeme)** — istek se procjenjuje `jeIstekao(expiresAt.toMillis(), sadaMs)` (`servisi/vauceri.js`) sa jednim
   `sadaMs = Date.now()` po pokušaju transakcije (isti izvor kao `issuedAt`, i04/P-2).
+  ZATVORENO u i05: cancel i API-06 čitaju `sadaMs` na početku svakog pokušaja svog callback-a (I05-T13); zajednički modul
+  `servisi/oslobadjanjeVaucera.js` ne čita sat. Za i06 (istekao redeem, §20.5) važi isto.
 - **(k) i05, i06 (voucherId u putanji)** — format je `^[0-9a-f]{64}$`; neispravan oblik → odgovarajući 404 bez pristupa bazi; D-5 već
   pokriva neispravno percent-kodiranje; vrijednost nikad u log ni poruku (h).
+  ZATVORENO za i05 (O-22): `provjeriVoucherId` (`validacija/zahtjevVaucera.js`) sa `FORMAT_VOUCHER_ID` iz `servisi/vauceri.js` → 404
+  `VOUCHER_NOT_FOUND`; I05-T03 (a), (b). i06 (redeem) koristi istu funkciju.
 - **(l) potvrda (g) u i04 (i04/P-5)** — mehanizam je `loyaltyLedger/release_{voucherId}` + `tx.create` + eksplicitna provjera postojećeg
   release-a; ledger `createdAt` = `serverTimestamp()`.
 - **(m) potvrda (f) u i04** — retry issue-a kad mapping postoji a voucher ne → 500 (i04); i07 određuje redoslijed brisanja.
 - **(n) i05 (N-01, review i04)** — O-16 retry vraća sačuvani `status: "ACTIVE"` i za voucher kojem je `expiresAt` prošao (ništa se ne
   upisuje); i05 (API-06) to zatvara; Android (i10) odlučuje po `expiresAt`.
+  ZATVORENO u i05: API-06 implementiran; README opisuje preporučeni tok (Home → API-06 → čitanje iz Firestore-a; API-03 retry sa
+  `ACTIVE` i prošlim `expiresAt` → API-06; API-05 `409 VOUCHER_EXPIRED` → osvježavanje stanja).
 - **(o) i07 — OBAVEZA (P-4, N-09 re-review i04)** — poseban test po uzoru na I04-T18: konkurentna promjena `accountStatus` naloga ili
   brisanje naloga dok izdavanje (API-03) drži transakciju; voucher ne smije biti izdat poslije početka brisanja. Jednako za čitanje
   `users` i `rewardDefinitions` u transakciji: čim neki API počne mijenjati te dokumente, mora postojati test koji pokazuje da se čitaju
   u transakciji (u i04 obilaznice V1-b/V1-c iz re-reviewa nijedan test ne obara, jer nijedan API ne mijenja te dokumente).
+  Status poslije i05: OSTAJE za i07. i05 ne mijenja `users` ni `rewardDefinitions` (cancel i API-06 ih samo čitaju u transakciji,
+  kroz zajednički `procitajStanjeNaloga`); test konkurentnog brisanja naloga dolazi sa API-07.
 - **(p) i05, i06 (N-12)** — I04-T19 je vezan za implementaciju: mock `Date.now` prepoznaje pozivaoca po fajlu
   `src/servisi/izdavanjeNagrade.js` i očekuje tačno jedno čitanje pri ulasku. Refaktor sata (npr. pomoćna funkcija u `vauceri.js`) mora
   u istom koraku uskladiti I04-T19, bez slabljenja njegove provjere (`sadaMs` po pokušaju).
+  ZATVORENO u i05 bez usklađivanja: refaktor (korak 2, `9f6a789`) ne dira sat — `izdavanjeNagrade.js` čita `Date.now()` kao u i04,
+  zajednički modul ne čita sat, pa je I04-T19 nepromijenjen (`git diff i04 -- backend/test/emulator/izdavanjeAtomicnost.test.js`
+  prazno) i zelen. Novi servisi imaju isti test po svom fajlu (I05-T13).
+- **(q) i06 (g, i05)** — istekao redeem (§20.5) koristi `servisi/oslobadjanjeVaucera.js` (`pripremiOslobadjanja` + `upisiOslobadjanja`
+  sa `{ status: 'EXPIRED' }`) i `servisi/stanjeNaloga.js`; nijedan drugi kod ne piše `release_`.
+- **(r) i07 (O-9, i05)** — ako brisanje naloga zatvara ACTIVE voucher-e kao CANCELLED / EXPIRED, mora proći kroz isti mehanizam
+  (release najviše jednom) ili odluka O-9 mora reći da RELEASE izostaje; cancel retry ne provjerava `release_` (i05/P-4).
+- **(s) i10 (i05)** — Android poziva API-06 na Home-u i poslije `409 VOUCHER_EXPIRED` iz API-05 osvježava stanje; `Content-Length: 0`
+  bez tijela (Retrofit `@POST` bez `@Body`) je ispravan zahtjev za API-05 i API-06.
 
 ## 7. Poznata ograničenja (sažetak)
 
@@ -185,6 +229,19 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   razmacima) ostaju u poruci ne-gRPC greške u logu; veličina loga nije ograničena (poruka od ~1 MB se upisuje cijela). requestId i uid
   nisu u opsegu O-18, ali I04-T16 (a) zabranjuje requestId u logu za sve ishode API-03. Nedostižno: sve ne-gRPC poruke u i04 su
   statičke; za i05+ važi pravilo statičkih poruka (§6 (h)); opciono ograničiti dužinu opisa u logu.
+- R-10: ZATVORENO u i05 (O-19, korak 1): opis greške nikad ne baca (statički opis `(opis greške nedostupan)`), I05-T01 (d).
+  R-11 i R-12 ostaju poznata ograničenja; R-12 je za nove servise pokriven pravilom statičkih poruka (I05-T02).
+- i05/P-3: `cancelledAt` i odluka o isteku po satu Backend-a, ledger `createdAt` i `updatedAt` po Firestore-u (razlika satova moguća).
+- i05/P-8: API-06 nema gornju granicu broja isteklih voucher-a u jednoj transakciji; ostaju Firestore granice 10 MiB po zahtjevu i
+  270 s po transakciji (60 s neaktivnosti); praktična granica je rok zahtjeva od 10 s (→ 503, stanje konzistentno, retry bezbjedan).
+  Izmjereno nad emulatorom: 200 isteklih u jednoj transakciji (I05-T15 (e)); produkcija nije provjerljiva.
+- i05/P-9: upit `uid ==, status ==` (API-06) i potreba za indeksom utvrđeni samo nad emulatorom (kao i04/P-10).
+- i05/P-11: dva oblika 422 zavisno od tipa tijela (skalar / `null` → 422 i bez token-a; objekat / niz → 401 bez token-a).
+- i05/P-12: `/vouchers//cancel` → 404 `NOT_FOUND` (prazan segment nije ruta), ne `VOUCHER_NOT_FOUND`.
+- i05/P-13: 403 `FORBIDDEN` otkriva da tuđi voucher postoji (O-6).
+- i05/P-14: `reconciledCount` pod kontencijom broji samo voucher-e koje je oslobodila ta transakcija; zbir kroz paralelne pozive ≤ broj isteklih.
+- i05: brisanje voucher-a Admin SDK-om dok cancel drži transakciju čeka bravu u emulatoru, pa se stvarni gRPC NOT_FOUND iz cancel
+  transakcije ne može izazvati testom (I05-T20 (b) pokriva ALREADY_EXISTS; NOT_FOUND nad `vouchers/<id>` pokriva I04-T20 (a)).
 
 ## 8. Backlog
 
@@ -199,8 +256,8 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | ID | Pitanje | Odlučiti prije |
 |---|---|---|
 | O-2 | Demo nad emulatorom ili nad stvarnim Firebase Spark projektom (§3.5, §3.6); uz to i02/R-03. | i09 |
-| O-5 | Cancel voucher-a koji je ACTIVE ali istekao — kao §20.5 (EXPIRED + RELEASE, pa 409 `VOUCHER_EXPIRED`)? | i05 |
-| O-6 | Cancel tuđeg voucher-a — 403 `FORBIDDEN` ili 404 `VOUCHER_NOT_FOUND`? | i05 |
+| O-5 | ZATVORENO 2026-10-18 (Ana, brief i05): kao §20.5 (EXPIRED + RELEASE, pa 409 `VOUCHER_EXPIRED`) — vidi §2. | i05 |
+| O-6 | ZATVORENO 2026-10-18 (Ana, brief i05): 403 `FORBIDDEN` za tuđi, 404 `VOUCHER_NOT_FOUND` za nepostojeći — vidi §2. | i05 |
 | O-7 | Kada redeem vraća `VOUCHER_CANCELLED`. | i06 |
 | O-8 | `redemptionRequests` zapis i pri neuspjehu; `requestKey` SHA-256 kao §14? | i06 |
 | O-9 | U koje stanje se zatvaraju ACTIVE voucher-i pri brisanju naloga i da li se piše `REWARD_RELEASE`. | i07 |
