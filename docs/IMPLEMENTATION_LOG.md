@@ -626,3 +626,255 @@ Poznata ograničenja (dopuna FIX LOOP 1):
   POS (jedna kupovina po korisniku u trenutku) bez uticaja; ponašanje nad produkcionim Firestore-om nije provjerljivo u emulatoru. Kod nije mijenjan.
 - **R-04:** log bilježi šablon rute relativan na ruter `/api/v1` (bez prefiksa `/api/v1`), npr. `/pos/purchases`, `/account/init`; za
   zahtjev na postojeću putanju sa nepodržanim metodom (npr. `GET /api/v1/pos/purchases`) ruta nije pogođena, pa je `putanja` `(nepoznata ruta)`.
+
+## Iteracija 4 — Reward issue
+
+Grana `iteracija-04`. Brief: `docs/iteracije/i04_brief.md`. Plan: `docs/iteracije/i04_plan.md`
+(odobren uz odluke i04/P-1 … i04/P-16 i ispravke K-1 … K-3, sekcija 15). Uloga: BUILDER, 2026-10-17.
+
+### CHANGELOG
+
+- Firestore Security Rules (§25.6, §25.7, §25.9, §31, NFR-03, D-2): blokovi `/rewardDefinitions/{rewardId}`, `/vouchers/{voucherId}` i
+  `/rewardRequests/{requestKey}` doslovno iz §31 normativnog `.docx`-a, na mjestima kao u §31 (automatsko poređenje: `JEDNAKO_DOCX`,
+  `IDENTICNO_PLANU`); `/redemptionRequests` ostaje za i06. Rules testovi RULE-T09 i I04-T17 (`firebase/tests/nagradeIVauceri.test.js`);
+  RULE-T12 (preliminarno) nepromijenjen i zelen.
+- D-5 (i04/P-8, K-1): centralni rukovalac klasifikuje `URIError` sa `status 400` (neispravno percent-kodiran parametar putanje, Express 5)
+  kao `404 NOT_FOUND` — globalno, bez stack-a i bez sirove vrijednosti u logu; `putanja` u logu `(nepoznata ruta)`. Neispravan JSON ima prednost (422).
+- Validacija (§13, O-15, D-4, i04/P-9): `validacija/zahtjevIzdavanja.js` — tijelo tačno `{ requestId }`, `requestId` kanonski UUID v4 malim
+  slovima (regex bez zastavica), sve ostalo `422 INVALID_REQUEST`; `provjeriRewardId` → `404 REWARD_NOT_FOUND` bez pristupa bazi
+  (`jeIspravanIdDokumenta` + zabrana `\p{Cc}`). `jeIspravanIdDokumenta` premještena iz `tijeloKupovine.js` u `validacija/identifikator.js`
+  bez promjene logike (I03-T09 regresija zelena).
+- `servisi/vauceri.js` (§14, §15, §17, §18.1, i04/P-2 … P-4, P-6): `TRAJANJE_VAUCERA_MS = 900 000`, `generisiVoucherId()` =
+  `crypto.randomBytes(32).toString('hex')`, `jeIstekao(expiresAtMs, sadaMs)` (`≥`), `poredakOslobadjanja`, `izracunajRequestKey(uid, requestId)`
+  (SHA-256 hex nad UTF-8 `uid:requestId`).
+- Servis `izdajNagradu` (`servisi/izdavanjeNagrade.js`; §13, §13.1, §13.2, §14, §15, §17, §18.1, §7.4, §7.6, §11, O-14, O-16, i04/P-1 …
+  P-7, P-12): rok prije transakcije (503 bez `runTransaction`); JEDNA transakcija: mapping prvi (isti reward → isti voucher, ništa upisano;
+  drugi → 409; nekonzistentan → 500), nalog (409 / 500), definicija (500 prije 409 `REWARD_INACTIVE`), upit ACTIVE voucher-a korisnika
+  (`tx.get(query)`), provjera postojećih `release_*`, lanac release-a u memoriji, bodovi (O-14: release-i se commit-uju, pa 409
+  `INSUFFICIENT_POINTS` poslije commit-a), novi `voucherId` sa provjerom zauzetosti, upisi tačnim redoslijedom (1 … 2k release-i, 2k+1 nalog,
+  2k+2 voucher, 2k+3 `reserve_{voucherId}`, 2k+4 mapping); svi novi dokumenti `tx.create`, nalog i voucher samo `tx.update`; jedan
+  `sadaMs` po pokušaju i jedan `serverTimestamp()` po transakciji.
+- Ruta `POST /api/v1/rewards/:rewardId/issue` (`rute/nagrade.js`, §26 API-03, i04/P-1): posrednik `napraviProvjeruTokena` samo na ruti;
+  UID samo iz token-a; 201 za novi voucher, 200 za retry; tijelo `{ voucherId, rewardId, costPoints, status, issuedAt, expiresAt }`.
+  `aplikacija.js` dodaje rutu poslije API-02.
+- Testovi backend-a: I04-T02 (a), I04-T03 (a), (c), I04-T06 (a), I04-T09 (f) (unit); API-T05, API-T06, API-T07 (uz K-3), I04-T01 … I04-T16
+  (emulator). `test/pomocnici/omotacBaze.js` proširen (i04/P-11): `sakrijPostojece` važi i za dokumente u rezultatu `tx.get(query)`.
+- `skripte/provjera.ps1`: četvrti smoke `POST /api/v1/rewards/CAR_WASH/issue` bez token-a → 401 `UNAUTHENTICATED` (UTF-8 BOM, CRLF).
+- README: API-03 (ugovor, redoslijed provjera, O-14, i04/P-13, 503 i retry istim `requestId`) i rečenica o D-5.
+- Dokumentacija: `docs/TEST_REPORT.md` (sekcija i04; F1-01 ispravljen), `docs/TRACEABILITY.md` (redovi Iteracije 4, tabela O-1),
+  `docs/ODLUKE.md`, ovaj unos.
+
+Nijedan novi npm paket, kod greške ni Firestore indeks; katalog grešaka, `GreskaApi`, `dnevnik.js`, `greskeServisa.js`, posrednici,
+API-01 i API-02 (ugovor i ponašanje) nepromijenjeni.
+
+### Commit-i
+
+| Commit | Korak plana |
+|---|---|
+| `ced79f0` i04: odobrenje plana i odluke Orchestrator-a | 0 |
+| `972475c` i04: Security Rules za rewardDefinitions, vouchers i rewardRequests doslovno po §31 (RULE-T09) | 1 |
+| `caefdff` i04: neispravno kodiran parametar putanje → 404 NOT_FOUND bez sirove vrijednosti u logu (D-5) | 2 |
+| `7d9b457` i04: validacija requestId (O-15) i rewardId (D-4), generator voucherId i requestKey | 3 |
+| `ea4f46e` i04: POST /rewards/{rewardId}/issue u jednoj Firestore transakciji sa reconcile-om, RESERVE i mapping-om (API-T05, API-T06) | 4 |
+| `9725da8` i04: testovi double-spend-a, release-a najviše jednom, paralelnog retry-ja, kasnog commit-a i roka (API-T07) | 5 |
+| `4e42bc8` i04: test loga bez tajni za API-03 i smoke 401 za /rewards/{rewardId}/issue | 6 |
+| — (kontrolne mutacije M01 … M41 lokalno, bez commit-a; nijedna nije preživjela) | 7 |
+| (ovaj commit) i04: TEST_REPORT, IMPLEMENTATION_LOG, sljedivost, registar odluka i README za iteraciju 4 | 8 |
+
+### Fajlovi
+
+Dodati:
+
+```
+firebase/tests/nagradeIVauceri.test.js
+backend/src/rute/nagrade.js
+backend/src/servisi/izdavanjeNagrade.js
+backend/src/servisi/vauceri.js
+backend/src/validacija/identifikator.js
+backend/src/validacija/zahtjevIzdavanja.js
+backend/test/jedinicni/dekodiranjePutanje.test.js
+backend/test/jedinicni/zahtjevIzdavanja.test.js
+backend/test/jedinicni/vauceri.test.js
+backend/test/emulator/izdavanjeNagrade.test.js
+backend/test/emulator/izdavanjeAtomicnost.test.js
+backend/test/emulator/logIzdavanja.test.js
+```
+
+Izmijenjeni:
+
+```
+firebase/firestore.rules
+backend/src/aplikacija.js
+backend/src/greske/obradaGresaka.js
+backend/src/validacija/tijeloKupovine.js           (samo import jeIspravanIdDokumenta; ponašanje isto)
+backend/test/pomocnici/omotacBaze.js               (proširenje, postojeće grane nepromijenjene)
+skripte/provjera.ps1                               (UTF-8 sa BOM-om, CRLF)
+README.md
+docs/iteracije/i04_plan.md                         (samo sekcija 15)
+docs/TRACEABILITY.md
+docs/IMPLEMENTATION_LOG.md
+docs/TEST_REPORT.md                                (sekcija i04; F1-01: tri putanje)
+docs/ODLUKE.md
+```
+
+Netaknuti: `docs/srs/*` (SHA-256 provjeren), `docs/iteracije/i04_brief.md`, `CLAUDE.md`, `firebase/firestore.indexes.json`, katalog grešaka,
+`GreskaApi.js`, `dnevnik.js`, `greskeServisa.js`, `korelacija.js`, `kolekcije.js`, posrednici, `rute/nalog.js`, `rute/kupovine.js`,
+`servisi/evidencijaKupovine.js`, `servisi/inicijalizacijaNaloga.js`, seed, `package.json`/`package-lock.json`, Android, svi testovi i01–i03.
+
+### Odstupanja od plana
+
+**OD-1 — I04-T13 ojačan: izdavanje sa 409 se ponavlja istim `requestId`.** Po planu je 409 bio dozvoljen ishod izdavanja. U prvom izvršavanju
+sva tri izdavanja su dobila 409 prije nego što su kupovine commit-ovane (nalog 0/0), pa lanac nije sadržao nijedan `REWARD_RESERVE` i test
+nije provjeravao ono zbog čega postoji. Izdavanje sa `409 INSUFFICIENT_POINTS` se sada ponavlja ISTIM `requestId`-em (neuspjeh ne pravi
+mapping, i04/P-13) sa pauzom 250 ms, najviše 120 pokušaja; test zahtijeva tačno 3 voucher-a, 3 mapping-a i lanac EARN/RESERVE od 0/0.
+Pauza od 50 ms je u jednom punom izvršavanju izgladnjela kupovine (zaključavanje `loyaltyAccounts` u emulatoru; zaostale kupovine su poslije
+`ocistiEmulatore` dobile 404), pa je povećana na 250 ms. Produkcioni kod nije mijenjan.
+
+**OD-2 — I04-T08 (d), (e): `expiresAt` u tijelu retry-ja je iz sačuvanog (Admin SDK-om izmijenjenog) voucher-a.** Plan kaže „ostala polja tijela
+jednaka prvom”, ali test sam pomjera `expiresAt` u prošlost (nema test knob-a za sat). Po i04/P-1 tijelo je slika SAČUVANOG dokumenta, pa test
+provjerava `voucherId`, `rewardId`, `costPoints`, `issuedAt` jednake prvom, `status` i `expiresAt` jednake sačuvanom dokumentu; za (a)–(c)
+cijelo tijelo je `deepStrictEqual` prvom.
+
+**OD-3 — Koraci 5 i 6 nisu mogli biti crveni prije koda** (kod postoji od koraka 4; plan to predviđa za korak 5). Test-first je dokazan
+kontrolnim mutacijama: M01–M07, M10, M18, M31, M32 (korak 5) i M21, M22, M36, M37 (korak 6) obaraju te testove. Isto važi za dopunu
+I04-T03 (c) nad produkcionom rutom u koraku 4: D-5 je globalan od koraka 2, pa je ta dopuna bila zelena i prije rute (dokaz M21, M22).
+
+**OD-4 — Checkpoint-i koraka 5 i 6 izvršeni uz `git stash` necommit-ovanih izmjena kasnijih koraka.** Izmjene za korake 6 i 8 (README, docs,
+`provjera.ps1`, `logIzdavanja.test.js`) su pripremane tokom dugih izvršavanja; `provjera.ps1` svakog koraka je pokrenut nad stanjem tog
+commit-a (ostalo sklonjeno `git stash` / van repoa), pa vraćeno.
+
+**OD-5 — I04-T12: kad bi svih 10 zahtjeva dobilo 503 bez kasnog commit-a**, naknadni retry očekuje 201 (prvo izdavanje), inače 200; u svakom
+slučaju na kraju tačno 1 voucher / 1 RESERVE / 1 mapping. Nije se desilo ni u jednom izvršavanju.
+
+**OD-6 — Dodatni slučajevi van tabela plana (samo pojačanje):** I04-T02 (a) prazan string, objekat, niz sa objektom, `constructor`;
+I04-T02 (b) `uid` u tijelu, `null` tijelo, bez tijela; I04-T03 (a) `\t`, U+009F, `...`, `_x_`, niz; I04-T03 (b) `%2E`, `%00`, `a%7Fb`;
+I04-T05 `active: false` + `costPoints: 0` → 500 (i04/P-12); I04-T10 (c) `rewardId` nije string; I04-T16 (a) i `__SENTINEL__` kao `rewardId`
+(404 formata); I04-T09 (a) i isti `createdAt` RELEASE i RESERVE (i04/P-6).
+
+**OD-7 — Mutacije M13 i M15 imaju po dvije varijante (M13b `+ 900 001`, M15b bez provjere varijante)**, jer plan za njih kaže „zasebno”.
+Mutacije su izvršene nad jednim dugo pokrenutim emulatorom (`firebase emulators:start`) sa `--test-name-pattern`, kao u i03.
+
+### Status otvorenih pitanja iz plana
+
+| Pitanje | Status |
+|---|---|
+| i04/P-1 ugovor API-03 | Riješeno po odluci; API-T06 (`Object.keys` tim redoslijedom), I04-T08, I04-T14 PASS; M29, M30, M36 ubijene. |
+| i04/P-2 izvor vremena | Riješeno: jedan `sadaMs` po pokušaju; `serverTimestamp()` za ledger, mapping, `updatedAt`; API-T06 (razlika tačno 900 000 ms), I04-T09 (f); M09, M13, M13b ubijene. |
+| i04/P-3 `voucherId` | Riješeno: 32 bajta hex; I04-T06 (a), (b), I04-T10 (d); M14, M03 ubijene. |
+| i04/P-4 `requestKey` | Riješeno; vektor C3 u I04-T06 (a); M10 ubijena. |
+| i04/P-5 ledger eventId | Riješeno: `reserve_{voucherId}`, `release_{voucherId}`, samo `tx.create` + provjera postojećeg release-a; M05, M06, M07 ubijene. Obavezuje i05/i06. |
+| i04/P-6 redoslijed release-a | Riješeno; I04-T09 (d); M27 ubijena. |
+| i04/P-7 poredak i nekonzistentna stanja | Riješeno; I04-T04, I04-T05, I04-T10 (b), (c), (d), I04-T11 (redoslijed upisa po putanjama); M11, M17, M32 … M35 ubijene. |
+| i04/P-8 D-5 (opcija A) + K-1 | Riješeno: 404 `NOT_FOUND`; stvaran redoslijed JSON → D-5 (I04-T03 (c)); M21, M22 ubijene. |
+| i04/P-9 D-4 + `\p{Cc}` | Riješeno; I04-T03 (a), (b), I03-T09 regresija PASS; M23, M24 ubijene. `loyaltyUid` nepromijenjen (B-1). |
+| i04/P-10 `tx.get(query)` | Potvrđeno nad emulatorom; `firestore.indexes.json` nepromijenjen. |
+| i04/P-11 `omotacBaze` | Urađeno; I04-T11 (z1)–(z4). |
+| i04/P-12 definicija prije `active` | Riješeno; I04-T05; M34 ubijena. |
+| i04/P-13 … P-16 | Prihvaćeno; P-13 upisan u README; P-14 i P-16 u poznata ograničenja. |
+| K-2 (B-1 u ODLUKE.md) | Urađeno (sekcija 8). |
+| K-3 (API-T07 {201, 409}) | Ispunjeno u svakom od 6 punih izvršavanja (20/20 ponavljanja `201 + 409 INSUFFICIENT_POINTS`). |
+| F1-01 (backlog i03) | Zatvoren: tri putanje u TEST_REPORT ispravljene; `git grep -n -P "firebase\tests" -- docs` prazno. |
+
+### Ograničenja za buduće iteracije
+
+- **i05, i06 (g, i04/P-5):** svaki prelaz u EXPIRED / CANCELLED koristi `loyaltyLedger/release_{voucherId}` + `tx.create` (najviše jednom) i
+  eksplicitnu provjeru postojećeg release-a; ledger `createdAt` = `serverTimestamp()`; prefiks `redeem_` je rezervisan za i06.
+- **i05, i06 (vrijeme):** istek se procjenjuje `jeIstekao(expiresAt.toMillis(), sadaMs)` sa jednim `sadaMs = Date.now()` po pokušaju transakcije.
+- **i05, i06 (voucherId u putanji):** format `^[0-9a-f]{64}$`; neispravan oblik → odgovarajući 404 bez pristupa bazi; D-5 već pokriva
+  neispravno percent-kodiranje; vrijednost nikad u log ni poruku (h).
+- **i07 (f):** retry issue-a kad mapping postoji a voucher ne → 500 (i04); i07 određuje redoslijed brisanja.
+- **i10 (i):** Android upit `vouchers` mora imati `where('uid','==',auth.uid)` i `limit ≤ 20`; `rewardDefinitions` čita samo prijavljen korisnik.
+
+### Poznata ograničenja
+
+- i04/P-2: `issuedAt`/`expiresAt` i poređenje isteka su po satu Backend-a, ledger `createdAt` po Firestore-u; razlika satova je moguća (lokalno zanemarljiva).
+- i04/P-9, i04/P-10: ponašanje Firestore-a za ID sa NUL/kontrolnim znakom i indeks za upit `uid ==, status ==` utvrđeni samo nad emulatorom.
+- i04/P-14: Express ruter je case-insensitive i nije strict (`/REWARDS/CAR_WASH/ISSUE`, završna `/` pogađaju rutu).
+- i04/P-16: broj ACTIVE voucher-a u upitu reconcile-a nije ograničen.
+- **Otvoreno pitanje (uočeno tokom rada, kod nije mijenjan jer je van plana):** kad transakcija padne na `ALREADY_EXISTS` (samo nekonzistentno
+  stanje ili zastarjelo čitanje — I04-T11 (z1)–(z4)), 500 u serverski log upisuje stack sa porukom Firestore-a koja sadrži putanju dokumenta
+  (npr. `vouchers/<voucherId>` ili `rewardRequests/<requestKey>`). Odgovor je ne sadrži; u normalnom toku nije uočeno. Odnosi se na ograničenje (h)
+  za i05/i06 — za odluku Orchestrator-a. **Zatvoreno u FIX LOOP 1 (R-04, O-18), vidi niže.**
+- Pod kontencijom istog korisnika: 503 i latencija do ~10 s (I04-T12: jedan 503 u nekim serijama; I04-T13 do ~18 s zbog ponavljanja na 409),
+  kao u i03; stanje uvijek konzistentno, nijedan 500. **Ispravljeno u FIX LOOP 1 (R-03, O-17): važi i za RAZLIČITE korisnike, vidi niže.**
+- Ostala ograničenja iz i01–i03 (nepotpisani emulator token-i, `MetadataLookupWarning`, `npm warn install-scripts`, Gradle daemon, N-02) i dalje važe.
+
+### FIX LOOP 1 (nalazi iz `docs/iteracije/i04_review.md`, commit d3e6d6a)
+
+Review: ITERATION REJECTED (R-01, R-02 blokirajući; R-03, R-04 po odluci Orchestrator-a). Odluke Orchestrator-a O-17 i O-18 i napomene
+N-01, N-08 upisane u `docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 1 — odluke Orchestrator-a”.
+
+| Nalaz | Ispravka | Test | Dokaz |
+|---|---|---|---|
+| R-01 (MAJOR) API-T07 ne obara M02 pouzdano | Novi deterministički test: kupovina istog korisnika (ne čita `vouchers`) se pokreće dok izdavanje drži transakciju poslije čitanja (`omotacBaze({ prijeCommita })`); tačan balance i lanac. Kod nije mijenjan. | I04-T18 | nemutiran 10/10 prošao; M02 10/10 pao |
+| R-02 (MINOR, blokira) MA21 preživljava | Test sa prisiljenim ponovnim pokušajem (`omotacBaze({ prisiliPonovniPokusaj })`, ABORTED code 10) i `mock.method(Date, 'now', …)` samo za pozive iz `izdavanjeNagrade.js`. Kod nije mijenjan. | I04-T19 | nemutiran 10/10 prošao; M42 (= MA21) 10/10 pao |
+| R-03 (MINOR) netačno ograničenje kontencije | Samo dokumentacija (O-17): tehnika `tx.get(query)` se zadržava; ograničenje ispravljeno (važi i za različite korisnike u emulatoru); backlog B-2. | — | — |
+| R-04 (MINOR) 500 iz commit-a upisuje requestKey / voucherId u log | `backend/src/greske/obradaGresaka.js`: za 5xx log nosi `name (code N): poruka` sa redakcijom putanja dokumenata (`path=…`, `documents/…`, `<kolekcija>/…` → `[putanja dokumenta]`) i samo okvire `at …` (O-18). Odgovor i status nepromijenjeni. | I04-T16 (c) | crveno prije ispravke; poslije 10/10 prošao; M43 10/10 pao |
+
+Commit-i FIX LOOP-a 1:
+
+| Commit | Poruka |
+|---|---|
+| `1811463` | i04 fix: odluke Orchestrator-a (FIX LOOP 1) |
+| `070a1fc` | i04 fix: R-01 deterministički test čitanja stanja u transakciji (obara M02) |
+| `b562245` | i04 fix: R-02 test sadaMs po pokušaju (obara MA21) |
+| `5678e58` | i04 fix: R-04 redakcija putanja dokumenata u logu 5xx grešaka |
+| (ovaj) | i04 fix: dokumentacija FIX LOOP-a 1 |
+
+Fajlovi: `backend/src/greske/obradaGresaka.js` [I], `backend/test/pomocnici/omotacBaze.js` [I] (opcije `prijeCommita`, `prisiliPonovniPokusaj`,
+brojač `brojPokusaja`; postojeće opcije nepromijenjene), `backend/test/emulator/izdavanjeAtomicnost.test.js` [I] (I04-T18, I04-T19),
+`backend/test/emulator/logIzdavanja.test.js` [I] (I04-T16 (c)), `docs/iteracije/i04_plan.md`, `docs/TEST_REPORT.md`, `docs/IMPLEMENTATION_LOG.md`,
+`docs/ODLUKE.md`, `docs/TRACEABILITY.md`. Postojeći testovi nisu oslabljeni; nijedan novi paket.
+
+Odluke:
+- **O-17** — `tx.get(query)` nad `vouchers` se zadržava (brief, tačka 5); opcija B (upit van transakcije + `tx.getAll` kandidata) se ne uvodi.
+  Zaštita od double-spend-a se ne smije oslanjati na bravu upita (zato I04-T18). Backlog B-2.
+- **O-18** — serverski log 5xx grešaka ne smije sadržati putanje dokumenata, requestKey ni voucherId (ni u poruci ni u stack-u); popravljeno
+  globalno u centralnom rukovaocu greškama.
+- **N-08** — u `docs/ODLUKE.md` §6 duple oznake „(f) potvrđeno” i „(g) potvrđeno” zamijenjene novim oznakama (m) i (l); N-01 upisano kao (n).
+
+Poznata ograničenja (ispravka / dopuna):
+- **Kontencija (R-03, O-17; zamjenjuje stavku „Pod kontencijom istog korisnika” gore):** u emulatoru `tx.get(query)` serijalizuje izdavanja i
+  RAZLIČITIH korisnika — izmjereno u reviewu (K korisnika, po jedan SHOWER zahtjev, paralelno): K=2 → 3,6 s; K=5 → 9 pokušaja; K=10 → 2×503;
+  K=15 → 11×503 (63 pokušaja); stanje uvijek konzistentno. Ponašanje produkcionog Firestore-a nije provjereno. Backlog B-2 (i09).
+- **Log 5xx (R-04, O-18; zamjenjuje „Otvoreno pitanje” o `ALREADY_EXISTS` gore):** zatvoreno; log i dalje omogućava dijagnostiku
+  (`Error (code 6): 6 ALREADY_EXISTS: … path=[putanja dokumenta]` + okviri `at …`). Redakcija se oslanja na oblik poruke Firestore-a
+  (`path=…`, `documents/…`, naziv kolekcije §24 + `/`) utvrđen nad emulatorom.
+- **N-01 (za i05):** O-16 retry vraća sačuvani `status: "ACTIVE"` i za voucher kojem je `expiresAt` prošao (ništa se ne upisuje); i05 (API-06)
+  to zatvara; Android (i10) odlučuje po `expiresAt`.
+
+### FIX LOOP 2 (nalazi iz `docs/iteracije/i04_review_fix1.md`, commit 54b2e0b)
+
+Re-review: ITERATION REJECTED (R-06 blokirajući; R-05 po odluci Orchestrator-a P-3). R-01 … R-04 zatvoreni i nisu dirani. Odluke P-3, P-4 i
+napomene N-10 … N-13 upisane doslovno u `docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 2 — odluke Orchestrator-a”.
+
+| Nalaz | Ispravka | Test | Dokaz |
+|---|---|---|---|
+| R-06 (MINOR, blokira) M43-vr preživljava I04-T16 (c) | Samo test: I04-T16 (c) proširen slučajevima ALREADY_EXISTS na `vouchers/<noviVoucherId>` i `loyaltyLedger/reserve_<noviVoucherId>` (fiksiran `crypto.randomBytes`, dokument drugog uid-a pod tim ID-em, `omotacBaze({ sakrijPostojece })`). | I04-T16 (c) | nemutiran 10/10 prošao; M43-vr 10/10 pao (prije koraka 2); poslije koraka 2 ekvivalent M43-vr-g 10/10 pao |
+| R-05 (MINOR) stvarni emulatorski NOT_FOUND (`name: "<id>"`) prolazi redakciju | `backend/src/greske/obradaGresaka.js`: greška sa numeričkim gRPC `code` se u log 5xx upisuje BEZ poruke — `name (code N IME_STATUSA)` (statička mapa 0 … 16) + okviri `at …`; ne-gRPC greške i bačeni ne-Error: poruka sa redakcijom putanja (kao FIX LOOP 1) i svakog niza od ≥ 32 hex znaka (`[hex]`, N-10). Odgovor klijentu i statusi nepromijenjeni (§27). | I04-T20 (a)–(c) (`logGresaka5xx.test.js`) | crveno prije ispravke (3/3 testa); poslije 10/10 prošao; M44, M45, M43-vr po 10/10 pali |
+| P-4 (N-09) | Samo dokumentacija: obaveza za i07 u `docs/ODLUKE.md` §6 (o). | — | — |
+| N-11, N-12, N-13 | `docs/ODLUKE.md`: N-11 u §7, N-12 kao §6 (p), N-13 redoslijed oznaka (j), (k), (l) ispravljen. | — | — |
+
+Commit-i FIX LOOP-a 2:
+
+| Commit | Poruka |
+|---|---|
+| `0c80582` | i04 fix2: odluke Orchestrator-a (FIX LOOP 2) |
+| `458e720` | i04 fix2: R-06 test loga za vouchers/ i reserve_ (obara M43-vr) |
+| `f27ab90` | i04 fix2: R-05 log 5xx bez poruke gRPC grešaka i redakcija hex nizova |
+| (ovaj) | i04 fix2: dokumentacija FIX LOOP-a 2 |
+
+Fajlovi: `backend/src/greske/obradaGresaka.js` [I] (jedini proizvodni fajl), `backend/test/emulator/logIzdavanja.test.js` [I] (I04-T16 (c)),
+`backend/test/emulator/logGresaka5xx.test.js` [D] (I04-T20), `docs/iteracije/i04_plan.md`, `docs/TEST_REPORT.md`, `docs/IMPLEMENTATION_LOG.md`,
+`docs/ODLUKE.md`, `docs/TRACEABILITY.md`. `omotacBaze.js` nije mijenjan. Nijedan novi paket, nijedna nova ruta, nijedan test oslabljen.
+
+Odluke:
+- **P-3** — R-05 u FIX LOOP-u 2 (opcija A); log 5xx ne smije zavisiti od oblika poruke Firestore greške; O-18 ostaje globalan.
+- **P-4** — N-09 kao obaveza za i07 (ODLUKE §6 (o)).
+
+Poznata ograničenja (dopuna):
+- **Log 5xx (R-05, zamjenjuje rečenicu „Redakcija se oslanja na oblik poruke Firestore-a” iz FIX LOOP-a 1):** za gRPC greške (Firestore,
+  numerički `code`) poruka se više ne bilježi, pa zaštita ne zavisi od njenog oblika; dijagnostika je `Error (code 6 ALREADY_EXISTS)` /
+  `Error (code 5 NOT_FOUND)` + okviri. Redakcija hex nizova (≥ 32) za ne-gRPC poruke je heuristika: tajna kraća od 32 hex znaka ili
+  drugog oblika (npr. putanja kolekcije van §24) bi ostala. Format grešaka produkcionog Firestore-a nije provjeren (samo emulator).
+- **N-11:** Express `finalhandler` za `res.headersSent` ispisuje cijeli `err.stack` bez redakcije; nedostižno u i04 (ODLUKE §7).

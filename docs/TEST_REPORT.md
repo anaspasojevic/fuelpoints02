@@ -1771,16 +1771,16 @@ ponovljen ručno (paketi nepromijenjeni; `provjera.ps1` ga izvršava).
 | `backend: npm run test:emu` (1) | `ℹ tests 68` `ℹ pass 68` `ℹ fail 0` | 0 | 198 s |
 | `backend: npm run test:emu` (2) | `ℹ tests 68` `ℹ pass 68` `ℹ fail 0` | 0 | 202 s |
 | `backend: npm run test:emu` (3) | `ℹ tests 68` `ℹ pass 68` `ℹ fail 0` | 0 | 194 s |
-| `firebase	ests: npm test` (prvi pokušaj, bez JBR-a na PATH-u) | `ℹ tests 25` `ℹ pass 25` `ℹ fail 0` | 0 | 12 s |
+| `firebase\tests: npm test` (prvi pokušaj, bez JBR-a na PATH-u) | `ℹ tests 25` `ℹ pass 25` `ℹ fail 0` | 0 | 12 s |
 | `.\skripte\provjera.ps1` (prvi pokušaj, odmah poslije) ×2 | `Port 8080 ili 9099 je zauzet: zaustavi pokrenute emulatore.` `NEUSPJEH: Portovi emulatora 8080 i 9099 su slobodni` | 1, 1 | 2 s, 1 s |
-| `firebase	ests: npm test` (ponovljeno, JBR prvi u PATH-u) | `ℹ tests 25` `ℹ pass 25` `ℹ fail 0` | 0 | 9 s |
+| `firebase\tests: npm test` (ponovljeno, JBR prvi u PATH-u) | `ℹ tests 25` `ℹ pass 25` `ℹ fail 0` | 0 | 9 s |
 | `.\skripte\provjera.ps1` (1) | `SVE PROVJERE PROŠLE` (46/46, 68/68, 25/25, tri smoke-a, Android `BUILD SUCCESSFUL` ×2) | 0 | 282 s |
 | `.\skripte\provjera.ps1` (2) | `SVE PROVJERE PROŠLE` (isti brojevi) | 0 | 288 s |
 | `(Get-FileHash docs\srs\FuelPoints_SRS_3_1.docx -Algorithm SHA256).Hash` | `7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C60228` | — | — |
 | `git diff main -- docs/srs` | prazno (0 linija) | — | — |
 | `Get-NetTCPConnection -LocalPort 8080,9099,3999 -State Listen` na kraju | 0 (slobodni) | — | — |
 
-Prvi pokušaj `firebase	ests npm test` je pokrenut bez JBR-a na PATH-u: koristio je Oracle `javapath` posrednik (`C:\Program Files\Java\jdk-24`),
+Prvi pokušaj `firebase\tests npm test` je pokrenut bez JBR-a na PATH-u: koristio je Oracle `javapath` posrednik (`C:\Program Files\Java\jdk-24`),
 pa Firestore emulator (PID 16624, `--project_id demo-fuelpoints`) nije ugašen poslije `emulators:exec` i držao je port 8080 — poznat razlog
 zbog kojeg `provjera.ps1` stavlja JDK prvi u PATH. `provjera.ps1` je ispravno odbio start (exit 1). Zaostali proces je zaustavljen
 (`Stop-Process -Id 16624`), port provjeren (0), a Rules testovi i oba `provjera.ps1` ponovljeni sa JBR-om prvim u PATH-u (redovi iznad).
@@ -1807,3 +1807,415 @@ I03-T13 503 za 10 019 / 10 024 / 10 013 ms; I02-T09 svaki put `200×9, 201×1`. 
   povremeno daju jedan 503 (1 od 3 serije) i latenciju do ~10 s. Stanje je uvijek konzistentno, a POS retry bezbjedan. U ovim
   izvršavanjima (10 paralelnih) I03-T11/T12 nisu dobili 503. Detalji su u IMPLEMENTATION_LOG.
 - **R-04:** u logu je šablon rute bez prefiksa `/api/v1`; nepodržan metod na postojećoj putanji se bilježi kao `(nepoznata ruta)`.
+
+## Iteracija 4 — Reward issue
+
+Datum izvršavanja: 2026-10-17 (Windows 11 Pro 10.0.22621, Windows PowerShell 5.1). Grana `iteracija-04`, kod na commit-u `4e42bc8`
+(koraci 0–6; korak 7 bez commit-a; dokumentacija koraka 8 necommit-ovana u trenutku izvršavanja). `node -v` → `v24.21.0`.
+Emulator komande sa JBR-om prvim u PATH-u (`$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; $env:PATH="$env:JAVA_HOME\bin;$env:PATH"`).
+Izlaz svake komande preusmjeren u fajl van repoa; ovdje su prepisane linije sa rezultatom.
+
+### Završno izvršavanje (checkpoint)
+
+```powershell
+cd backend; npm test; npm run test:emu; npm run test:emu; npm run test:emu; cd ..
+cd firebase\tests; npm ci; npm test; cd ..\..
+.\skripte\provjera.ps1; $LASTEXITCODE    # dva puta zaredom (uključuje backend npm ci)
+(Get-FileHash docs\srs\FuelPoints_SRS_3_1.docx -Algorithm SHA256).Hash
+git diff main -- docs/srs
+```
+
+| Komanda | Rezultat | Exit code | Trajanje (`ℹ duration_ms`) |
+|---|---|---|---|
+| `backend: npm test` | `ℹ tests 63` `ℹ pass 63` `ℹ fail 0` | 0 | 4,2 s |
+| `backend: npm run test:emu` (1) | `ℹ tests 99` `ℹ pass 99` `ℹ fail 0` | 0 | 349 s |
+| `backend: npm run test:emu` (2) | `ℹ tests 99` `ℹ pass 99` `ℹ fail 0` | 0 | 364 s |
+| `backend: npm run test:emu` (3) | `ℹ tests 99` `ℹ pass 99` `ℹ fail 0` | 0 | 343 s |
+| `firebase\tests: npm ci` | `added 729 packages, and audited 730 packages in 28s` | 0 | 28 s |
+| `firebase\tests: npm test` | `ℹ tests 30` `ℹ pass 30` `ℹ fail 0` | 0 | 8,1 s |
+| `.\skripte\provjera.ps1` (1) | `SVE PROVJERE PROŠLE`; backend `ℹ tests 63`/`ℹ pass 63`, `ℹ tests 99`/`ℹ pass 99`; rules `ℹ tests 30`/`ℹ pass 30`; 4 smoke-a; Android 2× `BUILD SUCCESSFUL` | 0 | 440 s |
+| `.\skripte\provjera.ps1` (2) | isto kao (1) | 0 | 414 s |
+| `(Get-FileHash docs\srs\FuelPoints_SRS_3_1.docx -Algorithm SHA256).Hash` | `7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C60228` (`sha256sum`: `7d866413…c41c60228`) | — | — |
+| `git diff main -- docs/srs` | prazno (0 linija) | — | — |
+
+Prije završnog izvršavanja, na commit-u koraka 5 (`9725da8`, kod isti kao završni; bez `logIzdavanja.test.js`), `npm run test:emu` je izvršen još
+3 puta zaredom: `ℹ tests 97` `ℹ pass 97` `ℹ fail 0`, exit 0, sva tri. Ukupno 6 punih izvršavanja emulator suite-a bez ijednog pada
+poslije OD-1 (vidi „Nalazi tokom izvršavanja”).
+
+#### `.\skripte\provjera.ps1` — oba izvršavanja (izvod stdout-a, isto u oba osim `correlationId`)
+
+```
+==> Alati (Node 24, Java 21+, JDK za Gradle)
+==> SRS integritet (SHA-256 normativnog .docx-a)
+==> NFR-07 (bez tajni u repozitorijumu)
+==> Bez TODO/FIXME
+==> Portovi emulatora 8080 i 9099 su slobodni
+==> Backend: npm ci, npm test, npm run test:emu
+==> Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init, …, 401 UNAUTHENTICATED na /rewards/CAR_WASH/issue bez token-a)
+Smoke: 404 NOT_FOUND, correlationId abe7bc29-1599-4286-b9a4-0f57a9e0cd52
+Smoke: 401 UNAUTHENTICATED, correlationId dc6065ea-117f-4e2f-a33d-3a1d0497df79
+Smoke: 401 UNAUTHENTICATED_POS, correlationId 5c2de4c2-acb3-4b92-9db5-29a248698026
+Smoke: 401 UNAUTHENTICATED, correlationId 4452febc-d4e7-4a64-95a2-8dd1702fa662
+==> Firestore rules: npm ci, npm test
+==> Android: assembleDebug, testDebugUnitTest
+SVE PROVJERE PROŠLE
+```
+
+Log smoke koraka (1): `"code":"UNAUTHENTICATED","status":401,"metod":"POST","putanja":"/rewards/:rewardId/issue"` (šablon rute, D-3).
+`provjera.ps1` → 0 je izvršen i poslije svakog koraka 1–6 (i03/K-2).
+
+#### Statistika konkurentnih testova (završna 3 izvršavanja; `t.diagnostic`)
+
+| Test | Izvršavanje 1 | Izvršavanje 2 | Izvršavanje 3 |
+|---|---|---|---|
+| API-T07 (20 ponavljanja; raspodjela) | `{"201 + 409 INSUFFICIENT_POINTS":20}` | `{"201 + 409 INSUFFICIENT_POINTS":20}` | `{"201 + 409 INSUFFICIENT_POINTS":20}` |
+| API-T07 trajanje | 74,9 s | 71,2 s | 77,3 s |
+| I04-T10 (a) statusi (10 paralelnih) | `201,409,409,409,409,409,409,409,409,409` | `409,409,409,409,409,201,409,409,409,409` | `201,409,409,409,409,409,409,409,409,409` |
+| I04-T12 ponavljanje 1 | `200,200,200,200,201,200,200,200,200,200` | `200,201,200,200,200,200,200,200,200,200` | `200,200,200,201,200,200,200,200,200,200` |
+| I04-T12 ponavljanje 2 | `201,200,200,200,200,200,200,200,200,200` | `200,200,200,201,200,200,200,200,200,200` | `200,200,200,200,200,200,200,200,200,201` |
+| I04-T12 ponavljanje 3 | `200,200,200,200,200,200,200,200,200,201` | `200,200,503,200,200,201,200,200,200,200` | `200,200,200,200,200,200,200,200,201,200` |
+| I04-T13 statusi (5 kupovina, 3 izdavanja) | `201×8`; 503: 1; 409 prije uspjeha: 62 | `201×8`; 503: 0; 409 prije uspjeha: 30 | `201×8`; 503: 1; 409 prije uspjeha: 31 |
+| I04-T14 prvi zahtjev | HTTP 503 za 10 011 ms | HTTP 503 za 10 011 ms | HTTP 503 za 10 023 ms |
+
+Izvršavanja na commit-u koraka 5 (3×): API-T07 `{"201 + 409 INSUFFICIENT_POINTS":20}` sva tri puta; I04-T10 (a) uvijek tačno jedan 201 i 9×409;
+I04-T12 jedan 503 u ponavljanju 2 drugog izvršavanja (`200,201,200,200,200,503,200,200,200,200`), ostalo 200/201.
+Ni u jednom izvršavanju nijedan 500 (R18 se nije pojavio). **K-3 ispunjen** u svih 6 izvršavanja (svako ima ≥ 1, tačnije 20 ponavljanja sa
+ishodom tačno {201, 409 `INSUFFICIENT_POINTS`}); 503 pod kontencijom se u API-T07 nije pojavio.
+
+### Test-first (crveno prije koda)
+
+| Korak | Komanda | Rezultat prije implementacije |
+|---|---|---|
+| 1 | `firebase\tests: npm test` nad starim rules | `ℹ tests 30` `ℹ pass 28` `ℹ fail 2`: `✖ RULE-T09 owner get sopstvenog voucher-a i owner list …`, `✖ I04-T17 rewardDefinitions: prijavljen get/list → ALLOW …` (ALLOW slučajevi; default deny) |
+| 2 | `backend: node --test test/jedinicni/dekodiranjePutanje.test.js` | `ℹ tests 3` `ℹ pass 2` `ℹ fail 1`: `✖ I04-T03 (c) D-5 …` — `actual: 500, expected: 404` (tijelo `INTERNAL_ERROR`) |
+| 3 | `backend: npm test` | `ERR_MODULE_NOT_FOUND … src\servisi\vauceri.js`, `… src\validacija\zahtjevIzdavanja.js`; `ℹ tests 51` `ℹ pass 49` `ℹ fail 2` |
+| 4 | `npx firebase emulators:exec … "node --test --test-concurrency=1 test/emulator/izdavanjeNagrade.test.js"` | `ℹ tests 18` `ℹ pass 0` `ℹ fail 18` — ruta ne postoji (`actual: 404` `NOT_FOUND`, `expected: 409/201/401`) |
+| 4 | `backend: npm test` (dopuna I04-T03 (c) nad produkcionom rutom) | `ℹ tests 63` `ℹ pass 63` — zeleno i prije rute jer je D-5 globalan od koraka 2 (OD-3); crvenilo dokazano M21, M22 |
+| 5, 6 | — | kod postoji od koraka 4 (plan, korak 5); crvenilo dokazano mutacijama (OD-3) |
+
+Poslije koda koraka 4: `npm test` `ℹ tests 63` `ℹ pass 63`; emulator `izdavanjeNagrade.test.js` `ℹ tests 18` `ℹ pass 18` `ℹ fail 0`.
+Prvo izvršavanje `izdavanjeAtomicnost.test.js` (korak 5, samostalno): `ℹ tests 11` `ℹ pass 11` `ℹ fail 0`.
+
+### Nalazi tokom izvršavanja
+
+- **I04-T13 (OD-1).** U prvom samostalnom izvršavanju I04-T13 je prošao, ali sa `statusi: 201,201,201,201,201,409,409,409` — nijedno izdavanje
+  nije uspjelo, pa lanac nije sadržao RESERVE. Test je ojačan (409 → ponavljanje istim `requestId`, pauza 50 ms, 40 pokušaja). U punom
+  izvršavanju (`npm run test:emu`, 1. od 3) I04-T13 je pao: `Error: 73b90f94-…: nema ishoda poslije 40 pokušaja` (`ℹ tests 97` `ℹ pass 96`
+  `ℹ fail 1`); kupovine su pod kontencijom ponavljale 503, a zaostale su poslije `ocistiEmulatore` sljedećeg testa dobile 404
+  `LOYALTY_ACCOUNT_NOT_FOUND` (log). Pauza je povećana na 250 ms, budžet na 120 pokušaja; samostalno: `ℹ pass 1` za 15,6 s; zatim 6 punih
+  izvršavanja bez pada. Produkcioni kod nije mijenjan.
+- **Kodiranje privremene skripte za mutacije** (Python `-I`, konzola cp1250): ispis JSON-a prebačen na ASCII; nema uticaja na rezultate.
+
+### Security Rules i §31
+
+| Komanda | Izlaz |
+|---|---|
+| `python -I uporedi_rules.py docs\srs\FuelPoints_SRS_3_1.docx firebase\firestore.rules` (privremena skripta van repoa: §31 iz `word/document.xml`, paragrafi `w:p` i `w:br` → `\n`, `w:t` tekst, HTML entiteti; uklonjen blok `/redemptionRequests/{requestKey}` sa praznim redom ispred; CRLF → LF) | `JEDNAKO_DOCX` |
+| ista skripta nad `firebase/firestore.rules` prije izmjene (`git show HEAD:firebase/firestore.rules`, korak 1) | `RAZLIKA` — `unified_diff` pokazuje tačno tri nedostajuća bloka: `rewardDefinitions`, `vouchers` (poslije `loyaltyLedger`) i `rewardRequests` (poslije `notifications`) |
+| `diff <(tr -d '\r' < firebase/firestore.rules) <(sed -n 636,724p docs/iteracije/i04_plan.md)` | prazno → `IDENTICNO_PLANU` |
+
+### Inspekcije (plan, sekcija 9)
+
+| Komanda | Izlaz |
+|---|---|
+| `git grep -n -E "/vouchers/\|/redeem\|/cancel\|account/vouchers\|REWARD_REDEEM\|redemptionRequests" -- backend/src` | samo `backend/src/podaci/kolekcije.js:11:  redemptionRequests: 'redemptionRequests',` |
+| `git grep -n -i -E "process\.env\.(NODE_ENV\|TEST)\|inject\|ubriz\|mock" -- backend/src` | prazno (exit 1) |
+| `git grep -n randomUUID -- backend/src` | samo `backend/src/firebase/inicijalizacija.js:1,9` i `backend/src/posrednici/korelacija.js:1,5` |
+| `git diff --stat main -- '*package*.json'` | prazno |
+| `git diff --stat main -- firebase/firestore.indexes.json` | prazno |
+| `git grep -n -E "TODO\|FIXME" -- backend firebase skripte README.md ':!skripte/provjera.ps1'` | prazno (exit 1) |
+| `git grep -n -P "firebase\tests" -- docs` (F1-01) | prazno (exit 1); ispravljene linije 1774, 1776, 1783 (samo `firebase<TAB>ests` → `firebase\tests`) |
+| `git diff --stat main -- backend/test firebase/tests` | samo novi fajlovi i04 + `backend/test/pomocnici/omotacBaze.js` (`19 +`, 0 obrisanih linija) |
+
+### Kontrolne mutacije (plan 8.4)
+
+Emulatori su jednom pokrenuti (`npx firebase emulators:start --config ../firebase.json --project demo-fuelpoints --only firestore,auth`,
+JBR prvi u PATH-u). Privremena skripta van repoa (`mutacije.py`) za svaku mutaciju: tačna zamjena teksta (provjera da se tekst javlja tačno
+jednom; M11 premješta blok mapping-a iza provjera naloga i nagrade), ciljani test
+(`node --test --test-concurrency=1 --test-name-pattern=<ID> <fajl>` sa `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`,
+`FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099`, `GCLOUD_PROJECT=demo-fuelpoints`; Rules testovi iz `firebase\tests`), pa
+`git restore -- <izmijenjeni fajlovi>` i provjera `git diff --quiet -- backend/src firebase/firestore.rules`. Kontrolni prolaz istih ciljanih
+testova bez mutacija: svi `ℹ fail 0`, exit 0. Poslije svih mutacija `git status --short` prazan.
+
+| # | Mutacija | Ciljani test(ovi) | Ishod (`tests` / `fail`, exit) | Pao test |
+|---|---|---|---|---|
+| M01 | uklonjena provjera `dostupno < cijena` | API-T05 | 1 / 1, exit 1 | API-T05 |
+| M02 | bodovi pročitani van transakcije; nalog se u transakciji ne čita | API-T07; I04-T13; I04-T18 (FIX LOOP 1) | ispravka (FIX LOOP 1, R-01): prvobitni red „1 / 1; 1 / 1” nije ponovljiv — po reviewu (`i04_review.md` 4.2) API-T07 obara M02 u 1 od 7 izvršavanja, I04-T13 u 4 od 5; I04-T18 10 od 10 | I04-T18 (pouzdano); API-T07 nad emulatorom ne razlikuje M02 (brava `tx.get(query)` serijalizuje izdavanja, O-17) |
+| M03 | `tx.create` → `tx.set` za novi voucher | I04-T11 (z1)–(z4) | 1 / 1 | I04-T11 (z1)–(z4) |
+| M04 | `tx.create` → `tx.set` za mapping | I04-T11 (z1)–(z4) | 1 / 1 | I04-T11 (z1)–(z4) |
+| M05 | `tx.create` → `tx.set` za RESERVE | I04-T11 (z1)–(z4) | 1 / 1 | I04-T11 (z1)–(z4) |
+| M06 | `tx.create` → `tx.set` za RELEASE | I04-T11 (z1)–(z4) | 1 / 1 | I04-T11 (z1)–(z4) |
+| M07 | uklonjena provjera postojećeg `release_{id}` | I04-T10 (b) | 1 / 1 | I04-T10 (b) |
+| M08 | upit bez `status == ACTIVE` i bez provjere statusa | I04-T09 (b), (c) | 1 / 1 | I04-T09 (b), (c) |
+| M09 | `jeIstekao`: `>` umjesto `>=` | I04-T09 (f) | 3 / 1 | I04-T09 (f) jeIstekao |
+| M10 | `requestKey` = SHA-256(`requestId`) | API-T06, I04-T06 (b); I04-T06 (a) | 2 / 2; 3 / 1 | API-T06, I04-T06 (b), I04-T06 (a) izracunajRequestKey |
+| M11 | mapping se čita POSLIJE naloga i nagrade | I04-T08 (a)–(e) | 1 / 1 | I04-T08 (a)–(e) |
+| M12 | validacija tijela i `rewardId` poslije čitanja mapping-a | I04-T08 (f), I04-T02 (b), I04-T03 (b) | 4 / 3 | I04-T02 (b), I04-T03 (b) neispravan format, I04-T08 (f) |
+| M13 | `expiresAt = sadaMs + 15 * 60` | API-T06 | 1 / 1 | API-T06 |
+| M13b | `expiresAt = sadaMs + 900 001` | API-T06 | 1 / 1 | API-T06 |
+| M14 | `generisiVoucherId` = `crypto.randomUUID()` | I04-T06 (a); API-T06, I04-T06 (b) | 3 / 2; 2 / 2 | I04-T06 (a) ×2, API-T06, I04-T06 (b) |
+| M15 | UUID regex bez provjere verzije | I04-T02 (a); I04-T02 (b) | 4 / 1; 1 / 1 | I04-T02 (a), I04-T02 (b) |
+| M15b | UUID regex bez provjere varijante | I04-T02 (a) | 4 / 1 | I04-T02 (a) |
+| M16 | UUID regex sa zastavicom `i` | I04-T02 (a); I04-T02 (b) | 4 / 1; 1 / 1 | I04-T02 (a), I04-T02 (b) |
+| M17 | `active` provjeren poslije reconcile-a, ishod vraćen (commit) | I04-T05 nagrada | 1 / 1 | I04-T05 nagrada |
+| M18 | O-14 grana baca u callback-u (rollback release-a) | I04-T09 (e) | 1 / 1 | I04-T09 (e) |
+| M19 | `uid = req.query.uid ?? res.locals.uid` | I04-T01 UID | 1 / 1 | I04-T01 UID samo iz token-a |
+| M20 | posrednik na prefiksu `/rewards` | I04-T03 (b) format | 1 / 1 | I04-T03 (b) neispravan format |
+| M21 | uklonjena D-5 klauzula | I04-T03 (c); I04-T16 | 5 / 2; 2 / 2 | I04-T03 (c) test ruta i produkciona ruta, I04-T16 (a), (b) |
+| M22 | D-5 → NOT_FOUND, ali stack se loguje uvijek | I04-T03 (c); I04-T16 | 5 / 2; 2 / 2 | isto kao M21 |
+| M23 | uklonjena provjera kontrolnih znakova za `rewardId` | I04-T03 (a); I04-T03 (b) | 2 / 1; 1 / 1 | I04-T03 (a), I04-T03 (b) |
+| M24 | uklonjena cijela provjera formata `rewardId` | I04-T03 (b) | 1 / 1 | I04-T03 (b) |
+| M25 | release koristi `costPoints` iz definicije | I04-T05 SHOWER/snapshot | 1 / 1 | I04-T05 snapshot |
+| M26 | `availableAfter` RESERVE-a iz stanja prije release-a | I04-T09 (a) | 1 / 1 | I04-T09 (a) |
+| M27 | bez sortiranja release-a | I04-T09 (d) | 1 / 1 | I04-T09 (d) |
+| M28 | reconcile postavlja i `cancelledAt` | I04-T09 (a) | 1 / 1 | I04-T09 (a) |
+| M29 | `status` u odgovoru konstantno `ACTIVE` | I04-T08 (a)–(e) | 1 / 1 | I04-T08 (a)–(e) |
+| M30 | odgovor retry-ja: `costPoints` iz definicije | I04-T05 SHOWER/snapshot | 1 / 1 | I04-T05 snapshot |
+| M31 | uklonjena provjera preostalog roka | I04-T15 | 1 / 1 | I04-T15 |
+| M32 | uklonjena provjera `mapping.uid`/`requestId` | I04-T10 (c) | 1 / 1 | I04-T10 (c) |
+| M33 | uklonjeno poređenje `mapping.rewardId !== rewardId` | I04-T07 | 1 / 1 | I04-T07 |
+| M34 | definicija bez provjere tipa (`"50"` prolazi) | I04-T05 nagrada | 1 / 1 | I04-T05 nagrada |
+| M35 | `loyaltyAccounts` ne postoji provjereno prije DELETION | I04-T04 | 1 / 1 | I04-T04 |
+| M36 | `odgovorVaucera` uključuje `uid` | API-T06; I04-T16 (a) | 1 / 1; 1 / 1 | API-T06, I04-T16 (a) |
+| M37 | `putanja: req.originalUrl` u logu | I04-T16 | 2 / 2 | I04-T16 (a), (b) |
+| M38 | Rules: `/vouchers` `allow list: if ownResource();` | I04-T17 | 3 / 1 | I04-T17 vouchers |
+| M39 | Rules: `/rewardDefinitions` `allow read: if true;` | I04-T17 | 3 / 1 | I04-T17 rewardDefinitions |
+| M40 | Rules: `/vouchers` `allow update: if ownResource();` | RULE-T09 | 2 / 1 | RULE-T09 voucher write |
+| M41 | Rules: `/rewardRequests` `allow read: if signedIn();` | I04-T17 | 3 / 1 | I04-T17 rewardRequests |
+| M42 (= MA21, FIX LOOP 1) | `const sadaMs = rokDo - 10000;` (jednom po zahtjevu, ne po pokušaju; krši i04/P-2) | I04-T19 | 10 izvršavanja: 10 × 1 / 1, exit 1 | I04-T19 |
+| M43 (FIX LOOP 1) | `redigujPutanje` bez redakcije (`return tekst;`) u `obradaGresaka.js` | I04-T16 (c) | 10 izvršavanja: 10 × 1 / 1, exit 1 | I04-T16 (c) |
+
+Ubijeno 43/43 (M01 … M41 + M13b, M15b); svaka je oborila ciljani test imenovan ID-em (nijedna nije „ubijena” greškom učitavanja fajla).
+Nijedna mutacija nije preživjela, pa korak 7 nema commit ojačanja testova.
+
+### Testovi koji nisu izvršeni
+
+- Ponašanje nad produkcionim Firestore-om i produkcionim Rules engine-om (ID sa NUL/kontrolnim znakom, potreba za indeksom upita
+  `uid ==, status ==`, kontencija): testovi rade isključivo nad emulatorom (`demo-fuelpoints`), po pravilima projekta.
+- Razlika satova Backend/Firestore (i04/P-2): nije provjerljiva lokalno (emulator i Backend na istoj mašini).
+
+### Rezultat po ID-u (Iteracija 4)
+
+| ID | Rezultat | Izvor |
+|---|---|---|
+| API-T05 | PASS | `npm run test:emu` ×3 (+3 na commit-u koraka 5) |
+| API-T06 | PASS (uklj. retry ×2 → 200, `upisi === []`) | `npm run test:emu` ×3 |
+| API-T07 | PASS (20 ponavljanja; K-3: 20/20 `201 + 409 INSUFFICIENT_POINTS` u svakom izvršavanju) | `npm run test:emu` ×3 (+3) |
+| RULE-T09 | PASS (2 testa) | `firebase\tests: npm test` |
+| I04-T01 | PASS (2 testa) | `npm run test:emu` ×3 |
+| I04-T02 | PASS — (a) 4 unit testa; (b) emulator | `npm test`, `npm run test:emu` ×3 |
+| I04-T03 | PASS — (a) 2 unit testa; (b) 2 emulator testa; (c) 5 unit testova (test ruta + produkciona ruta API-03) | `npm test`, `npm run test:emu` ×3 |
+| I04-T04 | PASS (11 slučajeva) | `npm run test:emu` ×3 |
+| I04-T05 | PASS (2 testa; 10 slučajeva definicije + snapshot) | `npm run test:emu` ×3 |
+| I04-T06 | PASS — (a) 3 unit testa; (b) 100 izdavanja + dva korisnika | `npm test`, `npm run test:emu` ×3 |
+| I04-T07 | PASS | `npm run test:emu` ×3 |
+| I04-T08 | PASS — (a)–(e), (f) | `npm run test:emu` ×3 |
+| I04-T09 | PASS — (a), (b)+(c), (d), (e) emulator; (f) 3 unit testa | `npm test`, `npm run test:emu` ×3 |
+| I04-T10 | PASS — (a), (b), (c), (d) | `npm run test:emu` ×3 (+3) |
+| I04-T11 | PASS — (a)–(d) failure injection; (z1)–(z4) | `npm run test:emu` ×3 (+3) |
+| I04-T12 | PASS (3 ponavljanja; jedan dozvoljen 503 u 2 od 6 izvršavanja, nijedan 500) | `npm run test:emu` ×3 (+3) |
+| I04-T13 | PASS (svih 8 zahtjeva uspješno u svakom izvršavanju — 8×201 u završna 3, jednom `200` za kupovinu poslije 503 i kasnog commit-a na commit-u koraka 5; 3 voucher-a; lanac EARN/RESERVE od 0/0) | `npm run test:emu` ×3 (+3) |
+| I04-T14 | PASS (503 za ~10,0 s; kasni commit + retry → isti voucher) | `npm run test:emu` ×3 (+3) |
+| I04-T15 | PASS | `npm run test:emu` ×3 (+3) |
+| I04-T16 | PASS — (a) in-process, (b) spawn | `npm run test:emu` ×3 |
+| I04-T17 | PASS (3 testa) | `firebase\tests: npm test` |
+| Smoke 401 `/rewards/CAR_WASH/issue` | PASS | `provjera.ps1` (korak 6 i završno) |
+| Regresija I01–I03 (backend unit + emulator, Rules RULE-T01 … T08, T10 … T12, I02-T15, I03-T20) | PASS, bez izmjene postojećih testova | `npm test`, `npm run test:emu` ×3, `firebase\tests: npm test` |
+| Android `assembleDebug`, `testDebugUnitTest` | `BUILD SUCCESSFUL` | `provjera.ps1` |
+
+### Poznata ograničenja
+
+- Vidi `docs/IMPLEMENTATION_LOG.md`, Iteracija 4, „Poznata ograničenja” (satovi, emulator vs produkcija, P-14, P-16, `ALREADY_EXISTS` u logu).
+
+## Iteracija 4 — FIX LOOP 1 (nalazi R-01 … R-04 iz `docs/iteracije/i04_review.md`, commit d3e6d6a)
+
+Odluke Orchestrator-a O-17 i O-18 (`docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 1 — odluke Orchestrator-a”). Proizvodni kod je
+izmijenjen samo u `backend/src/greske/obradaGresaka.js` (R-04); `izdavanjeNagrade.js` nije mijenjan.
+
+Polazno stanje (vrh `d3e6d6a`, `git status` čist): `.\skripte\provjera.ps1` → `SVE PROVJERE PROŠLE`, `EXIT=0`; `ℹ tests 63 / pass 63 / fail 0`
+(unit), `ℹ tests 99 / pass 99 / fail 0` (emulator), `ℹ tests 30 / pass 30 / fail 0` (Rules).
+
+Ponavljanja i mutacije: privremena skripta van repoa (`ponovi.mjs`), unutar
+`npx firebase emulators:exec --config ../firebase.json --project demo-fuelpoints --only firestore,auth` (JBR prvi u PATH-u), pokreće
+`node --test --test-concurrency=1 --test-name-pattern=<ID> <fajl>` N puta i bilježi exit, `ℹ pass`, `ℹ fail` i prvu poruku greške.
+Mutacije M02 i M42 (`izdavanjeNagrade.js`) su vraćene sa `git restore`; M43 je vraćena na tekst ispravke prije commit-a koraka 3.
+Na kraju `git status --short` prazan.
+
+### R-01 — I04-T18 (`izdavanjeAtomicnost.test.js`): stanje se čita u transakciji, nezavisno od brave upita
+
+Mehanizam: nova opcija `omotacBaze({ prijeCommita })` — callback izdavanja se izvrši (sva čitanja gotova), pa omotač u prvom pokušaju
+pokrene kupovinu (API-02, isti korisnik, 20 bodova) i čeka njen ishod najviše 2 s prije commit-a izdavanja. Kupovina ne čita `vouchers`,
+pa brava `tx.get(query)` ne utiče na ishod (O-17). Asercije: 201 + 201, balance `[20, 50]`, tačno EARN + REWARD_RESERVE, lanac od 50/0 do
+20/50, 1 voucher, 1 mapping; 10 ponavljanja po izvršavanju.
+
+| Izvršavanje | Kod | Rezultat |
+|---|---|---|
+| proba ×1 sa dijagnostikom | M02 | `exit=1 pass=0 fail=1`: `ponavljanje 1: balance (izgubljen upis kupovine ili izdavanja)`; `izdavanje 201, kupovina 201, pokušaja izdavanja 1, kupovina čekala izdavanje: false` |
+| 10 izvršavanja | M02 | 10 × `exit=1 pass=0 fail=1` (`ponavljanje 1: balance …`) — **pao 10/10** |
+| proba ×1 sa dijagnostikom | nemutiran | `exit=0 pass=1 fail=0`; u svih 10 ponavljanja `izdavanje 201, kupovina 201, pokušaja izdavanja 1, kupovina čekala izdavanje: true` |
+| 10 izvršavanja | nemutiran | 10 × `exit=0 pass=1 fail=0` (35 747 – 38 992 ms) — **prošao 10/10** |
+
+Napomena: API-T07 nad emulatorom ne razlikuje M02 (review: 1 od 7 izvršavanja pada), jer brava `tx.get(query)` serijalizuje dva izdavanja;
+dokaz za M02 je I04-T18.
+
+### R-02 — I04-T19 (`izdavanjeAtomicnost.test.js`): `sadaMs` po pokušaju (i04/P-2)
+
+Mehanizam: nova opcija `omotacBaze({ prisiliPonovniPokusaj: 1 })` — poslije prvog pokušaja callback-a omotač baci ABORTED (code 10), pa
+Admin SDK ponavlja callback. `mock.method(Date, 'now', …)`: pozivi neposredno iz `src/servisi/izdavanjeNagrade.js` dobijaju T0, T0 + 10 s,
+T0 + 20 s; ostali stvarno vrijeme; `mock.restoreAll()` u testu i u `afterEach`. Asercije: 2 pokušaja, čitanja `Date.now` po pokušaju
+`[0, 1, 2]`, `issuedAt` = T0 + 20 s i `expiresAt` = T0 + 20 s + 900 000 ms (odgovor i dokument), voucher sa `expiresAt` T0 + 15 s
+oslobođen (EXPIRED, `release_`), balance `[30, 50]`.
+
+| Izvršavanje | Kod | Rezultat |
+|---|---|---|
+| 10 izvršavanja | nemutiran | 10 × `exit=0 pass=1 fail=0` — **prošao 10/10** |
+| 10 izvršavanja | M42 (= MA21) `const sadaMs = rokDo - 10000;` | 10 × `exit=1 pass=0 fail=1`: `čitanja Date.now po pokušaju: [{"vrijednost":…,"pokusaj":0}]` — **pao 10/10** |
+
+### R-04 — I04-T16 (c) (`logIzdavanja.test.js`) i redakcija u `obradaGresaka.js` (O-18)
+
+Ispravka: za 5xx log polje `stack` = `name (code N): poruka` sa redigovanim putanjama dokumenata (`path=…`, `documents/…`,
+`<kolekcija §24>/…` → `[putanja dokumenta]`) + samo okviri `at …`. Odgovor klijentu i statusni kod nepromijenjeni.
+Poruka Firestore greške u emulatoru (proba van repoa): `6 ALREADY_EXISTS: entity already exists: EntityRef[partitionRef=dev~demo-fuelpoints, path=/rewardRequests/<ID>]`.
+Test: dva slučaja (`sakrijPostojece` za `rewardRequests/<requestKey>` i za `loyaltyLedger/release_<voucherId>`) → 500 `INTERNAL_ERROR`;
+log bez oba requestKey-a, postojećeg i novog voucherId-a, requestId-a i putanje; log sadrži `ALREADY_EXISTS` ili `code 6` i okvire `at`.
+
+| Izvršavanje | Kod | Rezultat |
+|---|---|---|
+| ×1 prije ispravke (test-first) | zatečen `obradaGresaka.js` | `exit=1 pass=0 fail=1`: `mapping: log sadrži requestKey (mapping)` |
+| 10 izvršavanja (prva verzija testa) | ispravka | 10 × `fail=1`: `release: … UNAUTHENTICATED` — greška u testu (`ocistiEmulatore()` u pripremi drugog slučaja brisao je i Auth korisnika); uklonjeno iz testa, kod nepromijenjen |
+| 10 izvršavanja | ispravka | 10 × `exit=0 pass=1 fail=0` — **prošao 10/10** |
+| 10 izvršavanja | M43 (bez redakcije) | 10 × `exit=1 pass=0 fail=1`: `mapping: log sadrži requestKey (mapping)` — **pao 10/10** |
+
+### `.\skripte\provjera.ps1` poslije svakog koraka
+
+| Korak (commit) | Rezultat |
+|---|---|
+| 0 `1811463` odluke | `EXIT=0`; 63 / 99 / 30, `fail 0` |
+| 1 `070a1fc` R-01 | `EXIT=0`; 63 / 100 / 30, `fail 0`; I04-T18 ✔ (31 747 ms) |
+| 2 `b562245` R-02 | `EXIT=0`; 63 / 101 / 30, `fail 0`; I04-T19 ✔ |
+| 3 `5678e58` R-04 | `EXIT=0`; 63 / 102 / 30, `fail 0` (emulator `duration_ms 386181.965`); API-T07 `raspodjela ishoda: {"201 + 409 INSUFFICIENT_POINTS":19,"201 + 503 SERVICE_UNAVAILABLE":1}`; I04-T16 (a), (b), (c) ✔ |
+
+Izvod završnog izvršavanja (korak 3): `ℹ tests 63` `ℹ pass 63` `ℹ fail 0`; `ℹ tests 102` `ℹ pass 102` `ℹ fail 0`; smoke `404 NOT_FOUND`,
+`401 UNAUTHENTICATED`, `401 UNAUTHENTICATED_POS`, `401 UNAUTHENTICATED` (`/rewards/:rewardId/issue`); `ℹ tests 30` `ℹ pass 30` `ℹ fail 0`;
+Android `BUILD SUCCESSFUL`; `SVE PROVJERE PROŠLE`.
+
+### Rezultat po ID-u (FIX LOOP 1)
+
+| ID | Rezultat | Izvor |
+|---|---|---|
+| I04-T18 (R-01; NFR-06, AC-06, API-T07) | PASS 10/10; obara M02 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` koraci 1–3 |
+| I04-T19 (R-02; i04/P-2) | PASS 10/10; obara M42 (= MA21) 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` koraci 2–3 |
+| I04-T16 (c) (R-04; D-3, O-18) | PASS 10/10; obara M43 10/10 | `ponovi.mjs` ×10 ×2; `provjera.ps1` korak 3 |
+| Svi ostali (API-T05 … T07, RULE-T09, I04-T01 … T17, regresija I01–I03) | PASS, postojeći testovi nisu mijenjani | `provjera.ps1` korak 3 |
+
+## Iteracija 4 — FIX LOOP 2 (nalazi R-06 i R-05 iz `docs/iteracije/i04_review_fix1.md`, commit 54b2e0b)
+
+Odluke Orchestrator-a P-3 i P-4 (`docs/iteracije/i04_plan.md`, sekcija 15, „FIX LOOP 2 — odluke Orchestrator-a”). Proizvodni kod je
+izmijenjen samo u `backend/src/greske/obradaGresaka.js` (R-05); `omotacBaze.js` nije mijenjan.
+
+Polazno stanje (vrh `54b2e0b`, `git status` čist): `.\skripte\provjera.ps1` → `SVE PROVJERE PROŠLE`, `EXIT=0`; `ℹ tests 63 / pass 63 / fail 0`
+(unit), `ℹ tests 102 / pass 102 / fail 0` (emulator), `ℹ tests 30 / pass 30 / fail 0` (Rules), Android `BUILD SUCCESSFUL`.
+Napomena: za vrijeme ovog izvršavanja (prije emulatorskog dijela) radno stablo je već sadržalo proširenje `logIzdavanja.test.js` iz koraka 1,
+pa je u njemu izvršena proširena I04-T16 (c) (✔ 365 ms) nad nemutiranim kodom iz `54b2e0b`.
+
+Ponavljanja i mutacije: privremena skripta van repoa (`ponovi.mjs` u scratchpad-u sesije), uz ručno pokrenut
+`npx firebase emulators:start --config ../firebase.json --project demo-fuelpoints --only firestore,auth` (JBR prvi u PATH-u). Skripta primijeni
+zamjenu teksta u `obradaGresaka.js`, N puta pokrene `node --test --test-concurrency=1 [--test-name-pattern=<ID>] <fajl>` (env
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`, `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099`, `GCLOUD_PROJECT=demo-fuelpoints`), zabilježi exit,
+`ℹ pass`, `ℹ fail` i prvu poruku greške, pa vrati fajl. Poslije svake serije `git restore backend/src`; `git status --short` bez izmjena u `backend/src`.
+
+### R-06 — I04-T16 (c) (`logIzdavanja.test.js`): slučajevi `vouchers/<voucherId>` i `loyaltyLedger/reserve_<voucherId>`
+
+Mehanizam: kao postojeći slučajevi — `mock.method(crypto, 'randomBytes')` vraća fiksnih 32 bajta (`ab…`), pa je novi voucherId poznat unaprijed;
+dokument drugog uid-a pod tim ID-em (`vouchers/<noviVoucherId>`, odnosno `loyaltyLedger/reserve_<noviVoucherId>`) je pripremljen i sakriven
+`omotacBaze({ sakrijPostojece })`, pa `tx.create` pada na commit-u sa ALREADY_EXISTS. Priprema slučaja `voucher` briše istekli voucher i
+`release_` iz slučaja `release` (inače bi reconcile pao na postojećem `release_` prije commit-a); slučaj `reserve` briše `vouchers/<noviVoucherId>`.
+Asercije po slučaju (iste kao za postojeće): 500 `INTERNAL_ERROR` po §27; log bez requestKey-a (četiri), postojećeg i novog voucherId-a,
+requestId-a i putanje (sirovo ni u putanji); log sadrži `ALREADY_EXISTS` ili `code 6` i okvire `at`.
+
+Mutacija M43-vr (tačno iz re-reviewa) u `redigujPutanje`:
+`return tekst.replace(PUTANJA_DOKUMENTA, '[putanja dokumenta]');` →
+`return tekst.replace(PUTANJA_DOKUMENTA, (m) => (/vouchers\/|reserve_/.test(m) ? m : '[putanja dokumenta]'));`
+
+| Izvršavanje (kod iz `0c80582` = `54b2e0b` u `src/`) | Kod | Rezultat |
+|---|---|---|
+| 10 × `--test-name-pattern=I04-T16 \(c\)` | nemutiran | 10 × `exit=0 pass=1 fail=0` — **prošao 10/10** |
+| 10 × isto | M43-vr | 10 × `exit=1 pass=0 fail=1`: `voucher: log sadrži voucherId (novi)` — **pao 10/10** |
+| 3 × isto (dopuna) | M43-r: redakcija isključena samo za `reserve_` | 3 × `exit=1`: `reserve: log sadrži voucherId (novi)` — pao 3/3 (slučaj `reserve` sam obara) |
+| 3 × isto (dopuna) | M43-v: redakcija isključena samo za `vouchers/` | 3 × `exit=1`: `voucher: log sadrži voucherId (novi)` — pao 3/3 |
+
+### R-05 — I04-T20 (`logGresaka5xx.test.js`) i log 5xx bez poruke gRPC grešaka (`obradaGresaka.js`)
+
+Ispravka: greška sa numeričkim gRPC `code` (`Number.isInteger(err.code)`) → polje `stack` = `name (code N IME_STATUSA)` (statička mapa
+0 OK … 16 UNAUTHENTICATED) + okviri `at …`; poruka se NE bilježi. Ostale greške (Error bez numeričkog `code`, bačen ne-Error) → poruka uz
+redakciju putanja (FIX LOOP 1) i svakog niza od ≥ 32 uzastopna hex znaka (`[hex]`); `name` i okviri idu kroz istu redakciju. Odgovor
+klijentu i statusni kodovi nepromijenjeni (§27, poruka iz kataloga).
+
+Test (grešku obrađuje `centralniRukovalacGreskama` direktno, `req.route.path = '/rewards/:rewardId/issue'`; log se presreće `presretniLog`):
+- **(a)** stvarna emulatorska NOT_FOUND: `db.runTransaction` sa `tx.update` nad nepostojećim `vouchers/<id>`, za `<id>` = 64 hex i za
+  `TAJNA-<uuid>` (ID koji nije hex niz, pa ga ne hvata hex redakcija). Preduslov: `code === 5` i sirova poruka emulatora sadrži ID.
+  Asercije: odgovor 500 `{ error: { code: 'INTERNAL_ERROR', message: <katalog>, correlationId } }`; log bez ID-a; prvi red
+  `Error (code 5 NOT_FOUND)`; nijedan red poruke emulatora (≥ 6 znakova) u `stack`; okviri `at`.
+- **(b)** isto van transakcije: `db.doc('rewardRequests/<id>').update(…)`.
+- **(c)** ne-gRPC: `Error` sa golim 64-hex, `release_<hex>` bez kolekcije, `vouchers/<hex>`, `loyaltyLedger/reserve_<hex>`,
+  `vouchers/TAJNA-<uuid>`, `loyaltyLedger/reserve_TAJNA-<uuid>`, `Error` sa string `code`; bačen string sa golim hex-om i sa `vouchers/TAJNA-…`.
+  Asercije: 500 `INTERNAL_ERROR` po §27; log bez tajne; za `Error` poruka ostaje (`Error: neočekivan…`) i okviri `at`.
+
+Stvarna poruka emulatora (iz pada testa prije ispravke): `Error (code 5): 5 NOT_FOUND: no entity to update: app: "dev~demo-fuelpoints"` + redovi
+`path < Element { type: … name: "<id>" } >` (potvrđen oblik iz re-reviewa).
+
+Mutacije u `obradaGresaka.js` (kod iz `f27ab90`):
+- **M44** — grana (a) uklonjena: `  if (Number.isInteger(err.code)) {` → `  if (false) {` (gRPC poruka se opet loguje, sa redakcijom).
+- **M44b** (dopuna) — grana (a) zadržava prvi red, ali dodaje redigovanu poruku: `[…, rediguj(String(err.message)), ...okviri]`.
+- **M45** — bez hex redakcije: `return redigujPutanje(tekst).replace(HEX_NIZ, '[hex]');` → `return redigujPutanje(tekst);`.
+- **M43-vr** — tekst iz koraka 1, nepromijenjen (važi za ne-gRPC putanje).
+- **M43-vr-g** — ekvivalent M43-vr za novu gRPC granu (vidi ispod): `return [`${ime} (code ${err.code} ${status})`, ...okviri].join('\n');` →
+  `return [`${ime} (code ${err.code} ${status})`, ...(/vouchers\/|reserve_/.test(String(err.message)) ? [String(err.message)] : []), ...okviri].join('\n');`
+- **M43** (FIX LOOP 1, ponovljena) — `redigujPutanje`: `return tekst;`.
+
+| Izvršavanje (kod iz `f27ab90`) | Test | Kod | Rezultat |
+|---|---|---|---|
+| ×1 prije ispravke (test-first; `obradaGresaka.js` iz `458e720`) | I04-T20 cijeli fajl | zatečen | `pass 0 fail 3`: (a) `vouchers/aeadcd…: prvi red opisa: Error (code 5): 5 NOT_FOUND: no entity to update: app: "dev~demo-fuelpoints"`; (b) isto za `rewardRequests/…`; (c) `goli hex: log sadrži tajnu` |
+| 10 izvršavanja | I04-T20 cijeli fajl | nemutiran | `REZULTAT … pao 0/10` (svako izvršavanje exit 0, fail 0) — **prošao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | nemutiran | `pao 0/10` (exit 0, fail 0) — **prošao 10/10** |
+| 10 izvršavanja | I04-T20 | M44 | `pao 10/10`, prva poruka: `vouchers/b67b4a…: prvi red opisa: Error: 5 NOT_FOUND: no entity to update: …` — **pao 10/10** |
+| 3 izvršavanja (dopuna) | I04-T20 | M44b | `pao 3/3`, prva poruka: `vouchers/6deaf4…: log sadrži red poruke gRPC greške ("5 NOT_FOUND: no entity to upda…")` — pao 3/3 |
+| 10 izvršavanja | I04-T20 | M45 | `pao 10/10`, prva poruka: `goli hex: log sadrži tajnu` — **pao 10/10** |
+| 10 izvršavanja | I04-T20 | M43-vr | `pao 10/10`, prva poruka: `vouchers/<id bez hex-a>: log sadrži tajnu` — **pao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | M43-vr-g | `pao 10/10`, prva poruka: `voucher: log sadrži voucherId (novi)` — **pao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | M43-vr | `pao 0/10` (exit 0, fail 0) — 0/10 (očekivano, vidi ispod) |
+| 10 izvršavanja | I04-T20 | M43 | `pao 10/10`, prva poruka: `vouchers/<id bez hex-a>: log sadrži tajnu` — **pao 10/10** |
+| 10 izvršavanja | I04-T16 (c) | M43 | `pao 0/10` (exit 0, fail 0) — 0/10 (očekivano, vidi ispod) |
+| ×1 | `logIzdavanja.test.js` + `logGresaka5xx.test.js` cijeli | nemutiran | `exit=0`, `fail 0` |
+
+**M43-vr i M43 poslije koraka 2.** Greške u I04-T16 (c) su stvarne Firestore ALREADY_EXISTS (gRPC `code 6`), a njihova poruka se više ne
+bilježi. Zato `redigujPutanje` za njih nije na putu podataka, pa M43-vr i M43 nad I04-T16 (c) više ne mijenjaju ponašanje (0/10, ekvivalentne
+mutacije za taj test). Obje i dalje obara I04-T20 (c) 10/10, preko ne-gRPC poruka `vouchers/TAJNA-<uuid>` i `loyaltyLedger/reserve_TAJNA-<uuid>`.
+Taj ID nije hex niz, pa ga hex redakcija ne prikriva. Ekvivalent M43-vr na novom mjestu (selektivno puštanje `vouchers/` i `reserve_` kroz
+gRPC granu) je M43-vr-g, koju I04-T16 (c) obara 10/10.
+
+**Ispravka napomena o redakciji iz FIX LOOP-a 1 (R-04):** opis „`name (code N): poruka` sa redigovanim putanjama” više ne važi za gRPC
+greške. One se bilježe kao `Error (code 6 ALREADY_EXISTS)` / `Error (code 5 NOT_FOUND)` + okviri, bez poruke, i ne zavise od njenog oblika.
+Redakcija putanja i hex nizova važi samo za ne-gRPC poruke. Primjer iz FIX LOOP-a 1 (`… path=/rewardRequests/<ID>`) je ostao tačan opis
+sirove poruke emulatora, ali ta poruka više ne ide u log.
+
+### `.\skripte\provjera.ps1` poslije svakog koraka
+
+| Korak (commit) | Rezultat |
+|---|---|
+| polazno `54b2e0b` | `EXIT=0`; 63 / 102 / 30, `fail 0` (vidi napomenu gore) |
+| 0 `0c80582` odluke | samo dokumentacija; nije izvršavano zasebno (polazno izvršavanje je trajalo preko ovog commit-a) |
+| 1 `458e720` R-06 | `EXIT=0`; 63 / 102 / 30, `fail 0` |
+| 2 `f27ab90` R-05 | `EXIT=0`; 63 / 105 / 30, `fail 0` (emulator `duration_ms 382289.2735`); API-T07 `raspodjela ishoda: {"201 + 409 INSUFFICIENT_POINTS":20}`; I04-T20 (a) ✔ 3 162 ms, (b) ✔, (c) ✔; I04-T16 (c) ✔ 353 ms |
+| 3 `00cf0c1` dokumentacija (vrh grane poslije commit-a) | `EXIT=0`, `SVE PROVJERE PROŠLE`; `ℹ tests 63` `ℹ pass 63` `ℹ fail 0`; `ℹ tests 105` `ℹ pass 105` `ℹ fail 0` (emulator `duration_ms 372633.2719`); API-T07 `raspodjela ishoda: {"201 + 409 INSUFFICIENT_POINTS":20}`; I04-T20 (a) ✔ 3 159 ms, (b) ✔, (c) ✔; I04-T16 (c) ✔ 364 ms; smoke `404 NOT_FOUND`, `401 UNAUTHENTICATED`, `401 UNAUTHENTICATED_POS`, `401 UNAUTHENTICATED`; `ℹ tests 30` `ℹ pass 30` `ℹ fail 0`; Android `BUILD SUCCESSFUL` ×2 |
+
+Ishod koraka 3 je upisan posebnim commit-om („i04 fix2: TEST_REPORT ishod završne provjere”), jer se provjera izvršava tek poslije commit-a
+dokumentacije; taj commit mijenja samo ovaj red i ovu napomenu.
+
+### Rezultat po ID-u (FIX LOOP 2)
+
+| ID | Rezultat | Izvor |
+|---|---|---|
+| I04-T16 (c) (R-06; D-3, O-18) | PASS 10/10; obara M43-vr 10/10 (kod prije koraka 2) i M43-vr-g 10/10 (kod poslije) | `ponovi.mjs`; `provjera.ps1` koraci 1–2 |
+| I04-T20 (a)–(c) (R-05, P-3; D-3, O-18, NFR-07) | PASS 10/10; obara M44, M45, M43-vr, M43 po 10/10 | `ponovi.mjs`; `provjera.ps1` korak 2 |
+| Svi ostali (API-T05 … T07, RULE-T09, I04-T01 … T19, regresija I01–I03) | PASS, postojeći testovi nisu mijenjani (I04-T16 (c) samo proširen) | `provjera.ps1` korak 2 |
