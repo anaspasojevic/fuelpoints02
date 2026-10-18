@@ -875,4 +875,32 @@ Ako konkurentni test da 500, Builder STAJE i javlja (R19).
 
 ## 15. Odluke Orchestrator-a (odobrenje plana)
 
-(Popunjava Orchestrator.)
+Plan je ODOBREN (Orchestrator, 2026-10-18) uz ispravke K-1 … K-3 ispod. Ana je odluke O-5 i O-6 donijela (brief); O-20 … O-22 su odluke Orchestrator-a iz briefa.
+
+i05/P-1  Odobreno: API-05 vraća 200 i za prvi poziv i za retry; tijelo sa 7 ključeva u fiksnom redoslijedu iz plana sekcije 6; API-06 vraća 200 { reconciledCount }.
+i05/P-2  Odobreno: pravilo tijela za endpoint-e bez tijela (O-21): prazno tijelo ili {} je valjano, sve ostalo 422 INVALID_REQUEST; kad je req.body === undefined,
+         zahtjev ne smije nositi nepročitan sadržaj (Transfer-Encoding prisutan ili Content-Length različit od '0' → 422). Retrofit oblik (Content-Length: 0, bez Content-Type) se prihvata.
+i05/P-3  Odobreno: cancelledAt = Timestamp.fromMillis(sadaMs); jedan sadaMs po pokušaju transakcije (i04/P-2, obaveza (j)).
+i05/P-4  Odobreno: redoslijed provjera iz plana 5.1 i 5.5 (O-20): idempotentni CANCELLED (200, bez upisa) i REDEEMED/EXPIRED 409 PRIJE provjere naloga; provjera naloga
+         (NOT_INITIALIZED 409, DELETION_IN_PROGRESS 409, inače 500) samo na ACTIVE putanji koja mijenja stanje. Odobrena preporuka: na retry-u se NE provjerava postojanje release_{voucherId}.
+         API-06: provjera naloga ide prva.
+i05/P-5  Odobreno: raspored fajlova iz plana (servisi/oslobadjanjeVaucera.js, servisi/stanjeNaloga.js, servisi/otkazivanjeVaucera.js, servisi/uskladjivanjeVaucera.js,
+         validacija/zahtjevVaucera.js, rute/vauceri.js). Refaktor zajedničkog mehanizma NE mijenja ponašanje API-03; I04-T19 i sav test kod i01–i04 ostaju netaknuti
+         (git diff -- backend/test u koraku 2 mora biti prazan).
+i05/P-6  Odobreno: O-19 izmjena u greske/obradaGresaka.js (okviriStacka bez ijedne linije poruke iz err.stack; R-10: opis greške ne smije baciti izuzetak) ide u KORAK 1,
+         zajedno sa I05-T01 i I05-T02 (statička analiza: identifikatori se ne interpoliraju u new Error poruke ni u logove). Testovi koji ubijaju R-M47 i R-M48 + pokrivanje R-08/R-09.
+i05/P-7  Prihvaćeno (informativno).
+i05/P-8  Odobreno: API-06 bez gornje granice broja voucher-a; ograničenje (Firestore 10 MiB / 270 s po transakciji) ide u poznata ograničenja.
+i05/P-9  Odobreno: firestore.indexes.json i firestore.rules se ne mijenjaju (nema složenog indeksa).
+i05/P-10 Odobreno: bez proširenja omotacBaze.js osim ako korak to stvarno traži; ako traži, samo aditivno i uz odstupanje OD-n.
+i05/P-11 Odobreno: dva oblika 422 (skalarni/null JSON → 422 i bez tokena; objekat/niz → 401 bez tokena), kao u planu.
+i05/P-12 Odobreno kao DOKUMENTOVANO ODSTUPANJE od briefa: /vouchers//cancel → 404 NOT_FOUND (ne VOUCHER_NOT_FOUND), jer prazan segment nije ruta. Upisati u ODLUKE.md i README.
+i05/P-13 Prihvaćeno (informativno): 403 otkriva postojanje tuđeg voucher-a (O-6). Upisati u README.
+i05/P-14 Prihvaćeno (informativno): reconciledCount pod kontencijom broji samo voucher-e koje je ta transakcija zaista oslobodila. Upisati u README.
+
+Ispravke plana (obavezujuće):
+K-1 I05-T14 (deterministički test) mora dokazati svoj ishod bez oslanjanja na kontenciju/503 i bez oslanjanja na to da upit nad vouchers serijalizuje transakcije
+    (pouka i04 R-01). Ako test može proći i kad je zaštita uklonjena, to je preživjela mutacija i test se jača.
+K-2 docs/ODLUKE.md (korak 9): upisati O-5, O-6 (odlučeno), O-20, O-21, O-22, odluke i05/P-n, ograničenja iz plana, zatvorene obaveze (g), (h), (j), (k), (n), (p) i status
+    obaveze (o) (ostaje za i07). Stanje iteracija: i05 — "BUILDER završio, čeka review".
+K-3 Ako bilo koji test pod kontencijom vrati 500 (R19), ili test nije 10/10 u oba smjera (sa kodom prolazi, bez zaštite pada), Builder STAJE i javlja. Ne improvizuje.
