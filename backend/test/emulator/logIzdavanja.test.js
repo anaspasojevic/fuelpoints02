@@ -1,6 +1,7 @@
 // I04-T16 (NFR-07, D-3, D-5, §3.3): za svaki ishod API-03 (201, 200, 401, 404, 409, 422, 500, 503) log (svi kanali) ne sadrži token,
 // sentinel, requestId iz tijela, requestKey, voucherId ni sirovu putanju; nijedan odgovor nema stack, balance, uid ni requestKey.
 // FIX LOOP 1 (R-04, O-18): I04-T16 (c) — log 500 iz commit-a bez putanje dokumenta.
+// FIX LOOP 2 (R-06): I04-T16 (c) pokriva i vouchers/<voucherId> i loyaltyLedger/reserve_<voucherId>.
 import assert from 'node:assert/strict';
 import crypto, { createHash, randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, mock, test } from 'node:test';
@@ -167,15 +168,22 @@ test('I04-T16 (a) log (svi kanali) i odgovori za sve ishode API-03 bez token-a, 
 
 // R-04 (review i04), O-18: 500 iz commit-a (ALREADY_EXISTS zbog zastarjelog čitanja, omotacBaze sakrijPostojece) loguje name, code i
 // okvire stack-a, ali ne putanju dokumenta: ni requestKey, ni voucherId, ni sirovo ni u putanji.
-test('I04-T16 (c) 500 ALREADY_EXISTS na rewardRequests/<requestKey> i loyaltyLedger/release_<voucherId> → log bez putanje, requestKey-a i voucherId-a, sa ALREADY_EXISTS', async () => {
+// R-06 (re-review i04): isto za vouchers/<voucherId> i loyaltyLedger/reserve_<voucherId> (novi voucherId poznat preko fiksnog randomBytes,
+// dokument drugog uid-a pod tim ID-em je pripremljen i sakriven, pa tx.create pada na commit-u).
+test('I04-T16 (c) 500 ALREADY_EXISTS na rewardRequests/<requestKey>, loyaltyLedger/release_<voucherId>, vouchers/<voucherId> i loyaltyLedger/reserve_<voucherId> → log bez putanje, requestKey-a i voucherId-a, sa ALREADY_EXISTS', async () => {
   const { uid, idToken } = await napraviKorisnika('log-500@primjer.test');
   const FIKSNO = Buffer.alloc(32, 0xab);
   const noviVoucherId = FIKSNO.toString('hex');
   const V = '5'.repeat(64);
   const R1 = randomUUID();
   const R2 = randomUUID();
+  const R3 = randomUUID();
+  const R4 = randomUUID();
   const kljuc1 = kljucZahtjeva(uid, R1);
   const kljuc2 = kljucZahtjeva(uid, R2);
+  const kljuc3 = kljucZahtjeva(uid, R3);
+  const kljuc4 = kljucZahtjeva(uid, R4);
+  const drugiUid = 'drugi-korisnik-log-500';
   const izvorna = crypto.randomBytes;
   mock.method(crypto, 'randomBytes', (n, ...ostalo) => (n === 32 ? FIKSNO : izvorna(n, ...ostalo)));
   const izdaj = (rewardId, tijelo, db) =>
@@ -217,6 +225,40 @@ test('I04-T16 (c) 500 ALREADY_EXISTS na rewardRequests/<requestKey> i loyaltyLed
       'SHOWER',
       R2,
     ],
+    [
+      'voucher',
+      async () => {
+        // Bez isteklog voucher-a iz prethodnog slučaja (inače reconcile pada na postojećem release_ prije commit-a).
+        await firebase.db.doc(`vouchers/${V}`).delete();
+        await firebase.db.doc(`loyaltyLedger/release_${V}`).delete();
+        await pripremiNalog(uid, 100, 0);
+        await firebase.db.doc(`vouchers/${noviVoucherId}`).set({
+          uid: drugiUid,
+          rewardId: 'CAR_WASH',
+          costPoints: 50,
+          status: 'ACTIVE',
+          issuedAt: VRIJEME_PRIPREME,
+          expiresAt: Timestamp.fromMillis(Date.now() + 900_000),
+          redeemedAt: null,
+          cancelledAt: null,
+          redeemedAtStationId: null,
+        });
+        return `vouchers/${noviVoucherId}`;
+      },
+      'CAR_WASH',
+      R3,
+    ],
+    [
+      'reserve',
+      async () => {
+        await firebase.db.doc(`vouchers/${noviVoucherId}`).delete();
+        await pripremiNalog(uid, 100, 0);
+        await firebase.db.doc(`loyaltyLedger/reserve_${noviVoucherId}`).set({ uid: drugiUid, type: 'REWARD_RESERVE', voucherId: noviVoucherId });
+        return `loyaltyLedger/reserve_${noviVoucherId}`;
+      },
+      'CAR_WASH',
+      R4,
+    ],
   ];
   for (const [opis, pripremi, rewardId, requestId] of scenariji) {
     const putanja = await pripremi();
@@ -238,6 +280,8 @@ test('I04-T16 (c) 500 ALREADY_EXISTS na rewardRequests/<requestKey> i loyaltyLed
     for (const [naziv, tajna] of [
       ['requestKey (mapping)', kljuc1],
       ['requestKey (release)', kljuc2],
+      ['requestKey (voucher)', kljuc3],
+      ['requestKey (reserve)', kljuc4],
       ['voucherId (postojeći)', V],
       ['voucherId (novi)', noviVoucherId],
       ['requestId', requestId],
