@@ -945,3 +945,17 @@ O-18 (odgovor na review P-2 / R-04): serverski log za neočekivane (5xx) greške
      requestKey ni voucherId, ni u poruci ni u stack-u. Popravlja se u ovom FIX LOOP-u, globalno u centralnom rukovaocu greškama.
 Napomene N-01…N-08 iz reviewa ne blokiraju. Obavezno: N-08 (duple oznake (f) i (g) u ODLUKE §6) ispraviti; N-01 (O-16 retry vraća
      sačuvani status ACTIVE i za voucher kojem je expiresAt prošao; i05/API-06 to zatvara) upisati kao ograničenje za i05.
+
+### FIX LOOP 2 — odluke Orchestrator-a
+
+Odgovor na re-review i04 (`docs/iteracije/i04_review_fix1.md`, ITERATION REJECTED, commit `54b2e0b`). R-01, R-02, R-03 i R-04 (oblik iz
+prvog reviewa) su ZATVORENI i ne diraju se. Builder ispravlja R-06 i R-05, upisuje obaveze iz N-09 i vraća dokumentaciju u red.
+
+- P-3 (R-05): ispravlja se u FIX LOOP-u 2 zajedno sa R-06 (opcija A). Redakcija loga 5xx grešaka NE SMIJE zavisiti od oblika poruke
+  Firestore greške (emulator i produkcija se razlikuju). O-18 ostaje globalan.
+- P-4 (N-09): upisuje se u ODLUKE §6 kao OBAVEZA za i07: poseban test po uzoru na I04-T18 (konkurentna promjena accountStatus naloga
+  ili brisanje naloga dok izdavanje drži transakciju; voucher ne smije biti izdat poslije početka brisanja). Jednako za čitanje users i
+  rewardDefinitions u transakciji — provjeriti da su van i04 pokrivena testom čim neki API počne mijenjati te dokumente.
+- Napomene N-10…N-14: N-10 se zatvara ispravkom iz koraka 2; N-11 (Express finalhandler za res.headersSent), N-12 (I04-T19 je vezan za
+  fajl i broj čitanja Date.now pri ulasku; refaktor sata u i05/i06 mora uskladiti test) i N-13 (redoslijed oznaka (l) ispred (j) u ODLUKE §6)
+  upisuju se u ODLUKE (N-13 se samo ispravlja).
