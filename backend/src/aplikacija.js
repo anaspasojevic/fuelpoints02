@@ -5,6 +5,7 @@ import { korelacija } from './posrednici/korelacija.js';
 import { dodajRuteKupovina } from './rute/kupovine.js';
 import { dodajRuteNagrada } from './rute/nagrade.js';
 import { dodajRuteNaloga } from './rute/nalog.js';
+import { dodajRuteVaucera } from './rute/vauceri.js';
 
 const parserJson = express.json();
 
@@ -36,6 +37,7 @@ export function napraviAplikaciju(opcije = {}) {
   dodajRuteNaloga(ruterApi, { servisi: opcije.servisi, verzijaUslova: opcije.verzijaUslova });
   dodajRuteKupovina(ruterApi, { servisi: opcije.servisi, posStanice: opcije.posStanice });
   dodajRuteNagrada(ruterApi, { servisi: opcije.servisi });
+  dodajRuteVaucera(ruterApi, { servisi: opcije.servisi });
   if (typeof opcije.dodajRute === 'function') {
     opcije.dodajRute(ruterApi);
   }
