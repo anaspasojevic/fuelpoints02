@@ -297,3 +297,13 @@ novu skriptu — van opsega.
 
 ## 14. Odluke Orchestrator-a (odobrenje plana)
 
+Plan i08 (commit d3b3a64) je ODOBREN. Datum: 2026-10-19.
+
+i08/P-1 — A: I08-T01 čita docs/srs/FuelPoints_SRS_3_1.md, uklanja markdown escape-ove i upoređuje sa firebase/firestore.rules; jednokratna ručna
+          provjera teksta §31 prema .docx-u (red po red) upisuje se u TEST_REPORT. Ako se .md i .docx razlikuju u sadržaju — normativan je .docx (OD-n).
+i08/P-2 — A: poređenje red po red (trim, više razmaka u jedan, bez praznih redova).
+i08/P-3 — B: \p{Cc} zabrana ide u jeIspravanIdDokumenta (validacija/identifikator.js); posebna KONTROLNI_ZNAK provjera u zahtjevIzdavanja.js se
+          uklanja kao duplikat (jedno mjesto istine); I04-T03 (a), (b) moraju ostati zeleni bez izmjene (dokaz da se ponašanje rewardId ne mijenja).
+i08/P-4 — odobreno: „jedan završni run” za AC-12 = jedno izvršavanje provjera.ps1 sa exit 0 (backend i Rules suita kao koraci istog run-a);
+          AC-12 tabela u TEST_REPORT navodi fajl i naziv testa za svaki od 12 API i 12 Rules ID-eva iz tog run-a.
+i08/K-1 — mutacija D06 se izvršava kao uklanjanje \p{Cc} provjere iz jeIspravanIdDokumenta; mora oboriti I08-T03 (loyaltyUid) i I04-T03 (rewardId).
