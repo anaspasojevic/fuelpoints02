@@ -9,6 +9,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 // Inicijalizacija Firebase-a iz BuildConfig vrijednosti, bez google-services.json (O-39).
 class FuelPointsAplikacija : Application() {
 
+    lateinit var zavisnosti: Zavisnosti
+        private set
+
     override fun onCreate() {
         super.onCreate()
         val opcije = FirebaseOptions.Builder()
@@ -17,10 +20,13 @@ class FuelPointsAplikacija : Application() {
             .setApiKey(BuildConfig.FIREBASE_API_KEY)
             .build()
         val aplikacija = FirebaseApp.initializeApp(this, opcije)
+        val auth = FirebaseAuth.getInstance(aplikacija)
+        val baza = FirebaseFirestore.getInstance(aplikacija)
         if (BuildConfig.KORISTI_EMULATOR) {
             // Emulator se mora postaviti prije prve upotrebe Auth-a i Firestore-a.
-            FirebaseAuth.getInstance(aplikacija).useEmulator(BuildConfig.EMULATOR_HOST, BuildConfig.PORT_AUTH)
-            FirebaseFirestore.getInstance(aplikacija).useEmulator(BuildConfig.EMULATOR_HOST, BuildConfig.PORT_FIRESTORE)
+            auth.useEmulator(BuildConfig.EMULATOR_HOST, BuildConfig.PORT_AUTH)
+            baza.useEmulator(BuildConfig.EMULATOR_HOST, BuildConfig.PORT_FIRESTORE)
         }
+        zavisnosti = Zavisnosti(auth, baza)
     }
 }

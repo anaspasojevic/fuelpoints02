@@ -1,3 +1,60 @@
 <resources>
     <string name="app_name">FuelPoints</string>
+
+    <!-- Zajedničko -->
+    <string name="nazad">Nazad</string>
+    <string name="prikazi_lozinku">Prikaži lozinku</string>
+    <string name="sakrij_lozinku">Sakrij lozinku</string>
+    <string name="pokusaj_ponovo">Pokušaj ponovo</string>
+    <string name="bez_mreze_marker">Nema mreže. Prikazano posljednje poznato stanje.</string>
+    <string name="prihvatam">Prihvatam</string>
+    <string name="uslove_koriscenja">uslove korišćenja</string>
+
+    <!-- UI-01 Prijava -->
+    <string name="litara">Litara</string>
+    <string name="bodova">Bodova</string>
+    <string name="prijava_naslov">Svaki litar\nse broji.</string>
+    <string name="prijava_podnaslov">Prijavite se i pratite bodove za pranje i tuš.</string>
+    <string name="email_oznaka">E-mail</string>
+    <string name="lozinka_oznaka">Lozinka</string>
+    <string name="prijavi_se">Prijavi se</string>
+    <string name="zaboravljena_lozinka">Zaboravljena lozinka</string>
+    <string name="napravi_nalog">Napravi nalog</string>
+
+    <!-- UI-02 Registracija -->
+    <string name="registracija_naslov">Novi nalog</string>
+    <string name="registracija_podnaslov">Bodovi kreću od nule, a prvi pun rezervoar ih brzo napuni.</string>
+    <string name="ime_za_prikaz">Ime za prikaz</string>
+    <string name="ponovite_lozinku">Ponovite lozinku</string>
+    <string name="pravilo_duzina">8+ znakova</string>
+    <string name="pravilo_veliko_slovo">veliko slovo</string>
+    <string name="pravilo_cifra">cifra</string>
+    <string name="pravilo_ispunjeno">%1$s: ispunjeno</string>
+    <string name="pravilo_nije_ispunjeno">%1$s: nije ispunjeno</string>
+    <string name="lozinke_se_poklapaju">Lozinke se poklapaju</string>
+
+    <!-- Uslovi korišćenja, verzija 1.0 (O-44, i09/P-6) -->
+    <string name="uslovi_naslov">Uslovi korišćenja</string>
+    <string name="uslovi_1_0">Uslovi korišćenja FuelPoints programa lojalnosti, verzija 1.0\n\n1. FuelPoints je program lojalnosti benzinske pumpe. Za svaki pun litar goriva dobijate jedan bod (42,73 l = 42 boda).\n\n2. Bodove dodjeljuje isključivo sistem pumpe pri kupovini; aplikacija ih samo prikazuje. Bodovi nemaju novčanu vrijednost i ne mogu se prenijeti.\n\n3. Bodovi se mogu zamijeniti za nagrade iz kataloga u aplikaciji. Voucher za nagradu važi 15 minuta; neiskorišćen ili otkazan voucher vraća bodove.\n\n4. Vaš QR kod sadrži samo identifikator naloga i služi isključivo za sakupljanje bodova na kasi.\n\n5. Čuvamo ime za prikaz, e-mail adresu i istoriju kupovina goriva radi vođenja naloga. Nalog možete obrisati u aplikaciji; kupovine i istorija bodova tada ostaju samo bez veze sa vama.\n\n6. Ovo je diplomski projekat (PMF Banja Luka) i ne predstavlja komercijalnu uslugu.</string>
+
+    <!-- Pokretanje, AUTH-03, AUTH-05 -->
+    <string name="ucitavanje">Učitavanje…</string>
+    <string name="dovrsetak_naslov">Dovršite registraciju</string>
+    <string name="dovrsetak_podnaslov">Nalog je napravljen, ali registracija nije završena. Unesite ime za prikaz i prihvatite uslove korišćenja.</string>
+    <string name="potvrdi">Potvrdi</string>
+    <string name="brisanje_naslov">Nalog se briše</string>
+
+    <!-- UI-03 Home -->
+    <string name="zdravo">Zdravo, %1$s</string>
+    <string name="zdravo_bez_imena">Zdravo</string>
+    <string name="dostupnih_bodova">dostupnih bodova</string>
+    <string name="rezervisano">Rezervisano</string>
+    <string name="moj_qr_kod">Moj QR kod</string>
+
+    <!-- UI-04 Moj QR -->
+    <string name="qr_naslov">Pokažite\nna kasi</string>
+    <string name="qr_podnaslov">Kasir skenira kod i bodovi za gorivo stižu na vaš nalog.</string>
+    <string name="qr_opis">QR kod sa vašim identifikatorom</string>
+    <string name="vas_identifikator">Vaš identifikator</string>
+    <string name="qr_napomena">Ovim kodom se samo sakupljaju bodovi.</string>
 </resources>
