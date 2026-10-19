@@ -564,3 +564,37 @@ SRS kontradikcija koja blokira rad: nije nađena.
 
 ## 14. Odluke Orchestrator-a (odobrenje plana)
 
+Plan i06 (commit 11c67f9) je ODOBREN, uz odluke i ispravke ispod. Datum: 2026-10-19.
+
+i06/P-1 — A: O-27 (jeKonzistentnoStanjeVaucera) koristi i O-16 retry grana API-03 (izdavanjeNagrade.js); I06-T05 obavezan.
+i06/P-2 — A: u skripte/provjera.ps1 se dodaje SAMO novi smoke red (redeem bez ključa → 401 UNAUTHENTICATED_POS). „Nepromijenjen” u brief-u
+          se odnosi na način rada test:emu i provjera.ps1, ne na smoke listu. Nejasnoća brief-a, ne odstupanje.
+i06/P-3 — A: strukturna ispravnost zapisa (500) prije poređenja voucherId-a (409 IDEMPOTENCY_CONFLICT); konzistentnost voucher-a samo za isti voucher.
+i06/P-4 — prihvaćeno: dupli ključ u JSON tijelu → posljednji pobjeđuje (JSON.parse); upisati u README i poznata ograničenja (ODLUKE §7).
+i06/P-5 — odobreno: provjera redeem_ / release_ neposredno prije grananja na istek (obje grane, 500 bez upisa).
+i06/P-6 — ODOBRILA ANA (2026-10-19): ugovor odgovora API-04 tačno po sekciji 6 plana (200 i za prvi otkup i za retry; tijelo
+          { voucherId, rewardId, costPoints, status, issuedAt, expiresAt, redeemedAt, redeemedAtStationId } iz sačuvanog voucher-a, ista funkcija).
+i06/P-7 — odobreno: omotacBaze.prijePokusaja (test-only); bez opcije ponašanje omotača identično i05; svaki test sa prijePokusaja ima kontrolu bez opcije.
+i06/P-8 — odobreno: backend/skripte/testEmuCiljano.js po sekciji 5.10 plana.
+i06/P-9 — odobreno: novo ograničenje (u) u ODLUKE §6 — i07: brisanje naloga uklanja voucher-e i redemptionRequests (§23.2); retry otkupa koji naiđe
+          na zapis bez voucher-a daje 500 (O-24); i07 određuje redoslijed brisanja (analogno (f), (m)).
+
+ISPRAVKE PLANA
+i06/K-1 — M45 (status provjeravan van transakcije) je D, ciljani test I06-T18 (c); mora pasti 1/1. Ako ne padne → Builder staje i javlja.
+i06/K-3 — spajanje koraka: koraci 3 + 4 plana → jedan commit „i06: Rules blok redemptionRequests i validacija zahtjeva otkupa (§31, §20.1, O-8 (b))”;
+          koraci 6 + 7 plana → jedan commit „i06: atomičnost, konkurentnost i log otkupa (NFR-04 … NFR-06, §6 (h))”. Testovi i dalje prije koda.
+i06/K-5 — test pod kontencijom koji da ijedan 500 → Builder staje i javlja; test se ne „popravlja” slabljenjem.
+
+O-30 (Ana, 2026-10-19) — BRZI REŽIM; važi za i06, i07 i i08. Petlje (Planner → Builder → Reviewer → FIX LOOP), SRS testovi (API-Txx, RULE-Txx),
+anotirani git tag i ograničenja (a) … (u) ostaju. Ima prednost nad i03/K-2, O-29 (b) i planom gdje se razlikuju:
+ (a) provjera.ps1 tačno 2× po Builder sesiji: poslije koraka koji dira zajednički kod prethodnih iteracija (u i06: O-27) i na kraju prije PR-a.
+     Između koraka: npm test + npm run test:emu:ciljano za nove/izmijenjene test fajlove i postojeće fajlove koje korak dira.
+ (b) kontrolne mutacije samo ključni skup; za i06: M01, M02, M04, M05, M06, M07, M09, M12, M17, M18, M20, M24, M30, M31, M32, M38, M41, M45
+     (D 1/1). Ostale mutacije iz sekcije 9 se ne izvršavaju (u TEST_REPORT jedan red „nije izvršeno, O-30 (b)”). Zamjenjuje i06/K-2 i K-4.
+ (c) ponavljanja: I06-T19 (b) i (c) ≥ 20; ostali dijelovi I06-T19 po 10. I06-T20: 100 operacija (umjesto 250).
+ (d) sažeta dokumentacija: TEST_REPORT = run poslije koraka 2 i završni provjera.ps1 (komanda, exit, tests/pass/fail, trajanje), tabela mutacija
+     (jedan red po mutaciji) i raspodjela konkurentnih testova; IMPLEMENTATION_LOG unos i06 ≤ 1 strana (uključuje R-06 „Ispravka (i06)”, OD-n,
+     ograničenja za i07+); TRACEABILITY i ODLUKE kao u sekciji 10 plana; README samo sekcija API-04 (+ P-4, O-8 (a) posljedica, test:emu:ciljano).
+ (e) Builder ne staje zbog prekoračenja vremena, samo na blokerima.
+ (f) Reviewer: vremenski okvir 60–90 min; provjera.ps1 1×; ne ponavlja Builder-ove mutacije; fokus na napade na API-04 i O-27.
+ (g) laptop ne smije u sleep (powercfg); prekinut run se ponavlja; prije run-a portovi 8080 i 9099 slobodni.
