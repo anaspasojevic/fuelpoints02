@@ -2583,3 +2583,80 @@ I06-T01 … I06-T22 PASS (run 2 `provjera.ps1`). I06-T23 (inspekcije):
 | I06-T20 100 sekvencijalnih operacija (seed `0x1606`) | 1 | kupovina 201: 18; issue 201: 15, 409 INSUFFICIENT_POINTS: 4; redeem 200: 7, 409 ALREADY_REDEEMED: 16, 409 EXPIRED: 8, 409 CANCELLED: 2, 409 IDEMPOTENCY_CONFLICT: 1; cancel 200: 2, 409 EXPIRED: 6, 409 ALREADY_REDEEMED: 3; API-06 200: 8; istek: 7; bez operacije: 3 | 0 |
 
 I06-T18 (deterministički redoslijed, `prijePokusaja`): 7 slučajeva + kontrola, 1 izvršavanje svaki, PASS. Nijedan 500 pod kontencijom (i06/K-5).
+
+
+## Iteracija 7 — Brisanje naloga (API-07)
+
+Datum izvršavanja: 2026-10-19 (Windows 11 Pro 10.0.22621, Windows PowerShell 5.1). Grana `iteracija-07`. Sažeto po O-30 (d): komanda, exit,
+tests / pass / fail, trajanje; puni izlazi su u scratchpad-u sesije (van repoa). Prije i poslije svakog emulator run-a portovi 8080 i 9099 slobodni
+(i07/K-2), JDK 24 prvi na PATH-u; `powercfg /change standby-timeout-ac 0` (bez sleep-a).
+
+### Run-ovi `provjera.ps1` (O-30 (a): tačno 2×)
+
+| # | Kada / stablo | Komanda | Exit | Rezultat | Trajanje |
+|---|---|---|---|---|---|
+| 1 | poslije koraka 3, kod = `e336652` (testovi koraka 4 tada još nisu postojali kao fajlovi u glob-u) | `.\skripte\provjera.ps1` | 0 | `SVE PROVJERE PROŠLE`; backend `ℹ tests 83 / pass 83 / fail 0`, emulator `ℹ tests 182 / pass 182 / fail 0` (1210 s); rules `ℹ tests 31 / pass 31 / fail 0`; smoke-ovi (8, uključujući novi `DELETE /api/v1/account` bez token-a → `401 UNAUTHENTICATED`); Android `assembleDebug`, `testDebugUnitTest` `BUILD SUCCESSFUL` | ≈ 22 min |
+| 2 | završno, poslije dokumentacije, **kod = `74c4227`** + necommit-ovana dokumentacija (i07/K-4, O-31 (a)) | `.\skripte\provjera.ps1` | 0 | `SVE PROVJERE PROŠLE`; backend `ℹ tests 83 / pass 83 / fail 0`, emulator `ℹ tests 193 / pass 193 / fail 0` (1411 s); rules `ℹ tests 31 / pass 31 / fail 0`; smoke-ovi (8); Android `BUILD SUCCESSFUL` | 1517 s (15:05:46–15:31:03) |
+
+Poslije run-a 2 commit-ovani su samo `docs/*.md` i `README.md`.
+
+### Ciljani run-ovi između koraka (`npm test` + `npm run test:emu:ciljano`)
+
+| Korak | Komanda | Exit | Rezultat |
+|---|---|---|---|
+| 1 | `… kupovinaPseudonim.test.js` prije izmjene `evidencijaKupovine.js` (crveno, K-3) | 1 | I07-T10 „isti payload”: 409 `IDEMPOTENCY_CONFLICT` umjesto 200 |
+| 1 | `npm test`; `… kupovinaPseudonim.test.js kupovina.test.js kupovinaAtomicnost.test.js` | 0; 0 | `tests 81 / pass 81`; `tests 27 / pass 27` |
+| 2 | `… <18 fajlova koji koriste omotacBaze>` | 1 | `tests 150 / pass 149 / fail 1` — I06-T19 (c) prolazna 401 (OD-3) |
+| 2 | `… otkupAtomicnost.test.js` | 0 | `tests 11 / pass 11 / fail 0` |
+| 3 | `node --test test/jedinicni/svjezinaPrijave.test.js` prije koda (crveno) | 1 | `ERR_MODULE_NOT_FOUND` (modul ne postoji) |
+| 3 | `… brisanjeNaloga.test.js` prije koda (crveno) | 1 | `tests 9 / pass 0 / fail 9` (svi 404 `NOT_FOUND`, ruta ne postoji) |
+| 3 | `npm test`; `… brisanjeNaloga.test.js` (3 run-a) | 0; 1, 1, 0 | `tests 83 / pass 83`; 8/9 (I07-T07 → OD-4 u kodu), 8/9 (I07-T02 greška testa, OD-10), `tests 9 / pass 9 / fail 0` |
+| 4 | `… blokadeBrisanja.test.js brisanjeAtomicnost.test.js logBrisanja.test.js` (prvi run, prije bilo kakve izmjene koda; OD-5) | 0 | `tests 11 / pass 11 / fail 0` (135 s) |
+
+### Rezultat po ID-u
+
+SRS testovi: **API-T12 PASS** (oba: primjer brief-a i nastavak poslije prekida). Dopunski: **I07-T01 … I07-T15 PASS** (run 2 `provjera.ps1`);
+regresija i01–i06 (uključujući API-T03, API-T04) PASS. I07-T16 (inspekcije, izvršeno na `74c4227`):
+
+| Komanda | Ishod |
+|---|---|
+| `git grep -n "release_" -- backend/src` | kod samo `servisi/oslobadjanjeVaucera.js:13`; ostali pogoci su komentari (`obradaGresaka.js`, `oslobadjanjeVaucera.js`, `otkazivanjeVaucera.js`, `otkupVaucera.js`) |
+| `git grep -n -E "deleteUser\|'DELETION_IN_PROGRESS'" -- backend/src` | `deleteUser` samo `servisi/brisanjeNaloga.js:178`; upis `DELETION_IN_PROGRESS` samo `brisanjeNaloga.js:55` (ostalo su poređenja u `inicijalizacijaNaloga.js`, `stanjeNaloga.js`, `brisanjeNaloga.js`) |
+| `git grep -n "izloziAuthTime" -- backend/src` | `posrednici/autentikacija.js`, `rute/brisanjeNaloga.js` |
+| `git grep -n -i -E "process\.env\.(NODE_ENV\|TEST)\|inject\|ubriz\|mock" -- backend/src`; `git grep -n -E "TODO\|FIXME" -- backend/src backend/test` | prazno; prazno |
+| `git diff i06 --stat -- firebase/firestore.rules firebase/firestore.indexes.json backend/package.json backend/package-lock.json docs/srs` | prazno |
+| `git diff i06 --name-status -- backend/test` | samo `A` (6 test fajlova, `pomocnici/omotacAutha.js`, `pomocnici/pripremaBrisanja.js`) i `M pomocnici/omotacBaze.js` |
+| SHA-256 `docs/srs/FuelPoints_SRS_3_1.docx` | `7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C60228` |
+
+### Ključne mutacije (O-30 (b), O-31 (c); sve D, 1/1; `npm run test:emu:ciljano -- <fajl> --test-name-pattern=<obrazac>`; svaka vraćena `git restore`)
+
+| Oznaka | Tačna izmjena | Ciljani test | Ishod |
+|---|---|---|---|
+| D01 | `obrisiNalog`: K1 (`postaviBrisanjeUToku`) premješten iza K3 | I07-T05 | ubijena 1/1 (`1 / 0 / 1`) |
+| D02 | K4b (`obrisiKorisnika`) prije K5 (`pseudonimizuj`) | I07-T05 | ubijena 1/1 |
+| D03 | K6 (`obrisiAuthNalog`) prvi, prije K1 | I07-T05 | ubijena 1/1 |
+| D04 | `PRIVATNE_KOLEKCIJE` = notifications, vouchers, rewardRequests, redemptionRequests | I07-T05; I07-T15 | ubijena 1/1 (oba) |
+| D05 | K3 (`zatvoriAktivneVaucere`) uklonjen | API-T12; I07-T04 | ubijena 1/1 (`2 / 0 / 2` oba) |
+| D06 | `procitajAktivneZaZatvaranje`: uvijek CANCELLED (bez `jeIstekao`) | I07-T04 granica | ubijena 1/1 |
+| D07 | ruta bez `provjeriSvjezinuPrijave` | I07-T02 | ubijena 1/1 |
+| D07b | `jeSvjezaPrijava`: `<=` → `<` | I07-T01 (jedinični); I07-T02 | ubijena 1/1 (oba) |
+| D08 | `uidSePoredi = true` (O-10a vraćen) | I07-T10 | ubijena 1/1 (`3 / 2 / 1`) |
+| D09 | `ISTORIJSKE_KOLEKCIJE` bez `loyaltyLedger` | API-T12 | ubijena 1/1 (`2 / 0 / 2`) |
+| D10 | K1: users ne postoji → `GreskaApi('ACCOUNT_NOT_INITIALIZED')` | I07-T07 | ubijena 1/1 |
+| D11 | issue: `users` pročitan VAN transakcije (pre-čitanje prije `runTransaction`, u tx samo nalog i nagrada) | I07-T09 | ubijena 1/1 (`3 / 2 / 1`; prvi pokušaj nevažeći, OD-11) |
+| D11b | issue: provjera `DELETION_IN_PROGRESS` zaobiđena | I07-T08 | ubijena 1/1 |
+
+### Raspodjela konkurentnih testova (I07-T13, ciljani run koraka 4; `t.diagnostic`)
+
+| Test | Ponavljanja | Raspodjela ishoda | 500 |
+|---|---|---|---|
+| I07-T13 (a) 2 paralelna DELETE istog korisnika | 10 | `204: 20` | 0 |
+| I07-T13 (b) DELETE ‖ 3× issue ‖ 2× kupovina ‖ cancel | 10 | DELETE `204: 10`; issue `409 INSUFFICIENT_POINTS: 18`, `409 ACCOUNT_DELETION_IN_PROGRESS: 12`; kupovina `201: 4`, `404 LOYALTY_ACCOUNT_NOT_FOUND: 16`; cancel `200: 6`, `409 ACCOUNT_DELETION_IN_PROGRESS: 4` | 0 |
+
+U svim ponavljanjima: 0 dokumenata sa `uid` korisnika, Auth obrisan, svaki voucher ima RESERVE i tačno jedan RELEASE / REDEEM, lanac ledger-a
+uzastopan. I07-T09 (deterministički, `prijePokusaja`): 5 mutacija + (f) init + (g) cijeli DELETE između pokušaja, svaka sa kontrolom, PASS.
+Nijedan 500 pod kontencijom.
+
+### Poznata ograničenja
+
+Vidi IMPLEMENTATION_LOG i07 i ODLUKE §7 (prozor K4b → K6, budući `auth_time`, granica paketa u emulatoru, veliki nalog, prolazna 401 OD-3).

@@ -10,7 +10,9 @@ const BEARER = /^Bearer (\S+)$/i;
 // Token se ne upisuje nigdje (req, res.locals, log, odgovor); originalna greška SDK-a se ne prosljeđuje.
 // Rok cijelog zaštićenog zahtjeva (i02/P-5, FIX LOOP 1 R-02) počinje ovdje i prenosi se kroz res.locals.rokDo;
 // verifikacija i kasniji pozivi zavisnih servisa dobijaju samo preostalo vrijeme.
-export function napraviProvjeruTokena(auth) {
+// O-35: samo uz izloziAuthTime (API-07) posrednik postavlja res.locals.authTime = auth_time verifikovanog token-a; bez opcije ponašanje
+// je nepromijenjeno.
+export function napraviProvjeruTokena(auth, { izloziAuthTime = false } = {}) {
   return async function provjeraTokena(req, res, next) {
     const rokDo = Date.now() + ROK_ZAVISNOG_SERVISA_MS;
     res.locals.rokDo = rokDo;
@@ -26,6 +28,9 @@ export function napraviProvjeruTokena(auth) {
       throw new GreskaApi(klasifikujGreskuAuth(greska));
     }
     res.locals.uid = dekodiran.uid;
+    if (izloziAuthTime) {
+      res.locals.authTime = dekodiran.auth_time;
+    }
     next();
   };
 }

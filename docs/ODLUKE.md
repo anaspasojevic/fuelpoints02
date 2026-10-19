@@ -19,8 +19,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i03 Purchase / EARN | ITERATION ACCEPTED | tag `i03` (merge `43e604a`, PR #3) |
 | i04 Reward issue | ITERATION ACCEPTED (re-review 2, poslije FIX LOOP-a 2) | tag `i04` (merge `d445fe8`, PR #4) |
 | i05 Voucher cancel i account reconcile | ITERATION ACCEPTED (re-review nije bio potreban) | tag `i05` (merge `5a2f8cc`, PR #5) |
-| i06 Voucher redeem (API-04) | BUILDER ZAVRŠIO — čeka review | grana `iteracija-06` (PR → main, bez merge-a i taga) |
-| i07 – i11 | nije počelo | — |
+| i06 Voucher redeem (API-04) | ITERATION ACCEPTED (O-31: bez re-run-a `provjera.ps1`; NOTE R-01 … R-04) | tag `i06` (merge `9aae907`, PR #6) |
+| i07 Brisanje naloga (API-07) | BUILDER ZAVRŠIO — čeka review | grana `iteracija-07` (PR → main, bez merge-a i taga) |
+| i08 – i11 | nije počelo | — |
 
 ## 2. Odluke Ane (O-n)
 
@@ -41,6 +42,13 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-8 | (a) `redemptionRequests` zapis SAMO pri uspješnom otkupu (`resultStatus: "REDEEMED"`); neuspjeh ne pravi zapis; invarijanta #zapisa = #REWARD_REDEEM = #REDEEMED; posljedica: ID neuspješnog pokušaja može se kasnije upotrijebiti za drugi voucher (README). (b) `requestKey` = SHA-256 nad UTF-8 `stationId:redemptionRequestId`, hex malim slovima (`izracunajRequestKey`). Status: implementirano u i06, API-T08 … API-T10, I06-T06, I06-T13 (b). | 2026-10-19, i06 | i06_brief |
 | O-29 | Skraćenje trajanja iteracija (od i06): sleep isključen tokom dugih run-ova, prekinut run se ponavlja; mutacije D 1/1, K n/10; `npm run test:emu:ciljano` (backend) za razvoj i mutacije; vremenski okviri uloga; sažet TEST_REPORT. Vidi §10. | 2026-10-19, i06 | i06_brief |
 | O-30 | BRZI REŽIM za i06, i07 i i08 (ima prednost nad i03/K-2, O-29 (b) i planom): `provjera.ps1` tačno 2× po Builder sesiji; ključni skup mutacija; smanjena ponavljanja; sažeta dokumentacija; Reviewer 60–90 min. Vidi §10. | 2026-10-19, i06 | i06_plan (sekcija 14) |
+| O-9 | ACTIVE voucher-i se pri brisanju naloga zatvaraju sa `REWARD_RELEASE` kroz isti mehanizam (`release_{voucherId}`, `tx.create`, `oslobadjanjeVaucera.js`), u transakciji sa `loyaltyAccounts`; neistekao → CANCELLED + `cancelledAt`; zatim se voucher-i brišu (§23.2). Dopuna O-34. Status: implementirano u i07 (`servisi/brisanjeNaloga.js` K3, `procitajAktivneZaZatvaranje`), I07-T04, API-T12. | 2026-10-19, i07 | i07_brief |
+| O-10a | Kad sačuvani purchase ima `uid = null`, `uid` se NE poredi; isti `volumeMl`, `amountMinor`, `currency` → prvi rezultat (200, bez EARN-a i upisa); drugačiji → 409 `IDEMPOTENCY_CONFLICT`; `occurredAt` se ne poredi (O-3); odgovor bez `uid`-a. Posljedica i07/P-5. Status: implementirano u i07 (`servisi/evidencijaKupovine.js`), I07-T10. | 2026-10-19, i07 | i07_brief |
+| O-32 | Redoslijed brisanja (§23.1, §23.4, ograničenje (a)): 1 `users` → DELETION_IN_PROGRESS (tx; preskače se ako već jeste) → 2 blokada (posljedica) → 3 zatvaranje ACTIVE voucher-a (O-9, O-34) → 4a `rewardRequests`, `redemptionRequests` PRIJE `vouchers`, `notifications`, `vouchers`, `loyaltyAccounts` → 5 pseudonimizacija `purchases`, `loyaltyLedger` (`uid = null`) → 4b `users/{uid}` posljednji Firestore dokument → 6 `auth.deleteUser` posljednji. Status: implementirano u i07, I07-T05. | 2026-10-19, i07 | i07_brief |
+| O-33 | Uspješno brisanje (prvo i nastavljeno) → 204 bez tijela. Status: implementirano u i07, API-T12. | 2026-10-19, i07 | i07_brief |
+| O-31 | EKSPRESNI REŽIM od Reviewer-a i06 do i11 (uz O-30): Reviewer ne ponavlja `provjera.ps1` kad TEST_REPORT ima završni run na kodu X i `git diff X..<vrh PR-a>` sadrži samo `docs/*.md` i `README.md`; checkpoint: merge, pa `git diff <vrh PR-a> main` prazno, pa tag; mutacije i07 ~10, i08 ~5, Android bez mutacija; smoke i09/i10 samo API 35, puni NFR-09 u i11. Vidi §3 i §10. | 2026-10-19, i06 review | i07_brief (tačka 10) |
+| O-2 | Razvoj i testovi i09–i10 nad emulatorom; pravi Firebase Spark projekat se podešava u i11 (demo i ručna provjera §3.5, §3.6). | 2026-10-19 | i07_brief (tačka 10) |
+| B-1 (odluka) | i08: zabrana `\p{Cc}` za `loyaltyUid` (kao i04/P-9) → 404 `LOYALTY_ACCOUNT_NOT_FOUND` bez pristupa bazi. Vidi §8. | 2026-10-19 | i07_brief (tačka 10) |
 | O-6 | Voucher postoji, ali pripada drugom korisniku → 403 `FORBIDDEN`, ništa upisano ni otkriveno u tijelu odgovora; voucher koji ne postoji → 404 `VOUCHER_NOT_FOUND`. Status: implementirano u i05, I05-T05. | 2026-10-18, i05 | i05_brief |
 
 ## 3. Odluke Orchestrator-a (D-n)
@@ -66,6 +74,12 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-27 (Orchestrator, brief i06; izvršenje O-23) | JEDNA funkcija konzistentnosti stanja voucher-a `jeKonzistentnoStanjeVaucera` (`servisi/vauceri.js`, §15): ACTIVE / EXPIRED ⇒ `redeemedAt`, `redeemedAtStationId`, `cancelledAt` === null; REDEEMED ⇒ `redeemedAt` Timestamp, `redeemedAtStationId` neprazan string, `cancelledAt` null; CANCELLED ⇒ `cancelledAt` Timestamp, ostala dva null; polja moraju postojati. Koriste je redeem, cancel, `procitajIstekleAktivne` (API-03, API-06) i O-16 retry API-03 (i06/P-1). Nekonzistentno → 500, ništa upisano. Status: implementirano u i06, I06-T02 … I06-T05, I06-T14 (a). | i06 brief |
 | O-28 (Orchestrator, brief i06) | Ledger `loyaltyLedger/redeem_{voucherId}`, samo `tx.create`, uz eksplicitnu provjeru da ni `redeem_` ni `release_` ne postoje (→ 500); jedan modul piše `redeem_` (`servisi/otkupVaucera.js`). Upisi uspjeha: voucher → `redeem_` → loyaltyAccounts → zapis. Status: implementirano u i06, API-T08, I06-T14, I06-T15. | i06 brief |
 | i06/P-1 … P-9, K-1, K-3, K-5 (Orchestrator, odobrenje plana i06) | P-1 A: O-27 i u O-16 retry grani; P-2 A: u `provjera.ps1` samo novi smoke red (redeem bez ključa → 401); P-3 A: strukturna ispravnost zapisa (500) prije poređenja `voucherId`-a (409); P-4: dupli ključ u JSON tijelu → posljednji pobjeđuje (§7); P-5: provjera `redeem_`/`release_` prije grananja na istek; P-6 (Ana): ugovor odgovora API-04 = 200 `{ voucherId, rewardId, costPoints, status, issuedAt, expiresAt, redeemedAt, redeemedAtStationId }` iz sačuvanog voucher-a i za retry; P-7: `omotacBaze.prijePokusaja` (test-only); P-8: `backend/skripte/testEmuCiljano.js`; P-9: ograničenje (u). K-1: M45 je D (I06-T18 (c)); K-3: spajanje koraka; K-5: 500 pod kontencijom → Builder staje. Detalji: `docs/iteracije/i06_plan.md`, sekcija 14. | i06 plan |
+| O-31 (Ana; upis po brief-u i07, zatvara R-01 review-a i06) | Ekspresni režim od Reviewer-a i06 do i11 — tekst u §2 i §10. | i06 review |
+| O-34 (Orchestrator, brief i07) | Dopuna O-9 radi O-5 / §18.1: ACTIVE voucher sa `sadaMs ≥ expiresAt` se pri brisanju zatvara kao EXPIRED + RELEASE (nikad CANCELLED za istekao rok); ista transakcija. Status: implementirano u i07, I07-T04 (granica). | i07 brief |
+| O-34b (Orchestrator, brief i07; Planner potvrdio, i07/P-3) | DELETE kad `users/{uid}` ne postoji (pad između 4b i 6 ili NOT_INITIALIZED) → preostali idempotentni koraci po `uid`, pa brisanje Auth naloga → 204; nikad `ACCOUNT_NOT_INITIALIZED`. Status: implementirano u i07, I07-T07. | i07 brief |
+| O-35 (Orchestrator, brief i07; i07/P-2) | Recent auth: `auth_time` verifikovanog token-a; dozvoljeno ako `Date.now() ≤ auth_time·1000 + 300 000` (uključivo); inače 409 `REAUTHENTICATION_REQUIRED` bez pristupa bazi, i za nastavak; posrednik izlaže `auth_time` samo za API-07; redoslijed 422 JSON → 401 → 422 tijelo → 409 → tok. Status: implementirano u i07 (`posrednici/svjezinaPrijave.js`), I07-T01 … I07-T03. | i07 brief |
+| O-36 (Orchestrator, brief i07) | Tok brisanja NIJE jedna transakcija; koraci idempotentni i ponovljivi; K1, K3 (i K4b) transakcije, K4a / K5 upiti + paketi ≤ 400 upisa; rok 10 s → 503, stanje konzistentno, nastavak bezbjedan (§23.4, §6 (b)). Status: implementirano u i07, I07-T06, I07-T11. | i07 brief |
+| i07/P-1 … P-9, K-1 … K-4 (Orchestrator, odobrenje plana i07) | P-1 A: prozor K4b → K6 prihvaćen (§7) + ograničenje (v) za i10, bez koda (B, C, D odbačeni); P-2: oblik O-35, fail closed za `auth_time` koji nije nenegativan siguran cijeli broj, budući `auth_time` dozvoljen; P-3: nastavak uvijek cijeli tok od K1, K3 i K4b traže users DELETION_IN_PROGRESS ili nepostojeći (inače 500), `accountStatus` van enum-a → 500; P-4: K3 bez gornje granice broja ACTIVE voucher-a; P-5: posljedica O-10a (drugi `loyaltyUid` → 200 prvi rezultat); P-6: retry izdavanja / otkupa poslije brisanja mapping-a → 409 / 404, nikad 500 (zatvara (f), (m), (u)); P-7: `omotacBaze.batch()` + `dnevnik`, `test/pomocnici/omotacAutha.js` (test-only); P-8: ponovljen DELETE poslije K6 → 401; P-9: smoke `DELETE /account` bez token-a → 401. K-1: koraci 4 i 5 spojeni; K-2: JDK prvi na PATH-u i provjera portova; K-3: crveni run prije koda; K-4: commit koda završnog `provjera.ps1` u TEST_REPORT. Detalji: `docs/iteracije/i07_plan.md`, sekcija 14. | i07 plan |
 | D-5 | Neispravno percent-kodiran parametar putanje (Express 5 `URIError`, status 400) mora dati deterministički 4xx bez stack-a i bez sirove vrijednosti u logu i odgovoru; ispravka globalna. Kod predlaže Planner i04 (preporuka 404 `NOT_FOUND`). Status: implementirano u i04 — 404 `NOT_FOUND` u `odrediKod` (i04/P-8, K-1), I04-T03 (c), I04-T16. | i04 brief |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
@@ -142,14 +156,18 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 ## 6. Ograničenja za buduće iteracije
 
 - **(a) i07** — `users/{uid}` je POSLJEDNJI obrisani Firestore dokument prije brisanja Auth naloga (i02/P-2), da init ne „oživi” nalog.
+  ZATVORENO u i07 (O-32): K4b poslije svih ostalih Firestore koraka, K6 posljednji (I07-T05, mutacija D02); prozor K4b → K6 je poznato
+  ograničenje (i07/P-1, §7) uz (v).
 - **(b) sve mutacije** — odgovor 503 ne znači da mutacija nije upisana (kasni commit). Svaka mutacija to mora pokriti idempotency
   ključem i testom; testovi koji dozvoljavaju 503 čekaju kraj svih transakcija prije asercija i prije sljedećeg testa (i03 OD-5).
 - **(c) i06** — redeem koristi isti `napraviProvjeruPosKljuca(posStanice)`, vezan samo na rutu; mapa i rok se ne dupliraju.
 - **(d) i07 (O-10a)** — retry kupovine poslije pseudonimizacije (`uid = null`) po trenutnom kodu daje 409 (poređenje `uid`); i07 odlučuje.
+  ZATVORENO u i07 (O-10a): `uid === null` se ne poredi (I07-T10, mutacija D08).
 - **(e) i10** — Android upiti nad `purchases`/`notifications` moraju imati `where('uid', '==', auth.uid)` i `limit ≤ 20` / `≤ 50`;
   `orderBy` traži composite indeks.
 - **(f) i07** — kad brisanje ukloni voucher prije `rewardRequests` mapping-a, retry issue-a bi naišao na mapping bez voucher-a
   (u i04 → 500); i07 određuje redoslijed brisanja i ponašanje issue-a u tom međustanju.
+  ZATVORENO u i07 (O-32, i07/P-6): mapping-i se brišu PRIJE `vouchers`; retry u međustanju → 200 / 409 / 401, nikad 500 (I07-T15, D04).
 - **(g) i05, i06** — svaki prelaz u EXPIRED / CANCELLED (uključujući istekao redeem, §20.5) koristi isti mehanizam „release najviše
   jednom” koji odobri plan i04 (preporuka `release_{voucherId}` + `tx.create`).
   ZATVORENO za i05: jedna implementacija `servisi/oslobadjanjeVaucera.js` koju koriste API-03, API-05 (CANCELLED i O-5) i API-06
@@ -182,6 +200,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - **(l) potvrda (g) u i04 (i04/P-5)** — mehanizam je `loyaltyLedger/release_{voucherId}` + `tx.create` + eksplicitna provjera postojećeg
   release-a; ledger `createdAt` = `serverTimestamp()`.
 - **(m) potvrda (f) u i04** — retry issue-a kad mapping postoji a voucher ne → 500 (i04); i07 određuje redoslijed brisanja.
+  ZATVORENO u i07 kao (f).
 - **(n) i05 (N-01, review i04)** — O-16 retry vraća sačuvani `status: "ACTIVE"` i za voucher kojem je `expiresAt` prošao (ništa se ne
   upisuje); i05 (API-06) to zatvara; Android (i10) odlučuje po `expiresAt`.
   ZATVORENO u i05: API-06 implementiran; README opisuje preporučeni tok (Home → API-06 → čitanje iz Firestore-a; API-03 retry sa
@@ -192,6 +211,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   u transakciji (u i04 obilaznice V1-b/V1-c iz re-reviewa nijedan test ne obara, jer nijedan API ne mijenja te dokumente).
   Status poslije i05: OSTAJE za i07. i05 ne mijenja `users` ni `rewardDefinitions` (cancel i API-06 ih samo čitaju u transakciji,
   kroz zajednički `procitajStanjeNaloga`); test konkurentnog brisanja naloga dolazi sa API-07.
+  ZATVORENO u i07: I07-T09 (deterministički, `prijePokusaja`): issue, cancel, redeem, purchase, API-06 i init poslije promjene `users`
+  između pokušaja 1 i 2 ne mutiraju; (g) cijeli DELETE između pokušaja → issue 409 bez voucher-a; mutacija D11 (users van transakcije)
+  ubijena. Dio o `rewardDefinitions` ostaje neprimjenjiv (nijedan API ih ne mijenja).
 - **(p) i05, i06 (N-12)** — I04-T19 je vezan za implementaciju: mock `Date.now` prepoznaje pozivaoca po fajlu
   `src/servisi/izdavanjeNagrade.js` i očekuje tačno jedno čitanje pri ulasku. Refaktor sata (npr. pomoćna funkcija u `vauceri.js`) mora
   u istom koraku uskladiti I04-T19, bez slabljenja njegove provjere (`sadaMs` po pokušaju).
@@ -202,6 +224,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   sa `{ status: 'EXPIRED' }`) i `servisi/stanjeNaloga.js`; nijedan drugi kod ne piše `release_`.
 - **(r) i07 (O-9, i05)** — ako brisanje naloga zatvara ACTIVE voucher-e kao CANCELLED / EXPIRED, mora proći kroz isti mehanizam
   (release najviše jednom) ili odluka O-9 mora reći da RELEASE izostaje; cancel retry ne provjerava `release_` (i05/P-4).
+  ZATVORENO u i07 (O-9, O-34): K3 kroz `pripremiOslobadjanja` / `upisiOslobadjanja` (eksplicitna provjera `release_`, `tx.create`); I07-T04, D05, D06.
 - **(s) i10 (i05)** — Android poziva API-06 na Home-u i poslije `409 VOUCHER_EXPIRED` iz API-05 osvježava stanje; `Content-Length: 0`
   bez tijela (Retrofit `@POST` bez `@Body`) je ispravan zahtjev za API-05 i API-06.
 - **(t) i06 — OBAVEZA (O-23, i05 review R-01)** — kad redeem počne pisati `redeemedAt` / `redeemedAtStationId`, redeem i cancel moraju
@@ -210,6 +233,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   cancel, `procitajIstekleAktivne` i O-16 retry; mutacije M30, M31, M32 ubijene (TEST_REPORT i06).
 - **(u) i07 (i06/P-9)** — brisanje naloga uklanja voucher-e i `redemptionRequests` (§23.2); retry otkupa koji naiđe na zapis bez
   voucher-a daje 500 (O-24); i07 određuje redoslijed brisanja (analogno (f), (m)).
+  ZATVORENO u i07 kao (f): `redemptionRequests` prije `vouchers`; retry otkupa → 200 / 409 `VOUCHER_ALREADY_REDEEMED` / 404 (I07-T15).
+- **(v) i10 (i07/P-1, P-8)** — Android poslije pokretanja `DELETE /api/v1/account` ne poziva init ni drugi API dok ne dobije 204, a 401
+  na ponovljen DELETE tumači kao završeno brisanje (Auth nalog ne postoji). Na 409 `REAUTHENTICATION_REQUIRED` traži ponovnu prijavu.
 
 ## 7. Poznata ograničenja (sažetak)
 
@@ -270,30 +296,45 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - i06: `firebase emulators:exec` ostavlja Java proces emulatora na portu 8080 kad je na PATH-u Oracle `javapath` (poznato od i01,
   `provjera.ps1` to rješava); za `test:emu:ciljano` i ručne run-ove pravi JDK mora biti prvi na PATH-u (README).
 
+- i07/P-1: prozor između K4b (`users` obrisan) i K6 (Auth obrisan): init sa još važećim token-om tog korisnika može ponovo napraviti
+  `users` / `loyaltyAccounts`; ako K6 zatim uspije, ostaju dokumenti bez Auth naloga. Prozor je jedan Auth RPC; ublažava ga (v).
+- i07/P-2: budući `auth_time` (razlika satova) je dozvoljen; Admin SDK provjerava `iat` / `exp`, ne `auth_time`. Emulator ne izdaje
+  token sa starim `auth_time` koji prolazi `checkRevoked`, pa se svježina testira mock-om sata modula `svjezinaPrijave.js`.
+- i07/P-4: K3 je jedna transakcija bez gornje granice broja ACTIVE voucher-a (kao i05/P-8).
+- i07/P-5: poslije pseudonimizacije isti POS payload sa drugim `loyaltyUid` → 200 prvi rezultat, bez EARN-a (O-10a; README).
+- i07/P-6: §20.2 / O-16 „isti rezultat” prestaje kad §23.2 obriše mapping (retry → 409 / 404).
+- i07/P-8: ponovljen DELETE poslije uspješnog K6 → 401 (i kad je 503 nastao poslije commit-a K6).
+- i07: emulator ne provjerava granicu od 500 upisa po paketu; ≤ 400 se dokazuje brojanjem operacija u omotaču (I07-T06 (c)).
+- i07: veliki nalog — rok 10 s ograničava broj dokumenata po zahtjevu (→ 503, nastavak bezbjedan); produkcija neprovjerljiva.
+- i07: rijetka prolazna 401 na zahtjevu sa svježim token-om pod opterećenjem emulatora (uočeno jednom, I06-T19 (c), OD-3 i07; ponovljen run zelen).
+
 ## 8. Backlog
 
 | Oznaka | Prioritet | Opis | Ulazi u |
 |---|---|---|---|
 | F1-01 (i03_review_fix1) | P3 | `docs/TEST_REPORT.md` (linije ~1774, 1776, 1783): putanja `firebase\tests` upisana sa `\t` kao tabulatorom („`firebase<TAB>ests`”) | ZATVORENO u i04 (dokumentacioni korak; `git grep -n -P "firebase\tests" -- docs` prazno) |
 | B-2 (i04 review R-03, O-17) | P3 | Kontencija `tx.get(query)` nad `vouchers` između različitih korisnika u emulatoru; ako se pokaže u demu, razmotriti opciju B (upit van transakcije + `tx.getAll` kandidata i ponovna provjera u transakciji) uz novu odluku | i09 |
-| B-1 (i04/P-9) | P3 | `loyaltyUid` (API-02) sa NUL ili kontrolnim znakom prolazi provjeru formata i ide do Firestore-a (u emulatoru 404 iz transakcije; produkcija neprovjerljiva) | odluka prije i08 |
+| B-1 (i04/P-9) | P3 | `loyaltyUid` (API-02) sa NUL ili kontrolnim znakom prolazi provjeru formata i ide do Firestore-a (u emulatoru 404 iz transakcije; produkcija neprovjerljiva). ODLUKA (Ana, 2026-10-19): zabrana `\p{Cc}` (kao i04/P-9) → 404 `LOYALTY_ACCOUNT_NOT_FOUND` bez pristupa bazi | i08 |
 | R-02 (i05 review, NOTE) | P4 | Retry cancel-a nad CANCELLED / EXPIRED ne provjerava postojanje `release_{voucherId}` (po odluci i05/P-4); svjesna granica detekcije nekonzistentnog stanja, veza sa §6 (r) | bez roka |
 | R-03 (i05 review, NOTE) | P4 | Redakcija hex-a u logu ne-gRPC poruka ostavlja prefiks < 32 znaka (npr. hex razdvojen crticom); nedostižno u kodu i05 (statičke poruke, I05-T02); ostaje poznato ograničenje R-12 | bez roka |
 | R-04 (i05 review, NOTE) | P4 | 503 pod kontencijom istog naloga (paralelni cancel, cancel × API-06, cancel × issue); dozvoljeno po §27, stanje konzistentno, retry bezbjedan; Android (i09/i10) treba ponoviti poziv na 503 | bez roka |
 | R-05 (i05 review, NOTE) | P4 | 409 grana pri konkurentnom početku brisanja naloga za vrijeme cancel transakcije nije dostižna testom u emulatoru (brava, kao OD-2); obaveza §6 (o) ostaje za i07 | bez roka |
+| R-02 (i06 review, NOTE) | P4 | i06 OD-3: kod API-04 napisan prije prvog crvenog run-a; za i07+ i07/K-3 (crveni run se bilježi prije koda) | bez roka |
+| R-03 (i06 review, NOTE) | P4 | DoD `git grep "release_"` doslovno vraća i komentare; u briefovima formulisati „kod (bez komentara)” | bez roka |
+| R-04 (i06 review, NOTE) | P4 | Ishod slobodne trke redeem × cancel u emulatoru je pristrasan (cancel pobjeđuje); invarijanta važi, grana „redeem pobjeđuje” deterministički pokrivena (I06-T18 (b)) | bez roka |
 | R-06, R-07 (i05 review, NOTE) | P4 | Kozmetika TEST_REPORT / OD-6 (a) tačnost opisa: netačno obrazloženje da klijentski URL parser normalizuje `..` (R-06); isti opis za obje varijante mutacija u tabeli TEST_REPORT-a (R-07) | bez roka |
 
 ## 9. Otvorena pitanja
 
 | ID | Pitanje | Odlučiti prije |
 |---|---|---|
-| O-2 | Demo nad emulatorom ili nad stvarnim Firebase Spark projektom (§3.5, §3.6); uz to i02/R-03. | i09 |
+| O-2 | ZATVORENO 2026-10-19 (Ana, brief i07 tačka 10): i09–i10 nad emulatorom, pravi Spark projekat u i11 (uz i02/R-03) — vidi §2. | i09 |
 | O-5 | ZATVORENO 2026-10-18 (Ana, brief i05): kao §20.5 (EXPIRED + RELEASE, pa 409 `VOUCHER_EXPIRED`) — vidi §2. | i05 |
 | O-6 | ZATVORENO 2026-10-18 (Ana, brief i05): 403 `FORBIDDEN` za tuđi, 404 `VOUCHER_NOT_FOUND` za nepostojeći — vidi §2. | i05 |
 | O-7 | ZATVORENO 2026-10-19 (Ana, brief i06): 409 `VOUCHER_CANCELLED` / `VOUCHER_EXPIRED`, status prije roka — vidi §2. | i06 |
 | O-8 | ZATVORENO 2026-10-19 (Ana, brief i06): zapis samo pri uspjehu; `requestKey` = SHA-256(`stationId:redemptionRequestId`) — vidi §2. | i06 |
-| O-9 | U koje stanje se zatvaraju ACTIVE voucher-i pri brisanju naloga i da li se piše `REWARD_RELEASE`. | i07 |
-| O-10a | Retry kupovine poslije pseudonimizacije (`uid = null`) — vidi ograničenje (d). | i07 |
+| O-9 | ZATVORENO 2026-10-19 (Ana, brief i07): CANCELLED (istekao EXPIRED, O-34) + `REWARD_RELEASE`, pa brisanje — vidi §2. | i07 |
+| O-10a | ZATVORENO 2026-10-19 (Ana, brief i07): `uid = null` se ne poredi — vidi §2. | i07 |
 
 ## 10. Konvencije toka rada
 
@@ -311,5 +352,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - O-30 (i06, i07, i08 — BRZI REŽIM): `provjera.ps1` tačno 2× po Builder sesiji (poslije koraka koji dira zajednički kod prethodnih
   iteracija i na kraju prije PR-a), između koraka `npm test` + ciljani emulator run; samo ključni skup mutacija iz odobrenja plana;
   sažeta dokumentacija; Builder staje samo na blokerima; Reviewer 60–90 min, `provjera.ps1` 1×, bez ponavljanja Builder-ovih mutacija.
+- O-31 (od Reviewer-a i06 do i11 — EKSPRESNI REŽIM, uz O-30): (a) Reviewer ne ponavlja `provjera.ps1` ako TEST_REPORT ima završni run
+  na kodu X i `git diff X..<vrh PR-a>` sadrži samo `docs/*.md` i `README.md`; napadi kroz `test:emu:ciljano`; okvir 30–45 min (max 60);
+  (b) checkpoint: merge, pa `git diff <vrh PR-a> main` mora biti prazno (umjesto dva `provjera.ps1`), pa anotirani tag; (c) mutacije:
+  i07 ~10 ključnih, i08 ~5, Android iteracije bez mutacija; (d) smoke u i09 i i10 samo na API 35; puni NFR-09 (API 26 i API 35) u i11.
 - Commit-i bez potpisa alata. Checkpoint: `provjera.ps1` → `gh pr merge N --merge` → `provjera.ps1` na main →
   `git tag -a iNN -m "…"` → `git push origin iNN`.
