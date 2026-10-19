@@ -101,7 +101,7 @@ try {
         }
     }
 
-    Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init bez token-a, 401 UNAUTHENTICATED_POS na /pos/purchases bez ključa, 401 UNAUTHENTICATED na /rewards/CAR_WASH/issue bez token-a)' {
+    Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init bez token-a, 401 UNAUTHENTICATED_POS na /pos/purchases bez ključa, 401 UNAUTHENTICATED na /rewards/CAR_WASH/issue bez token-a, 401 UNAUTHENTICATED na /vouchers/{voucherId}/cancel i /account/vouchers/reconcile bez token-a)' {
         $env:PORT = $portSmoke
         $env:FIREBASE_PROJECT_ID = 'demo-fuelpoints'
         $env:VERZIJA_USLOVA = '1.0'
@@ -174,6 +174,22 @@ try {
             $greska = ($odgovor.tijelo | ConvertFrom-Json).error
             if ($greska.code -ne 'UNAUTHENTICATED') { throw "Očekivan kod UNAUTHENTICATED, dobijen $($greska.code)." }
             Write-Host "Smoke: 401 $($greska.code), correlationId $($greska.correlationId)"
+
+            # API-05 i API-06 bez Authorization zaglavlja i bez tijela (I05-T20, plan 11.2): rute postoje u produkcionom startu i traže token.
+            foreach ($putanjaSmoke in @("/api/v1/vouchers/$('0' * 64)/cancel", '/api/v1/account/vouchers/reconcile')) {
+                $odgovor = $null
+                try {
+                    Invoke-WebRequest "http://127.0.0.1:$portSmoke$putanjaSmoke" -Method Post -UseBasicParsing | Out-Null
+                    throw 'Očekivan je status 401, a zahtjev je uspio.'
+                } catch [System.Net.WebException] {
+                    if ($null -eq $_.Exception.Response) { throw "Server nije odgovorio na POST $putanjaSmoke." }
+                    $odgovor = @{ status = [int]$_.Exception.Response.StatusCode; tijelo = $_.ErrorDetails.Message }
+                }
+                if ($odgovor.status -ne 401) { throw "Očekivan status 401, dobijen $($odgovor.status)." }
+                $greska = ($odgovor.tijelo | ConvertFrom-Json).error
+                if ($greska.code -ne 'UNAUTHENTICATED') { throw "Očekivan kod UNAUTHENTICATED, dobijen $($greska.code)." }
+                Write-Host "Smoke: 401 $($greska.code), correlationId $($greska.correlationId)"
+            }
         } finally {
             Stop-Process -Id $proces.Id -Force -ErrorAction SilentlyContinue
         }

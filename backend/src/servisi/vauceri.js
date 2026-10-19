@@ -1,8 +1,32 @@
 // Default import: crypto.randomBytes se poziva kao svojstvo modula (i04/P-3).
 import crypto from 'node:crypto';
+import { Timestamp } from 'firebase-admin/firestore';
 
 // §17: voucher važi tačno 15 minuta od izdavanja.
 export const TRAJANJE_VAUCERA_MS = 900_000;
+
+// ODLUKE §6 (k): oblik voucherId-a (generisiVoucherId), bez zastavica (JS $ bez m ne prihvata završni prelom reda).
+export const FORMAT_VOUCHER_ID = /^[0-9a-f]{64}$/;
+
+// §15: enum statusa voucher-a.
+export const STATUSI_VAUCERA = new Set(['ACTIVE', 'REDEEMED', 'EXPIRED', 'CANCELLED']);
+
+export function jeNenegativanCijeliBroj(vrijednost) {
+  return Number.isSafeInteger(vrijednost) && vrijednost >= 0;
+}
+
+export function jePozitivanCijeliBroj(vrijednost) {
+  return Number.isSafeInteger(vrijednost) && vrijednost >= 1;
+}
+
+export function jeIspravanSacuvaniVaucer(vaucer) {
+  return (
+    jePozitivanCijeliBroj(vaucer.costPoints) &&
+    STATUSI_VAUCERA.has(vaucer.status) &&
+    vaucer.issuedAt instanceof Timestamp &&
+    vaucer.expiresAt instanceof Timestamp
+  );
+}
 
 // §15, i04/P-3: opaque voucherId iz CSPRNG-a, 32 bajta (256 bita) → 64 hex znaka malim slovima.
 // Nije izveden iz requestId-a, uid-a ni vremena; ispravan Firestore doc ID i bezbjedan segment putanje.

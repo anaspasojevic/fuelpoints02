@@ -100,6 +100,15 @@ test('I04-T03 (c) D-5: neispravno percent-kodiran rewardId na produkcionoj ruti 
   ]);
 });
 
+test('I04-T03 (c) D-5 (proširenje ulaza, i05): neispravno percent-kodiran voucherId na ruti API-05 → 404 NOT_FOUND, log bez stack-a i sirove vrijednosti', async () => {
+  await provjeriD5(napraviAplikaciju(), [
+    ['post', '/api/v1/vouchers/%E0%A4%A/cancel'],
+    ['get', '/api/v1/vouchers/%E0%A4%A/cancel'],
+    ['post', '/api/v1/vouchers/%ZZ/cancel'],
+    ['post', `/api/v1/vouchers/${SENTINEL}%E0/cancel`],
+  ]);
+});
+
 test('I04-T03 (c) D-5: neispravan JSON uz neispravno kodiran rewardId produkcione rute → 422 INVALID_REQUEST (i04/P-8)', async () => {
   presretniLog();
   const odgovor = await request(napraviAplikaciju())
