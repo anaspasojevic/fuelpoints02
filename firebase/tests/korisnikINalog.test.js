@@ -110,9 +110,10 @@ function bazaNeautentifikovanog() {
 }
 
 describe('RULE-T01 … RULE-T05 users/{uid}', () => {
-  test('RULE-T01 neautentifikovan read users/{uid} → DENY', async () => {
+  test('RULE-T01 neautentifikovan read users/{uid} (get i list) → DENY', async () => {
     await pripremiVlasnika();
     await ocekujZabranu(getDoc(doc(bazaNeautentifikovanog(), `users/${VLASNIK}`)), 'unauthenticated get users/korisnikA');
+    await ocekujZabranu(getDocs(collection(bazaNeautentifikovanog(), 'users')), 'unauthenticated list users');
   });
 
   test('RULE-T02 owner read sopstvenog profila → ALLOW', async () => {
@@ -136,6 +137,22 @@ describe('RULE-T01 … RULE-T05 users/{uid}', () => {
         `vlasnik update displayName dužine ${ime.length}`,
       );
     }
+  });
+
+  test('RULE-T04 granice: displayName 0 / 101 / nije string, updatedAt ≠ request.time, bez updatedAt → DENY', async () => {
+    await pripremiVlasnika();
+    const referenca = doc(bazaVlasnika(), `users/${VLASNIK}`);
+    for (const ime of ['', 'y'.repeat(101), 5]) {
+      await ocekujZabranu(
+        updateDoc(referenca, { displayName: ime, updatedAt: serverTimestamp() }),
+        `vlasnik update displayName ${JSON.stringify(ime).slice(0, 20)}`,
+      );
+    }
+    await ocekujZabranu(
+      updateDoc(referenca, { displayName: 'Novo', updatedAt: Timestamp.now() }),
+      'vlasnik update sa klijentskim updatedAt',
+    );
+    await ocekujZabranu(updateDoc(referenca, { displayName: 'Novo' }), 'vlasnik update displayName bez updatedAt');
   });
 
   test('RULE-T05 update koji dodaje ili mijenja server/unknown polje → DENY', async () => {

@@ -175,6 +175,20 @@ describe('RULE-T08 purchases', () => {
       await ocekujZabranu(deleteDoc(doc(db, 'purchases/SIM01__A1')), `${naziv}: delete purchases/SIM01__A1`);
     }
   });
+
+  test('RULE-T08 granice upita: limit 20 ALLOW; limit 21, bez limit-a, bez where uid, tuđi uid → DENY', async () => {
+    await pripremiKupovine();
+    const kupovine = collection(bazaVlasnika(), 'purchases');
+    const rezultat = await ocekujDozvolu(
+      getDocs(query(kupovine, where('uid', '==', VLASNIK), limit(20))),
+      'vlasnik list purchases where uid == A limit 20',
+    );
+    assert.deepStrictEqual(rezultat.docs.map((d) => d.id).sort(), ['SIM01__A1', 'SIM01__A2']);
+    await ocekujZabranu(getDocs(query(kupovine, where('uid', '==', VLASNIK), limit(21))), 'where uid == A limit 21');
+    await ocekujZabranu(getDocs(query(kupovine, where('uid', '==', VLASNIK))), 'where uid == A bez limit-a');
+    await ocekujZabranu(getDocs(query(kupovine, limit(20))), 'bez where, limit 20');
+    await ocekujZabranu(getDocs(query(kupovine, where('uid', '==', DRUGI), limit(20))), 'where uid == B limit 20');
+  });
 });
 
 describe('RULE-T10 notifications', () => {
@@ -196,6 +210,26 @@ describe('RULE-T10 notifications', () => {
     // I uz inače ispravan readAt (null → request.time): title i body ne smiju biti dio izmjene.
     await ocekujZabranu(updateDoc(referenca, { readAt: serverTimestamp(), title: 'x' }), 'vlasnik update readAt + title');
     await ocekujZabranu(updateDoc(referenca, { readAt: serverTimestamp(), body: 'x' }), 'vlasnik update readAt + body');
+  });
+
+  test('RULE-T10 list limit 50 / 51 i granice readAt', async () => {
+    await pripremiNotifikacije();
+    const db = bazaVlasnika();
+    const obavjestenja = collection(db, 'notifications');
+    const rezultat = await ocekujDozvolu(
+      getDocs(query(obavjestenja, where('uid', '==', VLASNIK), limit(50))),
+      'vlasnik list where uid == A limit 50',
+    );
+    assert.deepStrictEqual(rezultat.docs.map((d) => d.id).sort(), ['earn_SIM01__A1', 'earn_SIM01__A2']);
+    await ocekujZabranu(getDocs(query(obavjestenja, where('uid', '==', VLASNIK), limit(51))), 'limit 51');
+    await ocekujZabranu(getDocs(query(obavjestenja, where('uid', '==', VLASNIK))), 'bez limit-a');
+    await ocekujZabranu(getDocs(query(obavjestenja, limit(50))), 'bez where');
+
+    const nova = doc(db, 'notifications/earn_SIM01__A2');
+    await ocekujZabranu(updateDoc(nova, { readAt: Timestamp.now() }), 'readAt klijentsko vrijeme (≠ request.time)');
+    await ocekujZabranu(updateDoc(nova, { readAt: null }), 'readAt null → null');
+    await ocekujDozvolu(updateDoc(nova, { readAt: serverTimestamp() }), 'prvi update readAt null → request.time');
+    await ocekujZabranu(updateDoc(nova, { readAt: serverTimestamp() }), 'drugi update readAt (već postavljen)');
   });
 });
 
