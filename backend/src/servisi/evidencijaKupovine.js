@@ -54,9 +54,10 @@ export async function evidentirajKupovinu(db, ulaz, rokDo) {
         if (postojeca.stationId !== stationId || postojeca.posTransactionId !== posTransactionId) {
           throw new Error('Purchase dokument ne odgovara svom ID-u.');
         }
-        // §10.3; occurredAt nije dio poređenja (O-3).
+        // §10.3; occurredAt nije dio poređenja (O-3). O-10a: poslije pseudonimizacije (§23.3, uid === null) uid se ne poredi.
+        const uidSePoredi = postojeca.uid !== null;
         if (
-          postojeca.uid !== loyaltyUid ||
+          (uidSePoredi && postojeca.uid !== loyaltyUid) ||
           postojeca.volumeMl !== volumeMl ||
           postojeca.amountMinor !== amountMinor ||
           postojeca.currency !== currency
