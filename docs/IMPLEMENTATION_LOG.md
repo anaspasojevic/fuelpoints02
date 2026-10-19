@@ -1064,3 +1064,88 @@ voucher-a.
   konzistentno, nijedan 500, retry bezbjedan (B-2 ostaje otvoren).
 - Ostala ograničenja iz i01–i04 (nepotpisani emulator token-i, `MetadataLookupWarning`, `npm warn install-scripts`, Gradle daemon, N-02, N-11)
   i dalje važe.
+
+
+## Iteracija 6 — Voucher redeem (API-04)
+
+Grana `iteracija-06`. Brief: `docs/iteracije/i06_brief.md`. Plan: `docs/iteracije/i06_plan.md` (odobren uz i06/P-1 … P-9, K-1, K-3, K-5 i
+O-30 — BRZI REŽIM, sekcija 14). Uloga: BUILDER, 2026-10-19. Unos je sažet po O-30 (d).
+
+### CHANGELOG
+
+- **`test:emu:ciljano` (O-29 (c), i06/P-8):** `backend/skripte/testEmuCiljano.js` + skript u `package.json` — isti `emulators:exec` kao `test:emu`,
+  samo zadati `test/emulator/*.test.js` fajlovi i opcioni `--test-name-pattern`; bijela lista argumenata (I06-T01). `test:emu` nepromijenjen.
+- **O-27 (O-23, §6 (t)):** `jeKonzistentnoStanjeVaucera` u `servisi/vauceri.js` — jedina definicija konzistentnog voucher-a; koriste je cancel
+  (zamjenjuje `jeIspravanSacuvaniVaucer || rewardId` i zasebnu CANCELLED/`cancelledAt` provjeru), `procitajIstekleAktivne` (API-03 reconcile,
+  API-06), O-16 retry API-03 (i06/P-1) i redeem. Promjena ponašanja samo za nedostižno nekonzistentno stanje (→ 500, ništa upisano); nijedan
+  postojeći test i01–i05 nije mijenjan (`git diff i05 -- backend/test` = novi fajlovi + `omotacBaze.js`).
+- **Rules (D-2):** blok `match /redemptionRequests/{requestKey} { allow read, write: if false; }` doslovno iz §31.
+- **API-04:** `validacija/zahtjevOtkupa.js` (strogo tijelo `{ redemptionRequestId }`, §20.1); `servisi/otkupVaucera.js` (`otkupiVaucer`: rok →
+  JEDNA transakcija: zapis O-24 (i06/P-3) → postoji → O-27 → O-7 / §20.4 → nalog (O-25) → `redeem_`/`release_` (O-28, i06/P-5) → §20.5 kroz
+  `oslobadjanjeVaucera.js` ili otkup; upisi voucher → `redeem_` (`tx.create`) → nalog → zapis (`tx.create`)); `rute/otkupVaucera.js` (POS posrednik
+  samo na ruti); `aplikacija.js`. `izracunajRequestKey(prviDio, drugiDio)` (samo imena/komentar), `refRelease` izvezen samo za čitanje. Smoke red u
+  `provjera.ps1` (i06/P-2). Odgovor po i06/P-6.
+- **Testovi:** jedinični I06-T01, I06-T02, I06-T06, I06-T07; emulator API-T08 … API-T10, I06-T03 … I06-T05, I06-T08 … I06-T21; Rules I06-T22.
+  Test-only: `omotacBaze.prijePokusaja` (i06/P-7), novi pomoćnik `test/pomocnici/pripremaVaucera.js`.
+
+### Commit-i
+
+| Commit | Korak |
+|---|---|
+| `79b9c55` i06: odobrenje plana i odluke Orchestrator-a | 0 |
+| `762587a` i06: test:emu:ciljano (O-29 (c)) | 1 |
+| `194928f` i06: zajednička provjera stanja voucher-a (O-27) | 2 (+ `provjera.ps1` #1) |
+| `add4ae4` i06: Rules blok redemptionRequests i validacija zahtjeva otkupa (§31, §20.1, O-8 (b)) | 3 (K-3) |
+| `c1b9ba0` i06: API-04 redeem (§20, O-24 … O-28) | 4 |
+| `8c232be` i06: atomičnost, konkurentnost i log otkupa (NFR-04 … NFR-06, §6 (h)) | 5 (K-3) |
+| (bez commit-a) kontrolne mutacije, O-30 (b) | 6 |
+| dokumentacija (ovaj unos) | 7 |
+
+### Odstupanja (OD-n, bez promjene ponašanja)
+
+- **OD-1** — Novi test pomoćnik `backend/test/pomocnici/pripremaVaucera.js` (priprema kanonskih dokumenata, §27 tijelo, `mockSataFajla`), umjesto
+  lokalnih pomoćnika u svakom od četiri nova emulator fajla; plan (sekcija 4) ga ne navodi. Postojeći fajlovi netaknuti.
+- **OD-2** — `refRelease` export i preimenovanje parametara `izracunajRequestKey` ušli su u commit koraka 2 (plan: koraci 4/5); ponašanje isto.
+- **OD-3** — Redoslijed „test prije koda”: servis i ruta API-04 napisani su dok je trajao `provjera.ps1` #1 (da se ne dira kod koji suite učitava);
+  crveni run je ipak izvršen prije commit-a, na stablu bez uvezane rute: `otkupVaucera.test.js` 12/13 pada. I06-T22 ne može biti crven (default
+  deny već pokriva kolekciju, RULE-T12); obara ga M41.
+- **OD-4** — Ručni i ciljani emulator run-ovi traže pravi JDK prvi na PATH-u: sa Oracle `javapath` posrednikom `emulators:exec` ostavlja Java proces
+  na portu 8080 (poznato od i01; `provjera.ps1` to već radi). Prvi ručni run je ostavio takav proces (moj, ugašen); upisano u README i ODLUKE §7.
+- **OD-5** — I06-T19 (e) 10 ponavljanja (plan: 5), po O-30 (c) „ostali dijelovi po 10”.
+- **OD-6** — Provjera lanca `availableAfter`/`reservedAfter` u I06-T19/T20 reda događaje po `createdAt` (jedan serverTimestamp po transakciji), a
+  unutar transakcije po stanju. Prva verzija (samo po stanju) je u jednom run-u I06-T20 prijavila prekid kod ponovljenog stanja (80, 130) — lažan
+  nalaz pomoćnika (isto stanje posjećeno dva puta), ne koda; poslije ispravke pomoćnika I06-T20 zelen u svim run-ovima.
+- **OD-7** — Ispravke testova tokom razvoja (samo test kod, kod nepromijenjen): isti `redemptionRequestId` u više slučajeva jednog testa davao je
+  ispravan 409 `IDEMPOTENCY_CONFLICT` (O-24) umjesto očekivanog ishoda (I06-T14 (d) kontrola, I06-T15, I06-T18, I06-T21 ishod 5) → svaki slučaj
+  dobija sopstveni ID ili praznu bazu; I06-T09 „bez posStanice” je zbog podrazumijevanog parametra slao mapu → aplikacija se pravi direktno.
+- **OD-8** — I06-T21 (a) provjerava odsustvo balance-a u logu po nazivima polja (`availablePoints`, `reservedPoints`); same vrijednosti (30, 50)
+  se ne mogu razlikovati od drugih brojeva u logu (status, trajanje).
+- **OD-9** — Uz M20 izvršena je i M20b (plan je navodi u istom redu). Mutacije su primjenjivane skriptom van repoa (scratchpad), svaka se vraća
+  originalnim bajtovima fajla (ekvivalent `git restore`); `git status` poslije: samo necommit-ovana dokumentacija.
+
+### Ispravka (i06) — R-06 iz review-a i05
+
+U unosu i05 (OD-6 (a)) i u TEST_REPORT i05 piše da je `..` izbačen iz HTTP liste I05-T03 (b) jer ga klijentski URL parser normalizuje. To je
+netačno: supertest/superagent NE normalizuje `..` — `/api/v1/vouchers/../cancel` stiže do rute i daje `404 VOUCHER_NOT_FOUND` bez pristupa bazi
+(review i05, N8). Pokrivenost nije bila umanjena (jedinični `provjeriVoucherId('..')`). U i06 I06-T08 šalje `%2E%2E` kao segment → 404
+`VOUCHER_NOT_FOUND`, `brojPristupa 0`. Postojeći tekst i05 se ne prepisuje.
+
+### Status pitanja i06/P-n
+
+P-1 … P-9 riješeni po sekciji 14 plana (P-1 A, P-2 A, P-3 A, P-4 README + §7, P-5, P-6 ugovor, P-7 `prijePokusaja`, P-8 skripta, P-9 ograničenje (u)).
+K-1: M45 izvršena kao D 1/1 nad I06-T18 (TEST_REPORT). K-3: koraci spojeni. K-5: nijedan 500 pod kontencijom (raspodjela u TEST_REPORT).
+
+### Ograničenja za i07+
+
+- **(u)** brisanje naloga uklanja voucher-e i `redemptionRequests` (§23.2); retry otkupa nad zapisom bez voucher-a → 500 (O-24); i07 određuje
+  redoslijed brisanja.
+- (o) ostaje: test konkurentnog brisanja naloga za vrijeme transakcija (sada i redeem: nalog se čita u transakciji samo za ACTIVE).
+- (r) važi i za redeem: ako brisanje zatvara ACTIVE voucher-e, mora kroz isti mehanizam release-a.
+
+### Poznata ograničenja
+
+- O-8 (a): ID neuspješnog pokušaja otkupa može se kasnije upotrijebiti za drugi voucher (README).
+- i06/P-4: dupli ključ u JSON tijelu → posljednja vrijednost (`JSON.parse`).
+- `redeemedAt` po satu Backend-a, ledger i zapis `createdAt` po Firestore-u.
+- 503 pod kontencijom istog voucher-a/naloga je moguć (I06-T19 raspodjela); stanje konzistentno, retry bezbjedan. Ponašanje utvrđeno nad emulatorom.
+- `prijePokusaja` zavisi od toga da Admin SDK poništi pokušaj prije ponavljanja; kontrola u I06-T18 bi pala glasno.

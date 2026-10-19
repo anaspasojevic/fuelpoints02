@@ -18,8 +18,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i02 Account lifecycle + auth boundary | ITERATION ACCEPTED | tag `i02` (merge `700b155`) |
 | i03 Purchase / EARN | ITERATION ACCEPTED | tag `i03` (merge `43e604a`, PR #3) |
 | i04 Reward issue | ITERATION ACCEPTED (re-review 2, poslije FIX LOOP-a 2) | tag `i04` (merge `d445fe8`, PR #4) |
-| i05 Voucher cancel i account reconcile | ITERATION ACCEPTED (re-review nije bio potreban), čeka merge i tag | grana `iteracija-05` (PR → main, bez merge-a i taga) |
-| i06 – i11 | nije počelo | — |
+| i05 Voucher cancel i account reconcile | ITERATION ACCEPTED (re-review nije bio potreban) | tag `i05` (merge `5a2f8cc`, PR #5) |
+| i06 Voucher redeem (API-04) | BUILDER ZAVRŠIO — čeka review | grana `iteracija-06` (PR → main, bez merge-a i taga) |
+| i07 – i11 | nije počelo | — |
 
 ## 2. Odluke Ane (O-n)
 
@@ -36,6 +37,10 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-15 | `requestId` (§13) je samo kanonski UUID v4 malim slovima; velika slova i svaki drugi oblik → 422 `INVALID_REQUEST`. Status: implementirano u i04 (`validacija/zahtjevIzdavanja.js`), I04-T02. | 2026-10-17, i04 | i04_brief |
 | O-16 | Reward issue: `rewardRequests` mapping se provjerava PRIJE preduslova §13.1 (analogno O-12); retry istog `(uid, requestId)` za isti reward vraća isti voucher i ništa ne upisuje, bez obzira na stanje naloga, nagrade, bodova i voucher-a; drugi reward → 409 `IDEMPOTENCY_CONFLICT`. Status: implementirano u i04, I04-T07, I04-T08. | 2026-10-17, i04 | i04_brief |
 | O-5 | Cancel voucher-a koji je u bazi ACTIVE, a `serverTime ≥ expiresAt`, tretira se kao §20.5: u ISTOJ transakciji ACTIVE → EXPIRED, `reservedPoints −= cost`, `availablePoints += cost`, `REWARD_RELEASE`; poslije commit-a 409 `VOUCHER_EXPIRED`. Ishod nikad nije CANCELLED za voucher kome je istekao rok. Status: implementirano u i05 (`servisi/otkazivanjeVaucera.js`), I05-T07, I05-T12 (b), AC-08. | 2026-10-18, i05 | i05_brief |
+| O-7 | Redeem CANCELLED voucher-a → 409 `VOUCHER_CANCELLED`; redeem EXPIRED voucher-a (status) → 409 `VOUCHER_EXPIRED`; ništa se ne upisuje. Status u bazi ima prednost nad rokom. Status: implementirano u i06 (`servisi/otkupVaucera.js`), I06-T11. | 2026-10-19, i06 | i06_brief |
+| O-8 | (a) `redemptionRequests` zapis SAMO pri uspješnom otkupu (`resultStatus: "REDEEMED"`); neuspjeh ne pravi zapis; invarijanta #zapisa = #REWARD_REDEEM = #REDEEMED; posljedica: ID neuspješnog pokušaja može se kasnije upotrijebiti za drugi voucher (README). (b) `requestKey` = SHA-256 nad UTF-8 `stationId:redemptionRequestId`, hex malim slovima (`izracunajRequestKey`). Status: implementirano u i06, API-T08 … API-T10, I06-T06, I06-T13 (b). | 2026-10-19, i06 | i06_brief |
+| O-29 | Skraćenje trajanja iteracija (od i06): sleep isključen tokom dugih run-ova, prekinut run se ponavlja; mutacije D 1/1, K n/10; `npm run test:emu:ciljano` (backend) za razvoj i mutacije; vremenski okviri uloga; sažet TEST_REPORT. Vidi §10. | 2026-10-19, i06 | i06_brief |
+| O-30 | BRZI REŽIM za i06, i07 i i08 (ima prednost nad i03/K-2, O-29 (b) i planom): `provjera.ps1` tačno 2× po Builder sesiji; ključni skup mutacija; smanjena ponavljanja; sažeta dokumentacija; Reviewer 60–90 min. Vidi §10. | 2026-10-19, i06 | i06_plan (sekcija 14) |
 | O-6 | Voucher postoji, ali pripada drugom korisniku → 403 `FORBIDDEN`, ništa upisano ni otkriveno u tijelu odgovora; voucher koji ne postoji → 404 `VOUCHER_NOT_FOUND`. Status: implementirano u i05, I05-T05. | 2026-10-18, i05 | i05_brief |
 
 ## 3. Odluke Orchestrator-a (D-n)
@@ -55,6 +60,12 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-21 (Orchestrator, brief i05) | Politika tijela za endpoint-e bez business input-a: bez tijela i `{}` su ispravni; svako drugo tijelo → 422 `INVALID_REQUEST`; neispravan JSON → 422 i bez token-a. Tačno pravilo: i05/P-2. Status: implementirano (`validacija/zahtjevVaucera.js`), I05-T03. | i05 brief |
 | O-22 (Orchestrator, brief i05) | `voucherId` iz putanje: `^[0-9a-f]{64}$`; neispravan → 404 `VOUCHER_NOT_FOUND` bez pristupa Firestore-u; neispravno percent-kodiran → D-5 (404 `NOT_FOUND`); vrijednost nikad u log ni u odgovor greške. Status: implementirano (`validacija/zahtjevVaucera.js`, `FORMAT_VOUCHER_ID` u `servisi/vauceri.js`), I05-T03, I05-T20. | i05 brief |
 | O-23 (Orchestrator, i05 review R-01) | R-01 (MINOR): ACTIVE voucher sa već popunjenim `redeemedAt`, `redeemedAtStationId` ili `cancelledAt` se na cancel-u ipak otkazuje (200) i postojeći `cancelledAt` se prepisuje. Kroz API nije dostižno i ne vodi u double-refund. Odluka: u i05 se NE mijenja kod (i05 ostaje ITERATION ACCEPTED). Obaveza za i06: kad redeem počne pisati `redeemedAt` / `redeemedAtStationId`, redeem i cancel moraju koristiti zajedničku provjeru stanja ACTIVE voucher-a (voucher sa `redeemedAt`, `redeemedAtStationId` ili `cancelledAt` ne smije se otkazati ni otkupiti), uz test koji obara mutaciju bez te provjere (§6 (t)). | i05 review |
+| O-24 (Orchestrator, brief i06) | Redeem: `redemptionRequests/{requestKey}` se provjerava PRIJE stanja voucher-a (§20.2); isti voucher → 200 isto tijelo iz sačuvanog voucher-a, ništa upisano, bez obzira na nalog i rok; drugi voucher → 409 `IDEMPOTENCY_CONFLICT`; nekonzistentan zapis → 500. Status: implementirano u i06, API-T09, I06-T12, I06-T13 (a). | i06 brief |
+| O-25 (Orchestrator, brief i06) | Redeem: REDEEMED / CANCELLED / EXPIRED → 409 voucher koda PRIJE naloga; nalog (uid iz voucher-a) tek za ACTIVE (409 / 409 / 500, ništa upisano, ni §20.5 release). Status: implementirano u i06, I06-T12. | i06 brief |
+| O-26 (Orchestrator, brief i06) | Redeem reconcile-uje SAMO voucher iz putanje (§20.5); bez `tx.get(query)`. Status: implementirano u i06, I06-T18 (g). | i06 brief |
+| O-27 (Orchestrator, brief i06; izvršenje O-23) | JEDNA funkcija konzistentnosti stanja voucher-a `jeKonzistentnoStanjeVaucera` (`servisi/vauceri.js`, §15): ACTIVE / EXPIRED ⇒ `redeemedAt`, `redeemedAtStationId`, `cancelledAt` === null; REDEEMED ⇒ `redeemedAt` Timestamp, `redeemedAtStationId` neprazan string, `cancelledAt` null; CANCELLED ⇒ `cancelledAt` Timestamp, ostala dva null; polja moraju postojati. Koriste je redeem, cancel, `procitajIstekleAktivne` (API-03, API-06) i O-16 retry API-03 (i06/P-1). Nekonzistentno → 500, ništa upisano. Status: implementirano u i06, I06-T02 … I06-T05, I06-T14 (a). | i06 brief |
+| O-28 (Orchestrator, brief i06) | Ledger `loyaltyLedger/redeem_{voucherId}`, samo `tx.create`, uz eksplicitnu provjeru da ni `redeem_` ni `release_` ne postoje (→ 500); jedan modul piše `redeem_` (`servisi/otkupVaucera.js`). Upisi uspjeha: voucher → `redeem_` → loyaltyAccounts → zapis. Status: implementirano u i06, API-T08, I06-T14, I06-T15. | i06 brief |
+| i06/P-1 … P-9, K-1, K-3, K-5 (Orchestrator, odobrenje plana i06) | P-1 A: O-27 i u O-16 retry grani; P-2 A: u `provjera.ps1` samo novi smoke red (redeem bez ključa → 401); P-3 A: strukturna ispravnost zapisa (500) prije poređenja `voucherId`-a (409); P-4: dupli ključ u JSON tijelu → posljednji pobjeđuje (§7); P-5: provjera `redeem_`/`release_` prije grananja na istek; P-6 (Ana): ugovor odgovora API-04 = 200 `{ voucherId, rewardId, costPoints, status, issuedAt, expiresAt, redeemedAt, redeemedAtStationId }` iz sačuvanog voucher-a i za retry; P-7: `omotacBaze.prijePokusaja` (test-only); P-8: `backend/skripte/testEmuCiljano.js`; P-9: ograničenje (u). K-1: M45 je D (I06-T18 (c)); K-3: spajanje koraka; K-5: 500 pod kontencijom → Builder staje. Detalji: `docs/iteracije/i06_plan.md`, sekcija 14. | i06 plan |
 | D-5 | Neispravno percent-kodiran parametar putanje (Express 5 `URIError`, status 400) mora dati deterministički 4xx bez stack-a i bez sirove vrijednosti u logu i odgovoru; ispravka globalna. Kod predlaže Planner i04 (preporuka 404 `NOT_FOUND`). Status: implementirano u i04 — 404 `NOT_FOUND` u `odrediKod` (i04/P-8, K-1), I04-T03 (c), I04-T16. | i04 brief |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
@@ -195,7 +206,10 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   bez tijela (Retrofit `@POST` bez `@Body`) je ispravan zahtjev za API-05 i API-06.
 - **(t) i06 — OBAVEZA (O-23, i05 review R-01)** — kad redeem počne pisati `redeemedAt` / `redeemedAtStationId`, redeem i cancel moraju
   koristiti zajedničku provjeru stanja ACTIVE voucher-a: voucher sa `redeemedAt`, `redeemedAtStationId` ili `cancelledAt` ne smije se
-  otkazati ni otkupiti; uz test koji obara mutaciju bez te provjere. Status: otvorena, i06.
+  otkazati ni otkupiti; uz test koji obara mutaciju bez te provjere. ZATVORENO u i06 (O-27): `jeKonzistentnoStanjeVaucera` koriste redeem,
+  cancel, `procitajIstekleAktivne` i O-16 retry; mutacije M30, M31, M32 ubijene (TEST_REPORT i06).
+- **(u) i07 (i06/P-9)** — brisanje naloga uklanja voucher-e i `redemptionRequests` (§23.2); retry otkupa koji naiđe na zapis bez
+  voucher-a daje 500 (O-24); i07 određuje redoslijed brisanja (analogno (f), (m)).
 
 ## 7. Poznata ograničenja (sažetak)
 
@@ -247,6 +261,15 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - i05: brisanje voucher-a Admin SDK-om dok cancel drži transakciju čeka bravu u emulatoru, pa se stvarni gRPC NOT_FOUND iz cancel
   transakcije ne može izazvati testom (I05-T20 (b) pokriva ALREADY_EXISTS; NOT_FOUND nad `vouchers/<id>` pokriva I04-T20 (a)).
 
+- i06/P-4: tijelo API-04 sa dvostrukim ključem (`{"redemptionRequestId":"A","redemptionRequestId":"B"}`) prihvata se sa posljednjom
+  vrijednošću (`JSON.parse`); otkrivanje bi tražilo sopstveni parser.
+- i06 (O-8 (a)): `redemptionRequestId` neuspješnog pokušaja otkupa može se kasnije upotrijebiti za drugi voucher (zapis samo pri uspjehu).
+- i06: redeem `redeemedAt` po satu Backend-a, ledger `createdAt` i zapis `createdAt` po Firestore-u (kao i05/P-3).
+- i06: 503 pod kontencijom istog voucher-a / naloga (paralelni redeem, redeem × cancel, redeem × API-06 × issue) je moguć (TEST_REPORT i06,
+  raspodjela I06-T19); stanje konzistentno, retry istim `redemptionRequestId` bezbjedan.
+- i06: `firebase emulators:exec` ostavlja Java proces emulatora na portu 8080 kad je na PATH-u Oracle `javapath` (poznato od i01,
+  `provjera.ps1` to rješava); za `test:emu:ciljano` i ručne run-ove pravi JDK mora biti prvi na PATH-u (README).
+
 ## 8. Backlog
 
 | Oznaka | Prioritet | Opis | Ulazi u |
@@ -267,8 +290,8 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-2 | Demo nad emulatorom ili nad stvarnim Firebase Spark projektom (§3.5, §3.6); uz to i02/R-03. | i09 |
 | O-5 | ZATVORENO 2026-10-18 (Ana, brief i05): kao §20.5 (EXPIRED + RELEASE, pa 409 `VOUCHER_EXPIRED`) — vidi §2. | i05 |
 | O-6 | ZATVORENO 2026-10-18 (Ana, brief i05): 403 `FORBIDDEN` za tuđi, 404 `VOUCHER_NOT_FOUND` za nepostojeći — vidi §2. | i05 |
-| O-7 | Kada redeem vraća `VOUCHER_CANCELLED`. | i06 |
-| O-8 | `redemptionRequests` zapis i pri neuspjehu; `requestKey` SHA-256 kao §14? | i06 |
+| O-7 | ZATVORENO 2026-10-19 (Ana, brief i06): 409 `VOUCHER_CANCELLED` / `VOUCHER_EXPIRED`, status prije roka — vidi §2. | i06 |
+| O-8 | ZATVORENO 2026-10-19 (Ana, brief i06): zapis samo pri uspjehu; `requestKey` = SHA-256(`stationId:redemptionRequestId`) — vidi §2. | i06 |
 | O-9 | U koje stanje se zatvaraju ACTIVE voucher-i pri brisanju naloga i da li se piše `REWARD_RELEASE`. | i07 |
 | O-10a | Retry kupovine poslije pseudonimizacije (`uid = null`) — vidi ograničenje (d). | i07 |
 
@@ -281,5 +304,12 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   mutacije; bez merge-a i taga; „BUILDER ZAVRŠIO — SPREMNO ZA REVIEW”) → REVIEWER (nova sesija; SRS, brief, kod i obavezujuće odluke;
   ITERATION ACCEPTED / REJECTED) → FIX LOOP („iNN fix: R-0x …”) → ponovni review.
 - P0/P1 (a po odluci i P2) idu u FIX LOOP; P3 u FIX LOOP ili backlog.
+- O-29 (od i06): prije dugih run-ova laptop ne smije u sleep (`powercfg /change standby-timeout-ac 0`, poslije vratiti); prekinut run se
+  ponavlja; kontrolne mutacije: deterministička 1/1, konkurentna n/10; `cd backend; npm run test:emu:ciljano -- <test/emulator/…>
+  [--test-name-pattern=<obrazac>]` za razvoj i mutacije (`test:emu` i `provjera.ps1` ostaju dokaz za DoD); TEST_REPORT sažet (komanda,
+  exit, tests/pass/fail, trajanje, raspodjela konkurentnih testova; jedan red po mutaciji).
+- O-30 (i06, i07, i08 — BRZI REŽIM): `provjera.ps1` tačno 2× po Builder sesiji (poslije koraka koji dira zajednički kod prethodnih
+  iteracija i na kraju prije PR-a), između koraka `npm test` + ciljani emulator run; samo ključni skup mutacija iz odobrenja plana;
+  sažeta dokumentacija; Builder staje samo na blokerima; Reviewer 60–90 min, `provjera.ps1` 1×, bez ponavljanja Builder-ovih mutacija.
 - Commit-i bez potpisa alata. Checkpoint: `provjera.ps1` → `gh pr merge N --merge` → `provjera.ps1` na main →
   `git tag -a iNN -m "…"` → `git push origin iNN`.
