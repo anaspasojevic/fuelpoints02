@@ -438,3 +438,19 @@ Napomena: tačke 3 i 5 opisuju ponašanje §13, §17, §23 koje aplikacija dobij
 
 ## 14. Odluke Orchestrator-a (odobrenje plana)
 
+Plan i09 (commit ab79761) je ODOBREN. Datum: 2026-10-19.
+
+i09/P-1 — A: Kotlin 2.3.21 (+ compilerOptions jvmTarget JVM_11); AGP 8.10.1, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 26 ostaju; verzije iz
+          tabele 5.10. Pravilo i01/P-8 se dopunjuje: „posljednja stabilna verzija starija od 14 dana KOMPATIBILNA sa toolchain-om iz i01”
+          (upisati u ODLUKE §4 kao i09/P-1).
+i09/P-2 — A: §3.6 kao Firebase policy: String.length ≥ 8, bar jedan A–Z, bar jedan 0–9; poruka „…bar jedno veliko slovo (A–Z) i bar jednu cifru.”
+i09/P-3 — A sa B kao rezervom: displayName se pri registraciji upisuje u Firebase Auth profil prije init-a; AUTH-03 ga čita za ponovni init sa
+          acceptedTermsVersion "1.0"; ako nedostaje ili nije ispravan → forma „Dovršite registraciju” (ime + prihvatanje uslova).
+i09/P-4 — B: neutralna poruka „Registracija nije uspjela. Ako već imate nalog, prijavite se ili zatražite novu lozinku.”
+i09/P-5 — A: fontovi (SIL OFL 1.1) u res/font i potrebne ikone kao vektorski drawable-i, licence u android-app/licence/; nijedna nova Gradle zavisnost.
+i09/P-6 — ODOBRILA ANA (2026-10-19): tekst uslova korišćenja verzije 1.0 tačno kako je predložen u planu (svih 6 tačaka), resurs uslovi_1_0.
+i09/P-7 — prihvaćeno: release build bez konfiguracije do i11 (O-2); bez TODO-a.
+
+ISPRAVKE PLANA
+i09/K-1 — K2 i K3 plana se spajaju u jedan commit „i09: validacija, generator QR-a, API klijent i izvori podataka (I09-T01, T02, T06, T07)”.
+i09/K-2 — smoke S1 … S13 izvršava Ana na emulatoru API 35 poslije K6; Builder čeka njen rezultat prije K7 (O-31 (d)).
