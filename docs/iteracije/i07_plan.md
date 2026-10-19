@@ -427,3 +427,27 @@ SRS kontradikcija koja blokira rad: nije nađena. i07/P-1 opcija B bi bila odstu
 
 ## 14. Odluke Orchestrator-a (odobrenje plana)
 
+Plan i07 (commit 0862c21) je ODOBREN, uz odluke i ispravke ispod. Datum: 2026-10-19.
+
+i07/P-1 — A (Orchestrator): prozor K4b → K6 se prihvata i dokumentuje u ODLUKE §7 (poznato ograničenje); novo ograničenje (v) za i10: Android
+          poslije pokretanja DELETE-a ne poziva init ni drugi API do 204, a 401 na ponovljen DELETE tumači kao završeno brisanje. Bez koda.
+          Opcije B, C, D se ne uvode (B odstupa od §23.1 (6); C je Auth mutacija van SRS-a; D krši §24 / §1.3).
+i07/P-2 — odobreno: Date.now() ≤ auth_time·1000 + 300 000 (granica uključiva); auth_time koji nije nenegativan siguran cijeli broj → 409
+          REAUTHENTICATION_REQUIRED (fail closed); budući auth_time → dozvoljeno (poznato ograničenje: razlika satova).
+i07/P-3 — odobreno: nastavak uvijek izvršava cijeli tok od K1; K3 i K4b u transakciji zahtijevaju users DELETION_IN_PROGRESS ili nepostojeći
+          users (inače 500); accountStatus van enum-a → 500 i nalog se ne briše (ODLUKE §5).
+i07/P-4 — odobreno: K3 jedna transakcija bez gornje granice broja ACTIVE voucher-a (kao i05/P-8); poznato ograničenje.
+i07/P-5 — prihvaćeno: posljedica O-10a (isti payload, drugi loyaltyUid poslije pseudonimizacije → 200 prvi rezultat, bez EARN-a); README i ODLUKE §7.
+i07/P-6 — prihvaćeno: retry izdavanja / otkupa poslije brisanja mapping-a daje 409 / 404 (nikad 500); §20.2 / O-16 „isti rezultat” prestaje kad
+          §23.2 obriše zapis. Zatvara (f), (m), (u).
+i07/P-7 — odobreno: omotacBaze.batch() + opcija dnevnik i test/pomocnici/omotacAutha.js (test-only). Uslov: bez opcija ponašanje omotača
+          identično i06; postojeći test fajlovi i01–i06 netaknuti i zeleni.
+i07/P-8 — prihvaćeno: ponovljen DELETE poslije uspješnog K6 → 401 (Auth nalog ne postoji); dio ograničenja (v).
+i07/P-9 — odobreno: smoke red u provjera.ps1 (DELETE /api/v1/account bez token-a → 401 UNAUTHENTICATED), u koraku 3.
+
+ISPRAVKE PLANA
+i07/K-1 — koraci 4 i 5 plana se spajaju u jedan commit „i07: atomičnost, nastavak, blokade, konkurentnost i log brisanja (NFR-04, AUTH-05, §6 (o), §6 (h))”
+          (I07-T06, T08, T09, T11, T13, T14, T15). Testovi i dalje prije koda.
+i07/K-2 — JDK prvi na PATH-u i provjera portova 8080 / 9099 prije i poslije svakog emulator run-a su obavezni (OD-4 iz i06).
+i07/K-3 — testovi prije koda: crveni run se izvrši i zabilježi (TEST_REPORT, jedan red po koraku) PRIJE pisanja produkcionog koda koraka (i06 R-02).
+i07/K-4 — u TEST_REPORT se navodi commit koda na kome je završni provjera.ps1 izvršen; poslije njega su dozvoljeni samo commit-i docs/*.md i README.md (O-31 (a)).
