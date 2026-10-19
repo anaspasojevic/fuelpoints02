@@ -12,6 +12,11 @@
 // - prisiliPonovniPokusaj: n → prvih n pokušaja: callback se izvrši, pa omotač baci ABORTED (code 10), pa SDK ponavlja callback.
 // - prijePokusaja          → omotač sačeka prijePokusaja(pokusaj) na POČETKU svakog pokušaja, prije callback-a (i06/P-7; uz
 //                            prisiliPonovniPokusaj nameće redoslijed: druga operacija se izvrši između pokušaja 1 i 2).
+// - dnevnik: niz             → (i07/P-7) svaki upis (transakcije i paketa) se dodaje i u ovaj niz, koji test može dijeliti sa
+//                            omotacAutha, pa niz dokazuje redoslijed Firestore upisa i brisanja Auth naloga.
+// batch() (i07/P-7): paket pravog db-a; operacije paketa se broje i bilježe u upisi kao { metod: 'batch.<op>', putanja, paket } i
+// baciNaUpisu važi i za njih (greška se baci prije operacije, pa se paket ne commit-uje); paketi: [{ paket, brojOperacija, commitovan }].
+// Servisi i01–i06 ne koriste pakete, pa je za njih ponašanje omotača bez opcija identično i06.
 // brojPokusaja broji pozive callback-a (svih transakcija omotača).
 // sveTransakcijeZavrsene čeka kraj SVIH pokrenutih transakcija, i onih čiji je zahtjev već dobio 503 (kasni commit).
 import { setTimeout as pauza } from 'node:timers/promises';
@@ -34,6 +39,7 @@ export function omotacBaze(
     prijeCommita,
     prisiliPonovniPokusaj = 0,
     prijePokusaja,
+    dnevnik,
   } = {},
 ) {
   let brojPristupa = 0;
@@ -41,6 +47,7 @@ export function omotacBaze(
   let brojTransakcija = 0;
   let brojUpisa = 0;
   const upisi = [];
+  const paketi = [];
   let commitZavrsen = Promise.resolve();
   const zavrseneTransakcije = [];
 
@@ -63,6 +70,42 @@ export function omotacBaze(
     };
   }
 
+  function zabiljeziUpis(upis) {
+    brojUpisa += 1;
+    upisi.push(upis);
+    dnevnik?.push(upis);
+    if (brojUpisa === baciNaUpisu) {
+      throw new Error('ubrizgana greška C:\\tajno\\x.js');
+    }
+  }
+
+  function posrednikPaketa(paket) {
+    const stavka = { paket: paketi.length + 1, brojOperacija: 0, commitovan: false };
+    paketi.push(stavka);
+    const posrednik = new Proxy(paket, {
+      get(cilj, svojstvo) {
+        const vrijednost = Reflect.get(cilj, svojstvo, cilj);
+        if (METODE_UPISA.includes(svojstvo)) {
+          return (ref, ...ostalo) => {
+            zabiljeziUpis({ metod: `batch.${svojstvo}`, putanja: ref.path, paket: stavka.paket });
+            stavka.brojOperacija += 1;
+            vrijednost.call(cilj, ref, ...ostalo);
+            return posrednik;
+          };
+        }
+        if (svojstvo === 'commit') {
+          return async (...argumenti) => {
+            const rezultat = await vrijednost.apply(cilj, argumenti);
+            stavka.commitovan = true;
+            return rezultat;
+          };
+        }
+        return typeof vrijednost === 'function' ? vrijednost.bind(cilj) : vrijednost;
+      },
+    });
+    return posrednik;
+  }
+
   function posrednikTransakcije(tx) {
     return new Proxy(tx, {
       get(cilj, svojstvo) {
@@ -81,11 +124,7 @@ export function omotacBaze(
         }
         if (METODE_UPISA.includes(svojstvo)) {
           return (ref, ...ostalo) => {
-            brojUpisa += 1;
-            upisi.push({ metod: svojstvo, putanja: ref.path });
-            if (brojUpisa === baciNaUpisu) {
-              throw new Error('ubrizgana greška C:\\tajno\\x.js');
-            }
+            zabiljeziUpis({ metod: svojstvo, putanja: ref.path });
             return vrijednost.call(cilj, ref, ...ostalo);
           };
         }
@@ -106,6 +145,10 @@ export function omotacBaze(
     getAll(...argumenti) {
       brojPristupa += 1;
       return db.getAll(...argumenti);
+    },
+    batch() {
+      brojPristupa += 1;
+      return posrednikPaketa(db.batch());
     },
     runTransaction(funkcija, opcije) {
       brojPristupa += 1;
@@ -156,6 +199,9 @@ export function omotacBaze(
     },
     get upisi() {
       return upisi.slice();
+    },
+    get paketi() {
+      return paketi.map((stavka) => ({ ...stavka }));
     },
     get commitZavrsen() {
       return commitZavrsen;
