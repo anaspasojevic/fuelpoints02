@@ -18,7 +18,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i02 Account lifecycle + auth boundary | ITERATION ACCEPTED | tag `i02` (merge `700b155`) |
 | i03 Purchase / EARN | ITERATION ACCEPTED | tag `i03` (merge `43e604a`, PR #3) |
 | i04 Reward issue | ITERATION ACCEPTED (re-review 2, poslije FIX LOOP-a 2) | tag `i04` (merge `d445fe8`, PR #4) |
-| i05 Voucher cancel i account reconcile | BUILDER završio, čeka review | grana `iteracija-05` (PR → main, bez merge-a i taga) |
+| i05 Voucher cancel i account reconcile | ITERATION ACCEPTED (re-review nije bio potreban), čeka merge i tag | grana `iteracija-05` (PR → main, bez merge-a i taga) |
 | i06 – i11 | nije počelo | — |
 
 ## 2. Odluke Ane (O-n)
@@ -54,6 +54,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-20 (Orchestrator, brief i05) | Stanje naloga za API-05 / API-06 (po uzoru na O-16): CANCEL — voucher CANCELLED → 200 sa postojećim stanjem bez upisa i REDEEMED / EXPIRED → 409 bez upisa, bez obzira na stanje naloga; tek za ACTIVE voucher nalog mora biti ACTIVE (DELETION_IN_PROGRESS → 409 `ACCOUNT_DELETION_IN_PROGRESS`, users ili loyaltyAccounts ne postoji → 409 `ACCOUNT_NOT_INITIALIZED`, neispravno stanje → 500; ništa upisano, ni O-5 release). RECONCILE — provjera naloga prva (409 / 409 / 500), nalog ACTIVE bez isteklih → 200, brojač 0. Status: implementirano u i05 (`servisi/stanjeNaloga.js`, `otkazivanjeVaucera.js`, `uskladjivanjeVaucera.js`), I05-T08, I05-T16. | i05 brief |
 | O-21 (Orchestrator, brief i05) | Politika tijela za endpoint-e bez business input-a: bez tijela i `{}` su ispravni; svako drugo tijelo → 422 `INVALID_REQUEST`; neispravan JSON → 422 i bez token-a. Tačno pravilo: i05/P-2. Status: implementirano (`validacija/zahtjevVaucera.js`), I05-T03. | i05 brief |
 | O-22 (Orchestrator, brief i05) | `voucherId` iz putanje: `^[0-9a-f]{64}$`; neispravan → 404 `VOUCHER_NOT_FOUND` bez pristupa Firestore-u; neispravno percent-kodiran → D-5 (404 `NOT_FOUND`); vrijednost nikad u log ni u odgovor greške. Status: implementirano (`validacija/zahtjevVaucera.js`, `FORMAT_VOUCHER_ID` u `servisi/vauceri.js`), I05-T03, I05-T20. | i05 brief |
+| O-23 (Orchestrator, i05 review R-01) | R-01 (MINOR): ACTIVE voucher sa već popunjenim `redeemedAt`, `redeemedAtStationId` ili `cancelledAt` se na cancel-u ipak otkazuje (200) i postojeći `cancelledAt` se prepisuje. Kroz API nije dostižno i ne vodi u double-refund. Odluka: u i05 se NE mijenja kod (i05 ostaje ITERATION ACCEPTED). Obaveza za i06: kad redeem počne pisati `redeemedAt` / `redeemedAtStationId`, redeem i cancel moraju koristiti zajedničku provjeru stanja ACTIVE voucher-a (voucher sa `redeemedAt`, `redeemedAtStationId` ili `cancelledAt` ne smije se otkazati ni otkupiti), uz test koji obara mutaciju bez te provjere (§6 (t)). | i05 review |
 | D-5 | Neispravno percent-kodiran parametar putanje (Express 5 `URIError`, status 400) mora dati deterministički 4xx bez stack-a i bez sirove vrijednosti u logu i odgovoru; ispravka globalna. Kod predlaže Planner i04 (preporuka 404 `NOT_FOUND`). Status: implementirano u i04 — 404 `NOT_FOUND` u `odrediKod` (i04/P-8, K-1), I04-T03 (c), I04-T16. | i04 brief |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
@@ -192,6 +193,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   (release najviše jednom) ili odluka O-9 mora reći da RELEASE izostaje; cancel retry ne provjerava `release_` (i05/P-4).
 - **(s) i10 (i05)** — Android poziva API-06 na Home-u i poslije `409 VOUCHER_EXPIRED` iz API-05 osvježava stanje; `Content-Length: 0`
   bez tijela (Retrofit `@POST` bez `@Body`) je ispravan zahtjev za API-05 i API-06.
+- **(t) i06 — OBAVEZA (O-23, i05 review R-01)** — kad redeem počne pisati `redeemedAt` / `redeemedAtStationId`, redeem i cancel moraju
+  koristiti zajedničku provjeru stanja ACTIVE voucher-a: voucher sa `redeemedAt`, `redeemedAtStationId` ili `cancelledAt` ne smije se
+  otkazati ni otkupiti; uz test koji obara mutaciju bez te provjere. Status: otvorena, i06.
 
 ## 7. Poznata ograničenja (sažetak)
 
@@ -250,6 +254,11 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | F1-01 (i03_review_fix1) | P3 | `docs/TEST_REPORT.md` (linije ~1774, 1776, 1783): putanja `firebase\tests` upisana sa `\t` kao tabulatorom („`firebase<TAB>ests`”) | ZATVORENO u i04 (dokumentacioni korak; `git grep -n -P "firebase\tests" -- docs` prazno) |
 | B-2 (i04 review R-03, O-17) | P3 | Kontencija `tx.get(query)` nad `vouchers` između različitih korisnika u emulatoru; ako se pokaže u demu, razmotriti opciju B (upit van transakcije + `tx.getAll` kandidata i ponovna provjera u transakciji) uz novu odluku | i09 |
 | B-1 (i04/P-9) | P3 | `loyaltyUid` (API-02) sa NUL ili kontrolnim znakom prolazi provjeru formata i ide do Firestore-a (u emulatoru 404 iz transakcije; produkcija neprovjerljiva) | odluka prije i08 |
+| R-02 (i05 review, NOTE) | P4 | Retry cancel-a nad CANCELLED / EXPIRED ne provjerava postojanje `release_{voucherId}` (po odluci i05/P-4); svjesna granica detekcije nekonzistentnog stanja, veza sa §6 (r) | bez roka |
+| R-03 (i05 review, NOTE) | P4 | Redakcija hex-a u logu ne-gRPC poruka ostavlja prefiks < 32 znaka (npr. hex razdvojen crticom); nedostižno u kodu i05 (statičke poruke, I05-T02); ostaje poznato ograničenje R-12 | bez roka |
+| R-04 (i05 review, NOTE) | P4 | 503 pod kontencijom istog naloga (paralelni cancel, cancel × API-06, cancel × issue); dozvoljeno po §27, stanje konzistentno, retry bezbjedan; Android (i09/i10) treba ponoviti poziv na 503 | bez roka |
+| R-05 (i05 review, NOTE) | P4 | 409 grana pri konkurentnom početku brisanja naloga za vrijeme cancel transakcije nije dostižna testom u emulatoru (brava, kao OD-2); obaveza §6 (o) ostaje za i07 | bez roka |
+| R-06, R-07 (i05 review, NOTE) | P4 | Kozmetika TEST_REPORT / OD-6 (a) tačnost opisa: netačno obrazloženje da klijentski URL parser normalizuje `..` (R-06); isti opis za obje varijante mutacija u tabeli TEST_REPORT-a (R-07) | bez roka |
 
 ## 9. Otvorena pitanja
 
