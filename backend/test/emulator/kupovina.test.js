@@ -1,5 +1,5 @@
 // POST /api/v1/pos/purchases (§1.5, §7.3, §8, §9, §10, §11, §26 API-02):
-// API-T02, API-T03, API-T04, I03-T02 … I03-T09, I03-T14, I03-T18, I03-T19.
+// API-T02, API-T03, API-T04, I03-T02 … I03-T09, I03-T14, I03-T18, I03-T19, I08-T03.
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 import { deleteApp } from 'firebase-admin/app';
@@ -595,6 +595,35 @@ test('I03-T09 neispravan format loyaltyUid → 404 bez ikakvog pristupa bazi; ui
   const odgovor = await kupi(tijeloKupovine(dugUid));
   assert.equal(odgovor.status, 201);
   assert.equal((await podaci('purchases/SIM01__000184')).uid, dugUid);
+});
+
+// B-1 (§8.2, i03/P-5): loyaltyUid sa kontrolnim znakom ne postoji kao nalog; ista provjera kao za rewardId (i04/P-9).
+test('I08-T03 loyaltyUid sa kontrolnim znakom (\\p{Cc}) → 404 bez ikakvog pristupa bazi; redoslijed i03/P-6; razmak i ne-ASCII prolaze', async () => {
+  for (const [opis, uid] of [
+    ['NUL u sredini', 'a\u0000b'],
+    ['samo NUL', '\u0000'],
+    ['LF u sredini', 'a\nb'],
+    ['završni LF', 'abc\n'],
+    ['TAB', 'a\tb'],
+    ['samo CR', '\r'],
+    ['U+001F', 'a\u001fb'],
+    ['DEL', '\u007f'],
+    ['U+0085 (NEL)', 'a\u0085'],
+    ['U+009F', '\u009f'],
+  ]) {
+    await provjeriOdbijanjeBezBaze((db) => kupi(tijeloKupovine(uid), { db }), 404, 'LOYALTY_ACCOUNT_NOT_FOUND', opis);
+  }
+  await provjeriOdbijanjeBezBaze(
+    (db) => kupi(tijeloKupovine('a\u0000b', { volumeMl: 0 }), { db }),
+    422,
+    'INVALID_VOLUME',
+    'NUL u loyaltyUid + volumeMl 0',
+  );
+  const uid = 'korisnik č';
+  await pripremiNalog(uid);
+  const odgovor = await kupi(tijeloKupovine(uid));
+  assert.equal(odgovor.status, 201, `tijelo ${odgovor.text}`);
+  assert.equal((await podaci('purchases/SIM01__000184')).uid, uid);
 });
 
 test('I03-T14 isti posTransactionId na dvije stanice → dvije kupovine; "a__b" radi ispravno', async () => {
