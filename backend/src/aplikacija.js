@@ -2,6 +2,7 @@ import express from 'express';
 import { GreskaApi } from './greske/GreskaApi.js';
 import { centralniRukovalacGreskama, nepoznataRuta } from './greske/obradaGresaka.js';
 import { korelacija } from './posrednici/korelacija.js';
+import { dodajRuteBrisanja } from './rute/brisanjeNaloga.js';
 import { dodajRuteKupovina } from './rute/kupovine.js';
 import { dodajRuteNagrada } from './rute/nagrade.js';
 import { dodajRuteNaloga } from './rute/nalog.js';
@@ -40,6 +41,7 @@ export function napraviAplikaciju(opcije = {}) {
   dodajRuteNagrada(ruterApi, { servisi: opcije.servisi });
   dodajRuteVaucera(ruterApi, { servisi: opcije.servisi });
   dodajRuteOtkupa(ruterApi, { servisi: opcije.servisi, posStanice: opcije.posStanice });
+  dodajRuteBrisanja(ruterApi, { servisi: opcije.servisi });
   if (typeof opcije.dodajRute === 'function') {
     opcije.dodajRute(ruterApi);
   }
