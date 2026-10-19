@@ -214,6 +214,36 @@ Firestore-a (bodovi se nikad ne računaju iz odgovora). Retry API-03 može vrati
 prošao (sačuvano stanje, O-16) — klijent tada odlučuje po `expiresAt` i poziva API-06. Cancel: poziv API-05; na
 `409 VOUCHER_EXPIRED` klijent osvježava stanje, jer su bodovi već vraćeni.
 
+**API-07 `DELETE /api/v1/account`** — zaglavlje `Authorization: Bearer <Firebase ID token>` (UID samo iz verifikovanog token-a), bez
+tijela (dozvoljeni su i `Content-Length: 0` i `{}`; svako drugo tijelo → `422 INVALID_REQUEST`, O-21). Prijava mora biti svježa
+(§23): `auth_time` token-a najviše 5 minuta prije sata Backend-a (granica uključiva); inače ili kad `auth_time` nedostaje
+`409 REAUTHENTICATION_REQUIRED` bez ikakvog pristupa bazi — klijent traži ponovnu prijavu i ponavlja poziv. Redoslijed: neispravan JSON
+(`422`, i bez token-a) → token (`401`) → tijelo (`422`) → svježina (`409`) → brisanje.
+
+```powershell
+Invoke-WebRequest "http://127.0.0.1:3000/api/v1/account" -Method Delete -Headers @{ Authorization = "Bearer $idToken" } -UseBasicParsing
+# StatusCode 204, bez tijela
+```
+
+Tok (§23.1, O-32), svaki korak idempotentan i konzistentan sam za sebe (nije jedna transakcija, O-36): `users.accountStatus` →
+`DELETION_IN_PROGRESS` (od tog trenutka init, kupovina, issue, cancel, redeem i reconcile tog korisnika se odbijaju) → svaki ACTIVE
+voucher se zatvara sa `REWARD_RELEASE` u jednoj transakciji sa nalogom (neistekao `CANCELLED`, istekao `EXPIRED`; O-9, O-34) → brišu se
+`rewardRequests`, `redemptionRequests`, `notifications`, `vouchers`, `loyaltyAccounts` → u `purchases` i `loyaltyLedger` se samo
+`uid` postavlja na `null` (§23.3) → briše se `users/{uid}` → briše se Firebase Auth nalog (posljednji). Odgovor `204` bez tijela.
+Ako poziv vrati `500` ili `503`, ponovljen `DELETE` (uz svježu prijavu) nastavlja isti cleanup i vraća `204` (§23.4, O-33); korisnik
+čiji `users` dokument više ne postoji takođe dobija `204` (O-34b). Kad je Auth nalog već obrisan, ponovljen `DELETE` dobija
+`401 UNAUTHENTICATED` — to znači da je brisanje završeno (i07/P-8, ograničenje (v)).
+
+Greške: `401 UNAUTHENTICATED`, `404 NOT_FOUND` (`GET`/`POST`/`PUT` na `/account`), `409 REAUTHENTICATION_REQUIRED`,
+`422 INVALID_REQUEST`, `500 INTERNAL_ERROR` (npr. neispravno stanje naloga ili voucher-a; ništa se ne „popravlja”),
+`503 SERVICE_UNAVAILABLE`. Nikad `ACCOUNT_NOT_INITIALIZED` ni `ACCOUNT_DELETION_IN_PROGRESS`.
+
+Posljedice brisanja za druge endpointe: POS retry kupovine istog `(stationId, posTransactionId)` poslije pseudonimizacije sa istim
+`volumeMl`, `amountMinor` i `currency` vraća prvi rezultat (`200`, bez novog EARN-a) i kad je `loyaltyUid` drugačiji, jer se `uid = null`
+ne poredi (O-10a, i07/P-5); drugačiji iznos → `409 IDEMPOTENCY_CONFLICT`. Retry izdavanja / otkupa poslije brisanja mapping-a više ne
+vraća prvi rezultat nego `409` / `404` (i07/P-6). Android (i10) poslije pokretanja brisanja ne poziva init ni drugi API dok ne dobije
+`204` (ili `401` na ponovljen `DELETE`).
+
 ## Pokretanje
 
 ```powershell

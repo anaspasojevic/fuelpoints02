@@ -1149,3 +1149,81 @@ K-1: M45 izvršena kao D 1/1 nad I06-T18 (TEST_REPORT). K-3: koraci spojeni. K-5
 - `redeemedAt` po satu Backend-a, ledger i zapis `createdAt` po Firestore-u.
 - 503 pod kontencijom istog voucher-a/naloga je moguć (I06-T19 raspodjela); stanje konzistentno, retry bezbjedan. Ponašanje utvrđeno nad emulatorom.
 - `prijePokusaja` zavisi od toga da Admin SDK poništi pokušaj prije ponavljanja; kontrola u I06-T18 bi pala glasno.
+
+## Iteracija 7 — Brisanje naloga (API-07)
+
+Grana `iteracija-07`. Brief: `docs/iteracije/i07_brief.md`. Plan: `docs/iteracije/i07_plan.md` (odobren uz i07/P-1 … P-9, K-1 … K-4, sekcija 14).
+Uloga: BUILDER, 2026-10-19. Režim: ekspresni (O-30, O-31). Unos je sažet po O-30 (d).
+
+### CHANGELOG
+
+- **O-10a (§10, ograničenje (d)):** `servisi/evidencijaKupovine.js` — kad sačuvani purchase ima `uid === null`, `uid` se ne poredi; ostala
+  polja i O-3 nepromijenjeni (I07-T10).
+- **Test pomoćnici (i07/P-7):** `omotacBaze.batch()` (operacije paketa u `upisi` kao `batch.<op>`, `baciNaUpisu` važi i za njih, `paketi`) i opcija
+  `dnevnik`; `test/pomocnici/omotacAutha.js` (`deleteUser` sa `dnevnik`, `baciNaBrisanju`, brojači); `test/pomocnici/pripremaBrisanja.js` (OD-2).
+  Bez opcija omotač za i01–i06 servise radi identično i06 (oni ne koriste pakete).
+- **API-07 (§23, §26, O-32 … O-36):** `posrednici/svjezinaPrijave.js` (O-35, i07/P-2); `posrednici/autentikacija.js` opcija `izloziAuthTime`
+  (samo API-07); `servisi/oslobadjanjeVaucera.js` — zajednička privatna `procitajAktivne` + nova `procitajAktivneZaZatvaranje` (O-9, O-34),
+  `procitajIstekleAktivne` nepromijenjenog ponašanja; `servisi/brisanjeNaloga.js` (`obrisiNalog`: K1 tx → K3 tx (release kroz zajednički mehanizam)
+  → K4a upiti + paketi ≤ 400 (`rewardRequests`, `redemptionRequests`, `notifications`, `vouchers`, pa `loyaltyAccounts` ako postoji) → K5
+  pseudonimizacija `purchases`, `loyaltyLedger` → K4b tx → K6 `deleteUser` (`auth/user-not-found` = već obrisan)); `rute/brisanjeNaloga.js`
+  (token → prazno tijelo → svježina → tok → 204); `aplikacija.js`. Smoke red u `provjera.ps1` (i07/P-9).
+- **Testovi:** jedinični I07-T01; emulator API-T12, I07-T02 … I07-T15 (6 novih fajlova). Postojeći test fajlovi i01–i06 netaknuti.
+- **Dokumentacija:** README (API-07), TRACEABILITY, ODLUKE (§1 i06 ACCEPTED; §2, §3 O-9, O-10a, O-31 … O-36, O-2, i07/P-n, K-n; §6 zatvoreni
+  (a), (d), (f), (m), (o), (r), (u), novo (v); §7; §8 R-02 … R-04 i06, B-1 → i08; §9; §10 O-31).
+
+### Commit-i
+
+| Commit | Korak |
+|---|---|
+| `00b148d` i07: odobrenje plana i odluke Orchestrator-a | 0 |
+| `56db910` i07: O-10a retry kupovine poslije pseudonimizacije | 1 |
+| `806f810` i07: test pomoćnici za brisanje (batch, dnevnik, omotacAutha) | 2 |
+| `e336652` i07: API-07 brisanje naloga (§23, O-32 … O-36) | 3 (+ `provjera.ps1` #1) |
+| `74c4227` i07: atomičnost, nastavak, blokade, konkurentnost i log brisanja (NFR-04, AUTH-05, §6 (o), §6 (h)) | 4 (K-1: koraci 4 + 5 plana) |
+| (bez commit-a) ključne mutacije D01 … D11, D07b, D11b | 5 |
+| dokumentacija (ovaj unos) | 6 (+ `provjera.ps1` #2) |
+
+### Odstupanja (OD-n, bez promjene ponašanja)
+
+- **OD-1** — I07-T10 (korak 1, prije API-07) pseudonimizuje purchase i EARN Admin SDK-om (`uid → null`, isto što radi K5), ne kroz DELETE; kroz
+  DELETE pseudonimizaciju dokazuju API-T12 i I07-T06 (b).
+- **OD-2** — Novi pomoćnik `test/pomocnici/pripremaBrisanja.js` (zahtjevi kroz prave rute, primjer A/B, `snimakPoUid`, `provjeriObrisanA`) umjesto
+  lokalnih pomoćnika u pet fajlova; ušao u commit koraka 2.
+- **OD-3** — Ciljani run koraka 2 (18 fajlova sa omotačem): 149/150, I06-T19 (c) jednom dobio 401 na cancel-u sa svježim token-om (i06 fajl i
+  kod cancel-a netaknuti); ponovljen `otkupAtomicnost.test.js` 11/11, a `provjera.ps1` #1 i #2 zeleni. Upisano u ODLUKE §7.
+- **OD-4** — K4a briše `loyaltyAccounts/{uid}` samo ako postoji (čitanje, pa paket); plan 5.4 je imao bezuslovno brisanje (no-op). Razlog: I07-T07
+  traži da nastavak nad očišćenim stanjem ne upiše ništa (dnevnik = samo `deleteUser`). Konačno stanje isto.
+- **OD-5** — Korak 4 (testovi I07-T06, T08, T09, T11, T13, T14, T15) nije imao crveni run: ponašanje je uveo korak 3, prvi run 11/11, kod nije
+  mijenjan (plan: „kod se mijenja samo ako test otkrije grešku”). Snagu testova dokazuju mutacije D01 … D11b.
+- **OD-6** — I07-T10: zahtjev sa drugom valutom (`BAM`) odbija validacija prije baze (422 `UNSUPPORTED_CURRENCY`, I03-T06), pa je poređenje
+  valute uz `uid = null` dokazano izmjenom sačuvane valute (`XXX`) → 409.
+- **OD-7** — API-T12 (b) „konačno stanje normalizuj-jednako (a)” je realizovano istom provjerom `provjeriObrisanA` (iste asercije po dokumentu)
+  za prvo i nastavljeno brisanje, umjesto poređenja normalizovanih snimaka dva run-a.
+- **OD-8** — I07-T03: „`Content-Length: 5` bez JSON-a” realizovan kao `text/plain` i `application/x-www-form-urlencoded` tijelo (parser ga ne čita,
+  `Content-Length ≠ 0`); I07-T13 lanac ledger-a provjerava se pretragom niza stanja (od (0, 0) do `reserved 0`), ne po `createdAt`.
+- **OD-9** — I07-T14: 503 „rok” je u log testu Firestore UNAVAILABLE (14) i Auth `app/network-error`; istek roka usred K3 je u I07-T11 (b).
+- **OD-10** — Ispravke testova tokom razvoja (kod nepromijenjen): I07-T02 mock sata za korisnika bez profila bio je vezan za `auth_time` drugog
+  korisnika (kreiran sekundu kasnije) → mock relativan na sopstveni `auth_time`; I07-T05 broj ledger događaja 7 (ne 8).
+- **OD-11** — Mutacije primjenjuje skripta van repoa (scratchpad), svaka vraćena `git restore`; D11 je prvo pokrenuta sa obrascem koji sadrži `(`,
+  pa run nije izvršio nijedan test (exit 1 bez brojača — nevažeće); ponovljena sa `--test-name-pattern=I07-T09` → ubijena.
+
+### Status pitanja i07/P-n
+
+P-1 A (§7 + (v), bez koda); P-2 (`svjezinaPrijave.js`, I07-T01/T02); P-3 (K3 i K4b `provjeriBlokaduMutacija`, I07-T12 (a)); P-4 (§7); P-5 (README,
+§7, I07-T10); P-6 (I07-T15); P-7 (pomoćnici); P-8 (API-T12 (a): ponovljen DELETE → 401); P-9 (smoke). K-1 spojen korak 4; K-2 JDK prvi i portovi
+8080/9099 provjereni prije i poslije svakog run-a; K-3 crveni run-ovi u TEST_REPORT; K-4 commit koda završnog `provjera.ps1` u TEST_REPORT.
+
+### Ograničenja za i08+
+
+- **(v) i10** — Android poslije pokretanja DELETE-a ne poziva init ni drugi API do 204; 401 na ponovljen DELETE = završeno brisanje; 409
+  `REAUTHENTICATION_REQUIRED` → ponovna prijava.
+- B-1 → i08 (zabrana `\p{Cc}` za `loyaltyUid`).
+
+### Poznata ograničenja
+
+- Prozor K4b → K6 (i07/P-1): init sa važećim token-om može ponovo napraviti `users` / `loyaltyAccounts` prije brisanja Auth naloga.
+- Budući `auth_time` dozvoljen (i07/P-2); svježina se u emulatoru testira mock-om sata (emulator ne izdaje star `auth_time` koji prolazi `checkRevoked`).
+- Granica 500 upisa po paketu nije provjerljiva u emulatoru; ≤ 400 dokazano brojanjem operacija (I07-T06 (c)).
+- Veliki nalog: rok 10 s → 503, nastavak bezbjedan; produkcija neprovjerljiva. K3 bez gornje granice ACTIVE voucher-a (i07/P-4).
+- Konkurentni DELETE istog korisnika: oba mogu dobiti 204 (`auth/user-not-found` = već obrisan); 503 moguć, retry bezbjedan.
