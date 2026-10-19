@@ -4,7 +4,7 @@ import { jeNedostupnostFirestore, saRokom } from '../greske/greskeServisa.js';
 import { KOLEKCIJE } from '../podaci/kolekcije.js';
 import { pripremiOslobadjanja, upisiOslobadjanja } from './oslobadjanjeVaucera.js';
 import { procitajStanjeNaloga } from './stanjeNaloga.js';
-import { jeIspravanSacuvaniVaucer, jeIstekao } from './vauceri.js';
+import { jeIstekao, jeKonzistentnoStanjeVaucera } from './vauceri.js';
 
 const MAKSIMALNO_POKUSAJA = 5;
 
@@ -56,15 +56,13 @@ export async function otkaziVaucer(db, { uid, voucherId }, rokDo) {
       if (vaucer.uid !== uid) {
         throw new GreskaApi('FORBIDDEN');
       }
-      if (!jeIspravanSacuvaniVaucer(vaucer) || typeof vaucer.rewardId !== 'string') {
+      // O-27: konzistentnost stanja (i CANCELLED bez cancelledAt) prije grananja po statusu.
+      if (!jeKonzistentnoStanjeVaucera(vaucer)) {
         throw new Error('Nekonzistentno stanje: neispravan voucher.');
       }
 
       // §19.2, §19.3, O-20: terminalna stanja PRIJE provjere naloga; ništa se ne upisuje.
       if (vaucer.status === 'CANCELLED') {
-        if (!(vaucer.cancelledAt instanceof Timestamp)) {
-          throw new Error('Nekonzistentno stanje: otkazan voucher bez cancelledAt.');
-        }
         return { ishod: 'OTKAZAN', odgovor: tijeloOtkazanog(voucherId, vaucer) };
       }
       if (vaucer.status === 'REDEEMED') {

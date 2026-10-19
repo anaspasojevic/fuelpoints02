@@ -2500,3 +2500,86 @@ commit-a ojačanja testova (plan 8.4).
 
 - Vidi `docs/IMPLEMENTATION_LOG.md`, Iteracija 5, „Poznata ograničenja” (emulator vs produkcija, satovi, NOT_FOUND scenario, 503 pod
   kontencijom kao dozvoljen ishod).
+
+
+## Iteracija 6 — Voucher redeem (API-04)
+
+Datum izvršavanja: 2026-10-19 (Windows 11 Pro 10.0.22621, Windows PowerShell 5.1). Grana `iteracija-06`. Sažeto po O-29 (e) i O-30 (d):
+samo komanda, exit, tests / pass / fail, trajanje; puni izlazi su u scratchpad-u sesije (van repoa). Prije svakog run-a: portovi 8080 i 9099
+slobodni; `powercfg /change standby-timeout-ac 0` (bez sleep-a). Emulator komande sa JBR-om prvim u PATH-u (OD-4).
+
+### Run-ovi `provjera.ps1` (O-30 (a): tačno 2×)
+
+| # | Kada / stablo | Komanda | Exit | Rezultat | Trajanje |
+|---|---|---|---|---|---|
+| 1 | poslije koraka 2 (O-27), kod = `194928f` | `.\skripte\provjera.ps1` | 0 | `SVE PROVJERE PROŠLE`; backend `ℹ tests 78 / pass 78 / fail 0`, emulator `ℹ tests 144 / pass 144 / fail 0`; rules `ℹ tests 31 / pass 31 / fail 0`; smoke-ovi (6); Android `assembleDebug`, `testDebugUnitTest` `BUILD SUCCESSFUL` | 1187 s |
+| 2 | završno, poslije dokumentacije, kod = `8c232be` + necommit-ovana dokumentacija koraka 7 | `.\skripte\provjera.ps1` | 0 | `SVE PROVJERE PROŠLE`; backend `ℹ tests 81 / pass 81 / fail 0`, emulator `ℹ tests 170 / pass 170 / fail 0`; rules `ℹ tests 31 / pass 31 / fail 0`; smoke-ovi (7, uključujući novi API-04 → `401 UNAUTHENTICATED_POS`); Android `BUILD SUCCESSFUL` | 1379 s (12:12:57–12:35:56) |
+
+Run 1 je pokrenut nad radnim stablom u kojem su, pored commit-a koraka 2, postojali i još neuvezani novi fajlovi koraka 3 (jedinični test
+validacije je napisan poslije jediničnog koraka run-a; Rules test I06-T22 je ušao u rules suite — 31 = 30 + 1).
+
+### Ciljani run-ovi između koraka (`npm test` + `npm run test:emu:ciljano`)
+
+| Korak | Komanda | Exit | Rezultat |
+|---|---|---|---|
+| 1 | `npm run test:emu:ciljano -- test/emulator/adminSdk.test.js` / `… adminSdk.test.js punjenje.test.js --test-name-pattern=I0` / `… "test/emulator/admin*.test.js"` / `… ../x.test.js` | 0 / 0 / 0 / 2 | 2/2, 6/6, 2/2 pass (25 s, 44 s, 24 s); neispravan argument → poruka, exit 2 |
+| 2 | `npm run test:emu:ciljano -- test/emulator/konzistentnostVaucera.test.js` (prije koda) | 1 | `tests 3 / pass 0 / fail 3` (crveno); jedinični I06-T02 crven (funkcija ne postoji) |
+| 2 | `… konzistentnostVaucera.test.js otkazivanjeVaucera.test.js uskladjivanjeVaucera.test.js izdavanjeNagrade.test.js` | 0 | `tests 41 / pass 41 / fail 0` (74 s) |
+| 3 | `npx firebase emulators:exec … "node --test … zahtjeviOtkupa.test.js podrazumijevanaZabrana.test.js"`; `npm test` | 0; 0 | `tests 4 / pass 4`; `tests 81 / pass 81` |
+| 4 | `… otkupVaucera.test.js` bez uvezane rute (crveno, OD-3) | 1 | `tests 13 / pass 1 / fail 12` |
+| 4 | `… otkupVaucera.test.js` | 0 | `tests 13 / pass 13 / fail 0` (poslije ispravke dva testa, OD-7) |
+| 5 | `… otkupAtomicnost.test.js logOtkupa.test.js vauceriAtomicnost.test.js izdavanjeAtomicnost.test.js` | 1 | i05 fajlovi zeleni; pali I06-T15, I06-T18, I06-T20, I06-T21 (a) — greške testa (OD-6, OD-7), 987 s |
+| 5 | `… otkupAtomicnost.test.js logOtkupa.test.js` | 0 | `tests 13 / pass 13 / fail 0` (381 s) |
+| 5 | `… otkupAtomicnost.test.js --test-name-pattern=I06-T20` (pomoćnik lanca po `createdAt`) | 0 | `tests 1 / pass 1 / fail 0` |
+
+SRS testovi: **API-T08 PASS, API-T09 PASS, API-T10 PASS** (oba testa API-T10: osnovni i granica u servisu); RULE-T01 … RULE-T12 PASS;
+I06-T01 … I06-T22 PASS (run 2 `provjera.ps1`). I06-T23 (inspekcije):
+
+| Komanda | Ishod |
+|---|---|
+| `git grep -n "release_" -- backend/src` (kod, bez komentara) | samo `servisi/oslobadjanjeVaucera.js` |
+| `git grep -n -E "redeem_\|REWARD_REDEEM\|redemptionRequests" -- backend/src` | `servisi/otkupVaucera.js` + `podaci/kolekcije.js` |
+| `git grep -n "jeKonzistentnoStanjeVaucera(" -- backend/src` | definicija + `otkupVaucera.js`, `otkazivanjeVaucera.js`, `oslobadjanjeVaucera.js`, `izdavanjeNagrade.js` |
+| `git grep -n -i -E "tx\.get\(.*where\|reconcile" -- backend/src/servisi/otkupVaucera.js` | prazno |
+| `git grep -n -i -E "process\.env\.(NODE_ENV\|TEST)\|inject\|ubriz\|mock" -- backend/src` | prazno |
+| `git diff i05 --stat -- firebase/firestore.rules firebase/firestore.indexes.json backend/package.json backend/package-lock.json firebase/tests/package*.json` | `package.json` +1 (`test:emu:ciljano`), `firestore.rules` +4 (blok + prazan red) |
+| `git diff i05 --name-status -- backend/test` | samo `A` (7 novih fajlova + `pomocnici/pripremaVaucera.js`) i `M pomocnici/omotacBaze.js` |
+| `(Get-FileHash docs\srs\FuelPoints_SRS_3_1.docx -Algorithm SHA256).Hash`; `git diff main -- docs/srs` | `7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C60228`; prazno |
+
+### Kontrolne mutacije (O-30 (b); sve D, 1/1; `npm run test:emu:ciljano -- <fajl> --test-name-pattern=<obrazac>`, Rules kroz `emulators:exec`)
+
+| Oznaka | Tačna izmjena | D/K | Ciljani test | Ishod |
+|---|---|---|---|---|
+| M01 | uklonjen blok REDEEMED / CANCELLED / EXPIRED u `otkupVaucera.js` | D | I06-T11 | ubijena 1/1 |
+| M02 | `tx.create(refRedeem, …)` → `tx.set(refRedeem, …)` | D | I06-T14 (d) | ubijena 1/1 |
+| M04 | `if (snimakRedeem.exists \|\| snimakRelease.exists)` → `if (false)` | D | I06-T14 (b) | ubijena 1/1 |
+| M05 | blok zapisa (T2) premješten iza provjere statusa (T4) | D | API-T09 | ubijena 1/1 |
+| M06 | `throw new GreskaApi('IDEMPOTENCY_CONFLICT')` → `void 0` (nastavlja) | D | API-T09 | ubijena 1/1 |
+| M07 | `izracunajRequestKey(stationId, …)` → `izracunajRequestKey('', …)` | D | API-T08 | ubijena 1/1 |
+| M09 | `tx.create(refZapis, …)` dodat u §20.5 granu | D | API-T10 | ubijena 1/1 |
+| M12 | `rezervisano = nalog.rezervisano − cost` → `nalog.rezervisano` | D | API-T08 | ubijena 1/1 |
+| M17 | `jeIstekao`: `sadaMs >= expiresAtMs` → `>` | D | API-T10 (granica) | ubijena 1/1 |
+| M18 | §20.5 grana: `return { ishod: 'ISTEKAO' }` → `throw new GreskaApi('VOUCHER_EXPIRED')` u callback-u | D | API-T10 | ubijena 1/1 |
+| M20 | CANCELLED → `VOUCHER_EXPIRED` | D | I06-T11 | ubijena 1/1 |
+| M20b | CANCELLED → `VOUCHER_NOT_FOUND` | D | I06-T11 | ubijena 1/1 |
+| M24 | čitanje naloga (T5) premješteno ispred terminalnih stanja (T4) | D | I06-T12 | ubijena 1/1 |
+| M30 | uklonjena O-27 provjera voucher-a u redeem-u (T3) | D | I06-T14 (a) | ubijena 1/1 |
+| M31 | cancel: `if (!jeKonzistentnoStanjeVaucera(vaucer))` → `if (false)` | D | I06-T03 | ubijena 1/1 |
+| M32 | `procitajIstekleAktivne`: uklonjen `!jeKonzistentnoStanjeVaucera(vaucer) \|\|` | D | I06-T04 | ubijena 1/1 |
+| M38 | ruta bez `napraviProvjeruPosKljuca`, `stationId 'SIM01'`, rok konstanta | D | I06-T09 | ubijena 1/1 |
+| M41 | Rules: `allow read: if signedIn();` u bloku `redemptionRequests` | D | I06-T22 | ubijena 1/1 |
+| M45 | status provjeravan VAN transakcije (pre-čitanje `refVaucer.get()`, u tx grananje po pre-pročitanom statusu) | D (i06/K-1) | I06-T18 | ubijena 1/1 |
+| M03, M08, M10, M11, M13–M16, M19, M21–M23, M25–M29, M33–M37, M39, M40, M42–M44 | — | — | — | nije izvršeno, O-30 (b) |
+
+### Raspodjela konkurentnih testova (završni ciljani run koraka 5; `t.diagnostic`)
+
+| Test | Ponavljanja | Raspodjela ishoda | 500 |
+|---|---|---|---|
+| I06-T19 (a) 10 identičnih redeem-a | 10 | `200: 100` | 0 |
+| I06-T19 (b) redeem SIM01 × SIM02 | 20 | `200: 20`, `409 VOUCHER_ALREADY_REDEEMED: 20` (u ranijem run-u: 20 / 19 / `503: 1`) | 0 |
+| I06-T19 (c) redeem × cancel | 20 | `200: 20`, `409 VOUCHER_CANCELLED: 11`, `409 VOUCHER_ALREADY_REDEEMED: 8`, `503: 1`; pobjednik REDEEMED 9 / CANCELLED 11 | 0 |
+| I06-T19 (d) 3 redeem + 3 API-06 + 3 issue nad isteklim | 10 | `200: 27`, `201: 9`, `409 VOUCHER_EXPIRED: 27`, `409 INSUFFICIENT_POINTS: 18`, `503: 9` | 0 |
+| I06-T19 (e) 3 voucher-a istog korisnika paralelno | 10 | `200: 30` | 0 |
+| I06-T20 100 sekvencijalnih operacija (seed `0x1606`) | 1 | kupovina 201: 18; issue 201: 15, 409 INSUFFICIENT_POINTS: 4; redeem 200: 7, 409 ALREADY_REDEEMED: 16, 409 EXPIRED: 8, 409 CANCELLED: 2, 409 IDEMPOTENCY_CONFLICT: 1; cancel 200: 2, 409 EXPIRED: 6, 409 ALREADY_REDEEMED: 3; API-06 200: 8; istek: 7; bez operacije: 3 | 0 |
+
+I06-T18 (deterministički redoslijed, `prijePokusaja`): 7 slučajeva + kontrola, 1 izvršavanje svaki, PASS. Nijedan 500 pod kontencijom (i06/K-5).

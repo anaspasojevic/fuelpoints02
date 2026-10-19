@@ -82,6 +82,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /redemptionRequests/{requestKey} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

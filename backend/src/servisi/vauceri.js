@@ -28,6 +28,36 @@ export function jeIspravanSacuvaniVaucer(vaucer) {
   );
 }
 
+// §15, §16, O-27 (O-23, ODLUKE §6 (t)): jedina definicija konzistentnog voucher dokumenta; koriste je redeem, cancel,
+// procitajIstekleAktivne (API-03 reconcile, API-06) i O-16 retry API-03 (i06/P-1). Polja stanja moraju POSTOJATI (undefined ≠ null).
+export function jeKonzistentnoStanjeVaucera(vaucer) {
+  if (
+    typeof vaucer?.uid !== 'string' ||
+    vaucer.uid === '' ||
+    typeof vaucer.rewardId !== 'string' ||
+    !jeIspravanSacuvaniVaucer(vaucer)
+  ) {
+    return false;
+  }
+  const jeTs = (vrijednost) => vrijednost instanceof Timestamp;
+  switch (vaucer.status) {
+    case 'ACTIVE':
+    case 'EXPIRED':
+      return vaucer.redeemedAt === null && vaucer.redeemedAtStationId === null && vaucer.cancelledAt === null;
+    case 'REDEEMED':
+      return (
+        jeTs(vaucer.redeemedAt) &&
+        typeof vaucer.redeemedAtStationId === 'string' &&
+        vaucer.redeemedAtStationId !== '' &&
+        vaucer.cancelledAt === null
+      );
+    case 'CANCELLED':
+      return jeTs(vaucer.cancelledAt) && vaucer.redeemedAt === null && vaucer.redeemedAtStationId === null;
+    default:
+      return false;
+  }
+}
+
 // §15, i04/P-3: opaque voucherId iz CSPRNG-a, 32 bajta (256 bita) → 64 hex znaka malim slovima.
 // Nije izveden iz requestId-a, uid-a ni vremena; ispravan Firestore doc ID i bezbjedan segment putanje.
 export function generisiVoucherId() {
@@ -51,8 +81,9 @@ export function poredakOslobadjanja(a, b) {
   return a.voucherId > b.voucherId ? 1 : 0;
 }
 
-// §14, i04/P-4: requestKey = SHA-256 nad UTF-8 bajtovima uid + ":" + requestId, hex malim slovima.
-// requestId (O-15) nema ":", pa je podjela jednoznačna.
-export function izracunajRequestKey(uid, requestId) {
-  return crypto.createHash('sha256').update(`${uid}:${requestId}`, 'utf8').digest('hex');
+// requestKey = SHA-256 nad UTF-8 bajtovima prviDio + ":" + drugiDio, hex malim slovima.
+// §14, i04/P-4 (API-03): uid:requestId — requestId (O-15) nema ":". §20.2, O-8 (b) (API-04): stationId:redemptionRequestId — ni
+// stationId (O-13) ni redemptionRequestId (§20.1) nema ":". Podjela je jednoznačna.
+export function izracunajRequestKey(prviDio, drugiDio) {
+  return crypto.createHash('sha256').update(`${prviDio}:${drugiDio}`, 'utf8').digest('hex');
 }

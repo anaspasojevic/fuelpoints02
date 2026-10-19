@@ -9,7 +9,7 @@ import {
   TRAJANJE_VAUCERA_MS,
   generisiVoucherId,
   izracunajRequestKey,
-  jeIspravanSacuvaniVaucer,
+  jeKonzistentnoStanjeVaucera,
   jePozitivanCijeliBroj,
 } from './vauceri.js';
 
@@ -71,7 +71,8 @@ export async function izdajNagradu(db, { uid, rewardId, requestId }, rokDo) {
           throw new Error('Nekonzistentno stanje: mapping postoji bez voucher-a.');
         }
         const vaucer = snimakVaucera.data();
-        if (vaucer.uid !== uid || vaucer.rewardId !== mapping.rewardId || !jeIspravanSacuvaniVaucer(vaucer)) {
+        // O-27, i06/P-1: ista provjera stanja kao redeem i cancel.
+        if (!jeKonzistentnoStanjeVaucera(vaucer) || vaucer.uid !== uid || vaucer.rewardId !== mapping.rewardId) {
           throw new Error('Nekonzistentno stanje: voucher ne odgovara mapping-u.');
         }
         return { ishod: 'POSTOJECI', odgovor: odgovorVaucera(mapping.voucherId, vaucer) };

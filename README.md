@@ -137,6 +137,43 @@ Greške: `401 UNAUTHENTICATED`, `404 REWARD_NOT_FOUND`, `404 NOT_FOUND`, `409 AC
 `422 INVALID_REQUEST`, `500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`. Kad klijent dobije `503`, voucher je možda ipak izdat:
 klijent ponavlja zahtjev ISTIM `requestId` i dobija isti voucher bez nove rezervacije.
 
+**API-04 `POST /api/v1/pos/vouchers/{voucherId}/redeem`** — zaglavlje `X-POS-API-Key` (isti POS ključevi kao API-02; `stationId`
+samo iz ključa, nikad iz tijela, query-ja ni zaglavlja), tijelo tačno `{ "redemptionRequestId" }`: `^[A-Za-z0-9._-]{1,64}$`
+(§20.1), generisan jednom po pokušaju otkupa na kasi i ponovljen pri svakom retry-ju. Bilo koje drugo polje (`stationId`, `uid`,
+`voucherId`, …), bez tijela, niz, `null` ili ne-JSON → `422 INVALID_REQUEST`. `voucherId` je tačno 64 mala hex znaka; svaki drugi
+oblik — uključujući Firebase UID iz Customer QR koda (AC-04) — → `404 VOUCHER_NOT_FOUND` bez pristupa bazi.
+U JEDNOJ Firestore transakciji ACTIVE voucher prelazi u `REDEEMED` (`redeemedAt` po satu Backend-a, `redeemedAtStationId`),
+`reservedPoints −= costPoints` (`availablePoints` se ne mijenja), nastaje `REWARD_REDEEM` i zapis `redemptionRequests/{requestKey}`
+(`requestKey` = SHA-256 nad UTF-8 `stationId:redemptionRequestId`, hex malim slovima; O-8 (b)). Odgovor `200` i za prvi i za
+ponovljeni isti `(stationId, redemptionRequestId)` za isti voucher (ništa se ne upisuje, bez obzira na stanje naloga i rok — O-24);
+tijelo uvijek iz sačuvanog voucher-a: `{ "voucherId", "rewardId", "costPoints", "status": "REDEEMED", "issuedAt", "expiresAt",
+"redeemedAt", "redeemedAtStationId" }` (i06/P-6).
+
+```powershell
+$tijelo = '{"redemptionRequestId":"POS-RDM-001"}'
+Invoke-RestMethod "http://127.0.0.1:3000/api/v1/pos/vouchers/<voucherId>/redeem" -Method Post `
+  -Headers @{ 'X-POS-API-Key' = $env:POS_KLJUC_SIM01 } -ContentType 'application/json' -Body $tijelo
+```
+
+- Isti `redemptionRequestId` za DRUGI voucher → `409 IDEMPOTENCY_CONFLICT`; novi ID (ili ista vrijednost sa druge stanice, što je
+  drugi `requestKey`) za već otkupljen voucher → `409 VOUCHER_ALREADY_REDEEMED`.
+- `CANCELLED` → `409 VOUCHER_CANCELLED`; `EXPIRED` → `409 VOUCHER_EXPIRED`; status ima prednost nad rokom (O-7).
+- ACTIVE voucher kome je rok istekao: u istoj transakciji prelazi u `EXPIRED` i bodovi se vraćaju (`REWARD_RELEASE`), pa
+  `409 VOUCHER_EXPIRED` (§20.5); drugi voucher-i korisnika se ne diraju (O-26).
+- Zapis o zahtjevu nastaje SAMO pri uspješnom otkupu (O-8 (a)). Posljedica: `redemptionRequestId` upotrijebljen za neuspješan pokušaj
+  (`404`, `409`, `500`, `503` bez commit-a) može se kasnije upotrijebiti za drugi voucher.
+- Tijelo sa dvostrukim ključem (`{"redemptionRequestId":"A","redemptionRequestId":"B"}`) prihvata se sa POSLJEDNJOM vrijednošću
+  (`JSON.parse`, i06/P-4).
+- Redoslijed provjera: neispravan JSON ili JSON skalar/`null` (`422`, i bez ključa) → neispravno kodiran parametar (`404 NOT_FOUND`)
+  → POS ključ (`401`) → tijelo (`422`) → format `voucherId` (`404`) → rok (`503`) → u transakciji: postojeći zahtjev (isti voucher →
+  `200`, drugi → `409 IDEMPOTENCY_CONFLICT`) → voucher postoji (`404`) → `REDEEMED` / `CANCELLED` / `EXPIRED` (`409`) → tek za ACTIVE
+  stanje naloga vlasnika (`409 ACCOUNT_NOT_INITIALIZED`, `409 ACCOUNT_DELETION_IN_PROGRESS`; O-25) → istek (§20.5) → otkup.
+
+Greške: `401 UNAUTHENTICATED_POS`, `404 VOUCHER_NOT_FOUND`, `404 NOT_FOUND`, `409 IDEMPOTENCY_CONFLICT`,
+`409 VOUCHER_ALREADY_REDEEMED`, `409 VOUCHER_CANCELLED`, `409 VOUCHER_EXPIRED`, `409 ACCOUNT_NOT_INITIALIZED`,
+`409 ACCOUNT_DELETION_IN_PROGRESS`, `422 INVALID_REQUEST`, `500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`. Kad kasa dobije `503`,
+otkup je možda ipak upisan: kasa ponavlja zahtjev ISTIM `redemptionRequestId` i dobija `200` sa istim tijelom bez novog otkupa.
+
 **API-05 `POST /api/v1/vouchers/{voucherId}/cancel`** — zaglavlje `Authorization: Bearer <Firebase ID token>` (UID samo iz
 verifikovanog token-a; `?uid=`, `X-User-Id` i slično se ignorišu). Bez tijela: zahtjev bez tijela (i `Content-Length: 0` bez
 `Content-Type`, kako šalje Retrofit `@POST` bez `@Body`) ili tijelo `{}`; svako drugo tijelo → `422 INVALID_REQUEST`, i kada
@@ -204,6 +241,10 @@ cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\
 - `npm run test:emu` (backend) i `npm test` (`firebase\tests`): testovi kroz `firebase emulators:exec`
   nad projektom `demo-fuelpoints`; nikad nad production projektom. Ne pokretati ih dok su emulatori
   već pokrenuti (portovi 8080 i 9099).
+- `npm run test:emu:ciljano -- test/emulator/<fajl>.test.js [drugi fajlovi] [--test-name-pattern=<obrazac>]` (backend, O-29 (c)):
+  ista konfiguracija kao `test:emu`, samo zadati fajlovi; za razvoj i kontrolne mutacije. Dokaz za DoD ostaju `test:emu` i
+  `provjera.ps1`. Ako je na PATH-u Oracle `javapath`, prije pokretanja postaviti pravi JDK prvi na PATH
+  (`$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"`), inače Java proces emulatora ostaje i drži port 8080.
 
 ## Provjera
 

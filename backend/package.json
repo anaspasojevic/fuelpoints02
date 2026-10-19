@@ -10,6 +10,7 @@
     "start": "node --env-file-if-exists=../.env src/pokreni.js",
     "test": "node --test test/jedinicni/*.test.js",
     "test:emu": "firebase emulators:exec --config ../firebase.json --project demo-fuelpoints --only firestore,auth \"node --test --test-concurrency=1 test/emulator/*.test.js\"",
+    "test:emu:ciljano": "node skripte/testEmuCiljano.js",
     "seed:emu": "node --env-file-if-exists=../.env skripte/napuniEmulator.js"
   },
   "dependencies": {
