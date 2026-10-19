@@ -1227,3 +1227,62 @@ P-1 A (§7 + (v), bez koda); P-2 (`svjezinaPrijave.js`, I07-T01/T02); P-3 (K3 i 
 - Granica 500 upisa po paketu nije provjerljiva u emulatoru; ≤ 400 dokazano brojanjem operacija (I07-T06 (c)).
 - Veliki nalog: rok 10 s → 503, nastavak bezbjedan; produkcija neprovjerljiva. K3 bez gornje granice ACTIVE voucher-a (i07/P-4).
 - Konkurentni DELETE istog korisnika: oba mogu dobiti 204 (`auth/user-not-found` = već obrisan); 503 moguć, retry bezbjedan.
+
+## Iteracija 8 — Security Rules lockdown 12/12 i B-1
+
+Grana `iteracija-08`. Brief: `docs/iteracije/i08_brief.md`. Plan: `docs/iteracije/i08_plan.md` (odobren uz i08/P-1 … P-4, K-1, sekcija 14).
+Uloga: BUILDER, 2026-10-19. Režim: ekspresni (O-30, O-31). Unos je sažet po O-30 (d).
+
+### CHANGELOG
+
+- **§31 (O-37):** `firebase/firestore.rules` bez izmjene — sadržinski identičan §31 (`.md` i `.docx`, TEST_REPORT i08). Novi test
+  `firebase/tests/normativnaPravila.test.js` (I08-T01: isijecanje jedinog javascript bloka §31 iz `.md`, uklanjanje markdown escape-ova,
+  normalizacija red po red po i08/P-2; kontrola komparatora); samo `node:fs`, bez novog paketa, pokreće se istim `npm test`.
+- **§30 RULE-T01 … RULE-T12 konačno:** RULE-T01 + neautentifikovan list `users`; nov RULE-T04 granice (0 / 101 / ne-string, klijentski
+  `updatedAt`, bez `updatedAt`); novi RULE-T08, RULE-T09 granice upita (limit 20 / 21, bez limit-a, bez `where uid`, tuđi uid); nov RULE-T10
+  list 50 / 51 i granice `readAt` (klijentsko vrijeme, null → null, drugi put); RULE-T12 bez „preliminarno” — konteksti neautentifikovan /
+  vlasnik (dokument sa `uid == auth.uid`) / drugi, operacije get, list, list `where uid limit 20`, set, create, update, delete, podkolekcije
+  (i ispod `users/{uid}`, `loyaltyAccounts/{uid}`, `rewardRequests/{key}`) i `collectionGroup`. Postojeće asercije nepromijenjene.
+- **AC-02:** I08-T02 u `podrazumijevanaZabrana.test.js` — create, update, set merge, delete nad 6 kritičnih kolekcija za 3 konteksta i
+  konkretno povećanje `availablePoints`; stanje poslije provjereno bez pravila (nepromijenjeno, ništa kreirano).
+- **B-1 (§8.2, i03/P-5, i08/P-3 B):** `backend/src/validacija/identifikator.js` — `jeIspravanIdDokumenta` odbija `\p{Cc}` (jedino mjesto
+  provjere); `zahtjevIzdavanja.js` — uklonjena lokalna `KONTROLNI_ZNAK` provjera (duplikat). `loyaltyUid` sa kontrolnim znakom → 404
+  `LOYALTY_ACCOUNT_NOT_FOUND` bez pristupa bazi, redoslijed provjera i03/P-6 nepromijenjen; `rewardId` ponašanje identično (I04-T03 (a), (b)
+  zeleni bez izmjene). Test I08-T03 u `backend/test/emulator/kupovina.test.js`.
+- **NFR-07:** inspekcija I08-T04 (TEST_REPORT i08), bez izmjene koda.
+- **Dokumentacija:** TEST_REPORT (AC-12 tabela), TRACEABILITY, ODLUKE (§1 i07 ACCEPTED, i08 status; B-1 zatvoren; O-37, O-38, i08/P-n, K-1;
+  §7 R-01 i07; §8 R-02 i07), ovaj unos.
+
+### Commit-i
+
+| Commit | Korak |
+|---|---|
+| `ff4072c` i08: odobrenje plana i odluke Orchestrator-a | 0 |
+| `3dde696` i08: RULE-T01 … RULE-T12 konačno i test pravila = §31 (I08-T01, I08-T02) | K1 |
+| `e8d10d0` i08: B-1 zabrana kontrolnih znakova u loyaltyUid (§8.2, i03/P-5) | K2 (+ `provjera.ps1` #1) |
+| (bez commit-a) mutacije D01 … D06, NFR-07 inspekcija, `provjera.ps1` #2 (završni, kod `e8d10d0`) | K3 |
+| dokumentacija (ovaj unos) | K4 |
+
+### Odstupanja (OD-n, bez promjene ponašanja)
+
+- **OD-1** — Naziv postojećeg testa RULE-T01 proširen u „RULE-T01 neautentifikovan read users/{uid} (get i list) → DENY” jer je dodata
+  asercija za list (§30 „read”); oznaka RULE-T01 ostaje, postojeća asercija netaknuta.
+- **OD-2** — Ručna `.docx` provjera (i08/P-1: „red po red”) urađena sa `<w:br/>` → prelom reda, pa poređenjem red po red (77 = 77, 0 razlika);
+  poređenje bez bijelih znakova iz plana 3.2 (b) zadržano kao kontrola (1756 = 1756).
+- **OD-3** — Prvi pokušaj mutacija D01 … D05 nevažeći: `--test-name-pattern=A|B|…` je `emulators:exec` izvršio kroz `cmd`, koji je `|`
+  protumačio kao pipe (exit 255, nijedan test). Ponovljeno sa više `--test-name-pattern` opcija; pravila vraćena `git restore` poslije svakog.
+- **OD-4** — U mutacionim run-ovima sa filterom imena, fajlovi bez izabranog testa prijavljuju grešku nivoa fajla (`after` poziva
+  `cleanup` nad neinicijalizovanim okruženjem jer `before` nije izvršen). Artefakt filtera; ishod mutacije se čita samo iz imenovanih testova.
+- **OD-5** — I08-T02 za `loyaltyAccounts` kao „create” koristi `loyaltyAccounts/korisnikB` (ID dokumenta = uid, kolekcija nema polje `uid`);
+  ostale kolekcije nov dokument sa `uid == A`. Konteksti uključuju i drugog korisnika i neautentifikovanog (plan 5.4).
+
+### Status pitanja i08/P-n
+
+P-1 A (I08-T01 nad `.md`; `.docx` provjera u TEST_REPORT, bez razlike); P-2 A (red po red); P-3 B (`jeIspravanIdDokumenta`, duplikat uklonjen;
+I04-T03 (a), (b) zeleni bez izmjene); P-4 (AC-12 tabela iz `provjera.ps1` #2). K-1: D06 obara I08-T03 i I04-T03 (a).
+
+### Poznata ograničenja
+
+- I08-T01 zavisi od `.md` kopije SRS-a (nepromjenljiva); regeneracija drugim alatom može oboriti test zbog formata (plan 11).
+- Normalizacija red po red je stroža od „samo razmaci”: drugačiji prelom reda u `firestore.rules` obara I08-T01.
+- AC-12 je ovdje backend dio nad emulatorom; završna potvrda u i11 (pravi projekat, O-2).

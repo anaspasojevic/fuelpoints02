@@ -20,8 +20,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i04 Reward issue | ITERATION ACCEPTED (re-review 2, poslije FIX LOOP-a 2) | tag `i04` (merge `d445fe8`, PR #4) |
 | i05 Voucher cancel i account reconcile | ITERATION ACCEPTED (re-review nije bio potreban) | tag `i05` (merge `5a2f8cc`, PR #5) |
 | i06 Voucher redeem (API-04) | ITERATION ACCEPTED (O-31: bez re-run-a `provjera.ps1`; NOTE R-01 … R-04) | tag `i06` (merge `9aae907`, PR #6) |
-| i07 Brisanje naloga (API-07) | BUILDER ZAVRŠIO — čeka review | grana `iteracija-07` (PR → main, bez merge-a i taga) |
-| i08 – i11 | nije počelo | — |
+| i07 Brisanje naloga (API-07) | ITERATION ACCEPTED (O-31; MINOR R-01 → §7, NOTE R-02 → §8) | tag `i07` (merge `3d2ec94`, PR #7) |
+| i08 Security Rules lockdown 12/12 i B-1 | BUILDER ZAVRŠIO — čeka review | grana `iteracija-08` (PR → main, bez merge-a i taga) |
+| i09 – i11 | nije počelo | — |
 
 ## 2. Odluke Ane (O-n)
 
@@ -48,7 +49,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-33 | Uspješno brisanje (prvo i nastavljeno) → 204 bez tijela. Status: implementirano u i07, API-T12. | 2026-10-19, i07 | i07_brief |
 | O-31 | EKSPRESNI REŽIM od Reviewer-a i06 do i11 (uz O-30): Reviewer ne ponavlja `provjera.ps1` kad TEST_REPORT ima završni run na kodu X i `git diff X..<vrh PR-a>` sadrži samo `docs/*.md` i `README.md`; checkpoint: merge, pa `git diff <vrh PR-a> main` prazno, pa tag; mutacije i07 ~10, i08 ~5, Android bez mutacija; smoke i09/i10 samo API 35, puni NFR-09 u i11. Vidi §3 i §10. | 2026-10-19, i06 review | i07_brief (tačka 10) |
 | O-2 | Razvoj i testovi i09–i10 nad emulatorom; pravi Firebase Spark projekat se podešava u i11 (demo i ručna provjera §3.5, §3.6). | 2026-10-19 | i07_brief (tačka 10) |
-| B-1 (odluka) | i08: zabrana `\p{Cc}` za `loyaltyUid` (kao i04/P-9) → 404 `LOYALTY_ACCOUNT_NOT_FOUND` bez pristupa bazi. Vidi §8. | 2026-10-19 | i07_brief (tačka 10) |
+| B-1 (odluka) | i08: zabrana `\p{Cc}` za `loyaltyUid` (kao i04/P-9) → 404 `LOYALTY_ACCOUNT_NOT_FOUND` bez pristupa bazi. Vidi §8. Status: ZATVORENO u i08 — provjera u `jeIspravanIdDokumenta` (i08/P-3 B), I08-T03, mutacija D06. | 2026-10-19 | i07_brief (tačka 10) |
 | O-6 | Voucher postoji, ali pripada drugom korisniku → 403 `FORBIDDEN`, ništa upisano ni otkriveno u tijelu odgovora; voucher koji ne postoji → 404 `VOUCHER_NOT_FOUND`. Status: implementirano u i05, I05-T05. | 2026-10-18, i05 | i05_brief |
 
 ## 3. Odluke Orchestrator-a (D-n)
@@ -81,6 +82,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-36 (Orchestrator, brief i07) | Tok brisanja NIJE jedna transakcija; koraci idempotentni i ponovljivi; K1, K3 (i K4b) transakcije, K4a / K5 upiti + paketi ≤ 400 upisa; rok 10 s → 503, stanje konzistentno, nastavak bezbjedan (§23.4, §6 (b)). Status: implementirano u i07, I07-T06, I07-T11. | i07 brief |
 | i07/P-1 … P-9, K-1 … K-4 (Orchestrator, odobrenje plana i07) | P-1 A: prozor K4b → K6 prihvaćen (§7) + ograničenje (v) za i10, bez koda (B, C, D odbačeni); P-2: oblik O-35, fail closed za `auth_time` koji nije nenegativan siguran cijeli broj, budući `auth_time` dozvoljen; P-3: nastavak uvijek cijeli tok od K1, K3 i K4b traže users DELETION_IN_PROGRESS ili nepostojeći (inače 500), `accountStatus` van enum-a → 500; P-4: K3 bez gornje granice broja ACTIVE voucher-a; P-5: posljedica O-10a (drugi `loyaltyUid` → 200 prvi rezultat); P-6: retry izdavanja / otkupa poslije brisanja mapping-a → 409 / 404, nikad 500 (zatvara (f), (m), (u)); P-7: `omotacBaze.batch()` + `dnevnik`, `test/pomocnici/omotacAutha.js` (test-only); P-8: ponovljen DELETE poslije K6 → 401; P-9: smoke `DELETE /account` bez token-a → 401. K-1: koraci 4 i 5 spojeni; K-2: JDK prvi na PATH-u i provjera portova; K-3: crveni run prije koda; K-4: commit koda završnog `provjera.ps1` u TEST_REPORT. Detalji: `docs/iteracije/i07_plan.md`, sekcija 14. | i07 plan |
 | D-5 | Neispravno percent-kodiran parametar putanje (Express 5 `URIError`, status 400) mora dati deterministički 4xx bez stack-a i bez sirove vrijednosti u logu i odgovoru; ispravka globalna. Kod predlaže Planner i04 (preporuka 404 `NOT_FOUND`). Status: implementirano u i04 — 404 `NOT_FOUND` u `odrediKod` (i04/P-8, K-1), I04-T03 (c), I04-T16. | i04 brief |
+| O-37 (Orchestrator, brief i08) | Dokaz identičnosti pravila je automatski test (I08-T01) koji čita normativni tekst §31; normalizacija samo razmaci / prazni redovi. Status: implementirano u i08 — `firebase/tests/normativnaPravila.test.js` nad `.md` (i08/P-1 A, P-2 A), jednokratna `.docx` provjera u TEST_REPORT i08 (77 = 77 redova, 0 razlika). | i08 brief |
+| O-38 (Orchestrator, brief i08) | R-01 review-a i07 (prozor K1 → K4a) upisan u §7 kao poznato ograničenje; R-02 i07 (NOTE, 503 pod opterećenjem) u §8 bez roka. Bez izmjene koda. | i08 brief |
+| i08/P-1 … P-4, K-1 (Orchestrator, odobrenje plana i08) | P-1 A: I08-T01 čita `.md` sa uklonjenim markdown escape-ovima, ručna `.docx` provjera u TEST_REPORT (pri razlici normativan je `.docx`); P-2 A: poređenje red po red (trim, razmaci u jedan, bez praznih redova); P-3 B: `\p{Cc}` zabrana u `jeIspravanIdDokumenta`, lokalna provjera u `zahtjevIzdavanja.js` uklonjena kao duplikat; P-4: „jedan završni run” za AC-12 = jedno izvršavanje `provjera.ps1` sa exit 0; K-1: D06 = uklanjanje `\p{Cc}` provjere, mora oboriti I08-T03 i I04-T03. Detalji: `docs/iteracije/i08_plan.md`, sekcija 14. | i08 plan |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
 
@@ -115,7 +119,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i04/P-6 | Release-i po `expiresAt` rastuće, pa `voucherId` rastuće (poređenje stringova); po voucher-u update statusa, pa create `release_`; lanac release-i → RESERVE; isti `createdAt` za sve događaje transakcije. |
 | i04/P-7 | Poredak provjera i čitanja po planu 5.1/5.5; upisi: 1 … 2k release-i, 2k+1 nalog, 2k+2 voucher, 2k+3 RESERVE, 2k+4 mapping (O-14 grana: 1 … 2k, 2k+1 nalog). Nekonzistentna stanja → 500, ništa upisano. |
 | i04/P-8 | D-5: `err instanceof URIError && err.status === 400` → `NOT_FOUND`, globalno; stvaran redoslijed neispravan JSON (422) → D-5 (404) (K-1). |
-| i04/P-9 | Zajednička `jeIspravanIdDokumenta` (`validacija/identifikator.js`); za `rewardId` dodatno zabrana `\p{Cc}`; `loyaltyUid` nepromijenjen (B-1). |
+| i04/P-9 | Zajednička `jeIspravanIdDokumenta` (`validacija/identifikator.js`); za `rewardId` dodatno zabrana `\p{Cc}`; `loyaltyUid` nepromijenjen (B-1). i08 (B-1, i08/P-3 B): zabrana `\p{Cc}` premještena u `jeIspravanIdDokumenta` i važi za `rewardId` i `loyaltyUid`. |
 | i04/P-10 | `tx.get(query)` (uid ==, status == ACTIVE) radi nad emulatorom; `firestore.indexes.json` se ne mijenja. |
 | i04/P-11 | `omotacBaze.sakrijPostojece` važi i za dokumente u rezultatu `tx.get(query)`; mock `crypto.randomBytes` samo iz testova. |
 | i04/P-12 | Neispravna definicija nagrade (`costPoints` nije siguran cijeli broj ≥ 1, `active` nije boolean) → 500 prije provjere `active === false` (409 `REWARD_INACTIVE`). |
@@ -307,6 +311,10 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - i07: emulator ne provjerava granicu od 500 upisa po paketu; ≤ 400 se dokazuje brojanjem operacija u omotaču (I07-T06 (c)).
 - i07: veliki nalog — rok 10 s ograničava broj dokumenata po zahtjevu (→ 503, nastavak bezbjedan); produkcija neprovjerljiva.
 - i07: rijetka prolazna 401 na zahtjevu sa svježim token-om pod opterećenjem emulatora (uočeno jednom, I06-T19 (c), OD-3 i07; ponovljen run zelen).
+- R-01 (i07 review, MINOR; O-38): prozor K1 → K4a — za NOT_INITIALIZED korisnika init commit-ovan između K3 i K4a daje 500 na prvom DELETE-u
+  (`users` ACTIVE bez `loyaltyAccounts`, Auth postoji); ponovljen DELETE → 204 i čisto stanje. Samo sopstveni nalog, traži paralelan init i
+  DELETE (Android po (v) to ne radi). Poznato ograničenje, bez izmjene koda.
+- i08 (B-1): ponašanje produkcionog Firestore-a za ID sa kontrolnim znakom više nije relevantno za `loyaltyUid` i `rewardId` (odbija se prije baze).
 
 ## 8. Backlog
 
@@ -314,7 +322,8 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 |---|---|---|---|
 | F1-01 (i03_review_fix1) | P3 | `docs/TEST_REPORT.md` (linije ~1774, 1776, 1783): putanja `firebase\tests` upisana sa `\t` kao tabulatorom („`firebase<TAB>ests`”) | ZATVORENO u i04 (dokumentacioni korak; `git grep -n -P "firebase\tests" -- docs` prazno) |
 | B-2 (i04 review R-03, O-17) | P3 | Kontencija `tx.get(query)` nad `vouchers` između različitih korisnika u emulatoru; ako se pokaže u demu, razmotriti opciju B (upit van transakcije + `tx.getAll` kandidata i ponovna provjera u transakciji) uz novu odluku | i09 |
-| B-1 (i04/P-9) | P3 | `loyaltyUid` (API-02) sa NUL ili kontrolnim znakom prolazi provjeru formata i ide do Firestore-a (u emulatoru 404 iz transakcije; produkcija neprovjerljiva). ODLUKA (Ana, 2026-10-19): zabrana `\p{Cc}` (kao i04/P-9) → 404 `LOYALTY_ACCOUNT_NOT_FOUND` bez pristupa bazi | i08 |
+| B-1 (i04/P-9) | P3 | `loyaltyUid` (API-02) sa NUL ili kontrolnim znakom prolazi provjeru formata i ide do Firestore-a (u emulatoru 404 iz transakcije; produkcija neprovjerljiva). ODLUKA (Ana, 2026-10-19): zabrana `\p{Cc}` (kao i04/P-9) → 404 `LOYALTY_ACCOUNT_NOT_FOUND` bez pristupa bazi | ZATVORENO u i08 (I08-T03, D06) |
+| R-02 (i07 review, NOTE; O-38) | P4 | 503 `SERVICE_UNAVAILABLE` pod kontencijom (DELETE + 4 operacije istog korisnika: issue 2/10); dozvoljeno po §27, stanje konzistentno, retry bezbjedan, nijedan 500 | bez roka |
 | R-02 (i05 review, NOTE) | P4 | Retry cancel-a nad CANCELLED / EXPIRED ne provjerava postojanje `release_{voucherId}` (po odluci i05/P-4); svjesna granica detekcije nekonzistentnog stanja, veza sa §6 (r) | bez roka |
 | R-03 (i05 review, NOTE) | P4 | Redakcija hex-a u logu ne-gRPC poruka ostavlja prefiks < 32 znaka (npr. hex razdvojen crticom); nedostižno u kodu i05 (statičke poruke, I05-T02); ostaje poznato ograničenje R-12 | bez roka |
 | R-04 (i05 review, NOTE) | P4 | 503 pod kontencijom istog naloga (paralelni cancel, cancel × API-06, cancel × issue); dozvoljeno po §27, stanje konzistentno, retry bezbjedan; Android (i09/i10) treba ponoviti poziv na 503 | bez roka |
