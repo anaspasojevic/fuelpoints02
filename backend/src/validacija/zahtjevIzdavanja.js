@@ -5,9 +5,6 @@ import { jeIspravanIdDokumenta } from './identifikator.js';
 // Jedan UUID tako daje tačno jedan requestKey (§14).
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-// i04/P-9: kontrolni znakovi (U+0000–U+001F, U+007F–U+009F) u rewardId se odbijaju bez pristupa bazi.
-const KONTROLNI_ZNAK = /\p{Cc}/u;
-
 function jeObicanObjekat(vrijednost) {
   return typeof vrijednost === 'object' && vrijednost !== null && !Array.isArray(vrijednost);
 }
@@ -29,9 +26,9 @@ export function provjeriTijeloIzdavanja(tijelo) {
 }
 
 // D-4: rewardId iz putanje se provjerava prije upotrebe kao ID dokumenta; neispravan oblik ne postoji kao nagrada (§12)
-// → REWARD_NOT_FOUND bez pristupa bazi.
+// → REWARD_NOT_FOUND bez pristupa bazi (kontrolni znakovi: i04/P-9, u jeIspravanIdDokumenta).
 export function provjeriRewardId(rewardId) {
-  if (typeof rewardId !== 'string' || !jeIspravanIdDokumenta(rewardId) || KONTROLNI_ZNAK.test(rewardId)) {
+  if (typeof rewardId !== 'string' || !jeIspravanIdDokumenta(rewardId)) {
     throw new GreskaApi('REWARD_NOT_FOUND');
   }
   return rewardId;

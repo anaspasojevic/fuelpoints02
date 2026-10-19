@@ -159,6 +159,20 @@ describe('RULE-T09 vouchers', () => {
       await ocekujZabranu(deleteDoc(doc(db, `vouchers/${VA1}`)), `${naziv}: delete`);
     }
   });
+
+  test('RULE-T09 granice upita: limit 20 ALLOW; limit 21, bez limit-a, bez where uid, tuđi uid → DENY', async () => {
+    await pripremiVaucere();
+    const vauceri = collection(bazaVlasnika(), 'vouchers');
+    const rezultat = await ocekujDozvolu(
+      getDocs(query(vauceri, where('uid', '==', VLASNIK), limit(20))),
+      'vlasnik list vouchers where uid == A limit 20',
+    );
+    assert.deepStrictEqual(rezultat.docs.map((d) => d.id).sort(), [VA1, VA2]);
+    await ocekujZabranu(getDocs(query(vauceri, where('uid', '==', VLASNIK), limit(21))), 'where uid == A limit 21');
+    await ocekujZabranu(getDocs(query(vauceri, where('uid', '==', VLASNIK))), 'where uid == A bez limit-a');
+    await ocekujZabranu(getDocs(query(vauceri, limit(20))), 'bez where, limit 20');
+    await ocekujZabranu(getDocs(query(vauceri, where('uid', '==', DRUGI), limit(20))), 'where uid == B limit 20');
+  });
 });
 
 describe('I04-T17 ostale granice vouchers, rewardDefinitions i rewardRequests (§25.6, §25.7, §25.9, §31)', () => {

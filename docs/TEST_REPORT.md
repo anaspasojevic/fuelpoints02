@@ -2660,3 +2660,131 @@ Nijedan 500 pod kontencijom.
 ### Poznata ograničenja
 
 Vidi IMPLEMENTATION_LOG i07 i ODLUKE §7 (prozor K4b → K6, budući `auth_time`, granica paketa u emulatoru, veliki nalog, prolazna 401 OD-3).
+
+## Iteracija 8 — Security Rules lockdown 12/12 i B-1
+
+Datum izvršavanja: 2026-10-19 (Windows 11 Pro 10.0.22621, Windows PowerShell 5.1). Grana `iteracija-08`. Sažeto po O-30 (d): komanda, exit,
+tests / pass / fail, trajanje; puni izlazi su u scratchpad-u sesije (van repoa). Prije i poslije svakog emulator run-a portovi 8080 i 9099 slobodni,
+JDK 24 prvi na PATH-u; `powercfg /change standby-timeout-ac 0` (prethodna vrijednost je takođe bila 0).
+
+### Run-ovi `provjera.ps1` (O-30 (a): tačno 2×)
+
+| # | Kada / stablo | Komanda | Exit | Rezultat | Trajanje |
+|---|---|---|---|---|---|
+| 1 | poslije K2, kod = `e8d10d0` | `.\skripte\provjera.ps1` | 0 | `SVE PROVJERE PROŠLE`; backend `ℹ tests 83 / pass 83 / fail 0`, emulator `ℹ tests 194 / pass 194 / fail 0` (1431 s); rules `ℹ tests 40 / pass 40 / fail 0`; smoke-ovi (8); Android `assembleDebug`, `testDebugUnitTest` `BUILD SUCCESSFUL` | ≈ 25 min |
+| 2 | završno (K3), **kod = `e8d10d0`**, radno stablo čisto (dokumentacija K4 još nije pisana u repo) | `.\skripte\provjera.ps1` | 0 | `SVE PROVJERE PROŠLE`; backend `ℹ tests 83 / pass 83 / fail 0`, emulator `ℹ tests 194 / pass 194 / fail 0` (1309 s); rules `ℹ tests 40 / pass 40 / fail 0`; smoke-ovi (8); Android `BUILD SUCCESSFUL` | 1443 s (20:14:01–20:38:04) |
+
+Poslije run-a 2 commit-ovani su samo `docs/*.md` (K4).
+
+### Ciljani run-ovi između koraka
+
+| Korak | Komanda | Exit | Rezultat |
+|---|---|---|---|
+| K1 | `cd firebase\tests; npm test` | 0 | `ℹ tests 40 / pass 40 / fail 0` (I08-T01 (a), (b); I08-T02; RULE-T01 … RULE-T12 konačni) |
+| K2 | `npm run test:emu:ciljano -- test/emulator/kupovina.test.js` **prije koda** (crveno) | 1 | `tests 16 / pass 15 / fail 1` — I08-T03: `NUL u sredini: pristup bazi` (loyaltyUid sa NUL stiže do Firestore-a) |
+| K2 | `npm run test:emu:ciljano -- test/emulator/kupovina.test.js test/emulator/izdavanjeNagrade.test.js` poslije koda | 0 | `tests 34 / pass 34 / fail 0` (I08-T03, I04-T03 (b) zeleni) |
+| K2 | `cd backend; npm test` | 0 | `tests 83 / pass 83 / fail 0` (I04-T03 (a) zelen bez izmjene) |
+
+### I08-T01 — jednokratna ručna provjera §31 prema `.docx`-u (O-37, i08/P-1)
+
+Postupak (scratchpad, skripta se ne commit-uje): `Copy-Item docs\srs\FuelPoints_SRS_3_1.docx <scratchpad>\srs.zip`; `Expand-Archive`;
+iz `word/document.xml` tekst `<w:t>` po paragrafu, `<w:br/>` → prelom reda, XML entiteti dekodirani; sekcija od posljednjeg paragrafa
+„31. FIRESTORE RULES” do „32. ACCEPTANCE CRITERIA”; paragraf sa kodom (tačno 1) normalizovan kao u I08-T01 (i08/P-2) i upoređen sa
+`firebase/firestore.rules` red po red: **77 = 77 redova, 0 razlika**; kontrolno bez ikakvih bijelih znakova **1756 = 1756 znakova, identično**.
+Zaključak: `.md` i `.docx` se za §31 ne razlikuju sadržinski; `firestore.rules` = §31, bez izmjene pravila (`git diff i07 -- firebase/firestore.rules` prazno).
+
+### AC-12 (backend dio) — 12/12 API i 12/12 Rules iz završnog run-a (`provjera.ps1` #2, kod `e8d10d0`; i08/P-4)
+
+Backend korak `npm run test:emu` (`ℹ tests 194 / pass 194 / fail 0`) i Rules korak `npm test` (`ℹ tests 40 / pass 40 / fail 0`) istog izvršavanja.
+
+| ID | Fajl | Naziv testa | Ishod |
+|---|---|---|---|
+| API-T01 | `backend/test/emulator/inicijalizacijaNaloga.test.js` | API-T01 validan init kreira profil i balance 0/0 sa tačnim poljima; ponovljeni init ne resetuje stanje | PASS |
+| API-T02 | `backend/test/emulator/kupovina.test.js` | API-T02 42 730 ml → 42 boda; purchase, EARN, balance i notifikacija tačno po §8.3, §11, §9.2 | PASS |
+| API-T03 | `backend/test/emulator/kupovina.test.js` | API-T03 ponovljeni isti (stationId, posTransactionId) sa istim payload-om → 200 i tijelo prve operacije, ništa novo | PASS |
+| API-T04 | `backend/test/emulator/kupovina.test.js` | API-T04 isti purchase ID sa drugim uid, volumeMl, amountMinor ili currency → 409, ništa izmijenjeno; nevalidan ulaz odbijen | PASS |
+| API-T05 | `backend/test/emulator/izdavanjeNagrade.test.js` | API-T05 49 available → CAR_WASH (50) → 409 INSUFFICIENT_POINTS, stanje nepromijenjeno, ništa upisano | PASS |
+| API-T06 | `backend/test/emulator/izdavanjeNagrade.test.js` | API-T06 50 available → CAR_WASH → 201: rezervacija, ACTIVE voucher, REWARD_RESERVE i mapping tačnih polja; retry → 200 isti voucher | PASS |
+| API-T07 | `backend/test/emulator/izdavanjeAtomicnost.test.js` | API-T07 dva paralelna CAR_WASH sa 50 bodova (20 ponavljanja) → nikad oba uspješna; bar jednom {201, 409 INSUFFICIENT_POINTS} (K-3) | PASS |
+| API-T08 | `backend/test/emulator/otkupVaucera.test.js` | API-T08 nalog 30/50, ACTIVE CAR_WASH (50), SIM01, POS-RDM-001 → 200; REDEEMED, nalog 30/0, jedan REWARD_REDEEM i jedan zapis tačnih polja | PASS |
+| API-T09 | `backend/test/emulator/otkupVaucera.test.js` | API-T09 isti zahtjev → 200 isto tijelo, 0 upisa; isti ID za drugi voucher → 409 IDEMPOTENCY_CONFLICT; novi ID ili druga stanica → 409 VOUCHER_ALREADY_REDEEMED | PASS |
+| API-T10 | `backend/test/emulator/otkupVaucera.test.js` | API-T10 istekao ACTIVE (50, nalog 0/50) → 409 VOUCHER_EXPIRED; EXPIRED + REWARD_RELEASE, nalog 50/0, bez zapisa i REDEEM; ponovljen → 409 bez upisa | PASS |
+| API-T10 | `backend/test/emulator/otkupVaucera.test.js` | API-T10 granica u servisu: sadaMs === expiresAt → EXPIRED (409) + release; sadaMs === expiresAt − 1 → REDEEMED sa redeemedAt = sadaMs | PASS |
+| API-T11 | `backend/test/emulator/otkazivanjeVaucera.test.js` | API-T11 ACTIVE CAR_WASH voucher → cancel → 200, CANCELLED sa cancelledAt, bodovi vraćeni, jedan REWARD_RELEASE; ponovljen cancel → isto tijelo, ništa upisano | PASS |
+| API-T12 | `backend/test/emulator/brisanjeNaloga.test.js` | API-T12 primjer A (72/0 → issue → 22/50, 2 notifikacije) → 204 bez tijela; sve A obrisano ili pseudonimizovano, Auth A ne postoji, B netaknut; ponovljen DELETE → 401 (i07/P-8) | PASS |
+| API-T12 | `backend/test/emulator/brisanjeNaloga.test.js` | API-T12 nastavak (§23.4): prvi DELETE prekinut na prvom upisu K4a → 500; DELETION_IN_PROGRESS; drugi DELETE → 204 i isto konačno stanje | PASS |
+| RULE-T01 | `firebase/tests/korisnikINalog.test.js` | RULE-T01 neautentifikovan read users/{uid} (get i list) → DENY | PASS |
+| RULE-T02 | `firebase/tests/korisnikINalog.test.js` | RULE-T02 owner read sopstvenog profila → ALLOW | PASS |
+| RULE-T03 | `firebase/tests/korisnikINalog.test.js` | RULE-T03 cross-user read profila → DENY; list users → DENY i za vlasnika | PASS |
+| RULE-T04 | `firebase/tests/korisnikINalog.test.js` | RULE-T04 owner update samo displayName + updatedAt (= request.time) → ALLOW | PASS |
+| RULE-T04 | `firebase/tests/korisnikINalog.test.js` | RULE-T04 granice: displayName 0 / 101 / nije string, updatedAt ≠ request.time, bez updatedAt → DENY | PASS |
+| RULE-T05 | `firebase/tests/korisnikINalog.test.js` | RULE-T05 update koji dodaje ili mijenja server/unknown polje → DENY | PASS |
+| RULE-T06 | `firebase/tests/korisnikINalog.test.js` | RULE-T06 owner read sopstvenog loyaltyAccounts/{uid} → ALLOW | PASS |
+| RULE-T07 | `firebase/tests/korisnikINalog.test.js` | RULE-T07 client create loyaltyAccounts (i za sopstveni uid) → DENY | PASS |
+| RULE-T07 | `firebase/tests/korisnikINalog.test.js` | RULE-T07 client update, merge i delete postojećeg loyaltyAccounts (i od strane vlasnika) → DENY | PASS |
+| RULE-T08 | `firebase/tests/kupovineObavjestenjaLedger.test.js` | RULE-T08 owner query (uid == auth.uid, limit 20) i owner get → ALLOW | PASS |
+| RULE-T08 | `firebase/tests/kupovineObavjestenjaLedger.test.js` | RULE-T08 direct purchase write (create, update, delete; i vlasnika) → DENY | PASS |
+| RULE-T08 | `firebase/tests/kupovineObavjestenjaLedger.test.js` | RULE-T08 granice upita: limit 20 ALLOW; limit 21, bez limit-a, bez where uid, tuđi uid → DENY | PASS |
+| RULE-T09 | `firebase/tests/nagradeIVauceri.test.js` | RULE-T09 owner get sopstvenog voucher-a i owner list (uid == auth.uid, limit 20) → ALLOW | PASS |
+| RULE-T09 | `firebase/tests/nagradeIVauceri.test.js` | RULE-T09 voucher write (create, update status/costPoints, delete; i vlasnika) → DENY | PASS |
+| RULE-T09 | `firebase/tests/nagradeIVauceri.test.js` | RULE-T09 granice upita: limit 20 ALLOW; limit 21, bez limit-a, bez where uid, tuđi uid → DENY | PASS |
+| RULE-T10 | `firebase/tests/kupovineObavjestenjaLedger.test.js` | RULE-T10 owner read i update readAt null → request.time → ALLOW | PASS |
+| RULE-T10 | `firebase/tests/kupovineObavjestenjaLedger.test.js` | RULE-T10 izmjena title ili body → DENY | PASS |
+| RULE-T10 | `firebase/tests/kupovineObavjestenjaLedger.test.js` | RULE-T10 list limit 50 / 51 i granice readAt | PASS |
+| RULE-T11 | `firebase/tests/kupovineObavjestenjaLedger.test.js` | RULE-T11 bilo kakav read/write nad loyaltyLedger (vlasnik, drugi, neautentifikovan) → DENY | PASS |
+| RULE-T12 | `firebase/tests/podrazumijevanaZabrana.test.js` | RULE-T12 rewardRequests: get, list, create, set, update, delete → DENY | PASS |
+| RULE-T12 | `firebase/tests/podrazumijevanaZabrana.test.js` | RULE-T12 redemptionRequests: get, list, create, set, update, delete → DENY | PASS |
+| RULE-T12 | `firebase/tests/podrazumijevanaZabrana.test.js` | RULE-T12 nepoznata kolekcija: get, list, create, set, update, delete → DENY | PASS |
+| RULE-T12 | `firebase/tests/podrazumijevanaZabrana.test.js` | RULE-T12 podkolekcije (i ispod dozvoljenih users/{uid} i loyaltyAccounts/{uid}) → DENY | PASS |
+| RULE-T12 | `firebase/tests/podrazumijevanaZabrana.test.js` | RULE-T12 collectionGroup upit nad podkolekcijom → DENY | PASS |
+
+Ukupno: 12/12 API-T (14 testova) i 12/12 RULE-T (24 testa) PASS u istom izvršavanju.
+
+### Rezultat po ID-u (dopunski)
+
+I08-T01 (a), (b) PASS; I08-T02 PASS; I08-T03 PASS (run 2); regresija i01–i07 PASS (I03-T09 i I04-T03 (a), (b) bez izmjene). I08-T04 — ispod.
+
+### I08-T04 — NFR-07 inspekcija (iz korijena, kod `e8d10d0`)
+
+| Komanda | Ishod |
+|---|---|
+| `git ls-files \| Select-String -Pattern '(^\|/)\.env$','google-services\.json','service-account','-key\.json$','\.pem$','\.p12$'` | prazno (jedini `.env*` fajl u repou je `.env.example`) |
+| `git grep -nIE "BEGIN (RSA \|EC )?PRIVATE KEY\|\"private_key\"\|AIza[0-9A-Za-z_-]{35}" -- . ':!docs/srs'` | 2 pogotka, oba dokumentacija koja citira obrasce: `docs/iteracije/i01_review.md:37` (komanda inspekcije i01), `docs/iteracije/i08_brief.md:29` (tekst brief-a); nijedna tajna |
+| `git grep -niIE "x-pos-api-key\s*[:=]\s*['\"]?[A-Za-z0-9_-]{43}" -- .` | prazno |
+| `git grep -nIE "POS_API_KLJUCEVI=[^\s#]*:[A-Za-z0-9_-]{43}" -- .` | prazno |
+| `git grep -n "createHash('sha256')" -- backend/src/konfiguracija/posKljucevi.js` | `posKljucevi.js:26` — POS ključevi se čuvaju samo kao SHA-256 otisci (i03/P-3) |
+| `git check-ignore -v .env firebase/tests/firestore-debug.log` | `.gitignore:6:.env`, `.gitignore:17:firestore-debug.log` — oba ignorisana |
+
+### Ključne mutacije (O-31 (c); sve D, 1/1; svaka vraćena `git restore`; primjena skriptom van repoa)
+
+Rules: `cd firebase\tests; npx firebase emulators:exec --config ../../firebase.json --project demo-fuelpoints --only firestore "node --test
+--test-concurrency=1 --test-name-pattern=<RULE-Txx> --test-name-pattern=I08-T01 --test-name-pattern=I04-T17 --test-name-pattern=I06-T22 *.test.js"`.
+Backend: `npm run test:emu:ciljano -- test/emulator/kupovina.test.js --test-name-pattern=I08-T03`; `node --test --test-name-pattern=I04-T03 test/jedinicni/zahtjevIzdavanja.test.js`.
+Svaka mutacija pravila obara i I08-T01 (a), (b) (tekst ≠ §31) — zabilježeno, ali se računa samo pad ponašajnog testa (plan, sekcija 9).
+
+| Oznaka | Tačna izmjena | Ciljani test | Exit | Ishod |
+|---|---|---|---|---|
+| D01 | `vouchers` list: uklonjeno `&& request.query.limit <= 20` | RULE-T09 | 1 | ubijena 1/1: RULE-T09 granice upita (i I04-T17 vouchers) pada |
+| D02 | `users` update: uklonjeno `&& changedOnly(['displayName', 'updatedAt'])` | RULE-T05 | 1 | ubijena 1/1: RULE-T05 pada |
+| D03 | `notifications` update: uklonjeno `&& request.resource.data.readAt == request.time` | RULE-T10 | 1 | ubijena 1/1: RULE-T10 list limit 50 / 51 i granice readAt pada (klijentski readAt) |
+| D04 | `loyaltyLedger`: `allow read: if signedIn(); allow write: if false;` | RULE-T11 | 1 | ubijena 1/1: RULE-T11 pada |
+| D05 | `rewardRequests` i `redemptionRequests`: `allow read: if signedIn(); allow write: if false;` | RULE-T12 (i I04-T17, I06-T22) | 1 | ubijena 1/1: RULE-T12 rewardRequests, RULE-T12 redemptionRequests, I04-T17 rewardRequests, I06-T22 padaju |
+| D06 | `jeIspravanIdDokumenta`: uklonjen uslov `!KONTROLNI_ZNAK.test(vrijednost)` (i08/K-1) | I08-T03; I04-T03 (a) | 1; 1 | ubijena 1/1 (oba): I08-T03 `NUL u sredini: pristup bazi` (`tests 1 / fail 1`); I04-T03 (a) `Missing expected exception: NUL u sredini` (`tests 2 / pass 1 / fail 1`) |
+
+Prvi pokušaj D01 … D05 bio je nevažeći (OD-3): obrazac `RULE-T09|I08-T01|…` je `emulators:exec` predao kroz `cmd`, koji je `|` protumačio kao
+pipe (exit 255, nijedan test izvršen); ponovljeno sa ponovljenim `--test-name-pattern`. U run-ovima sa filterom fajlovi bez nijednog
+izabranog testa prijavljuju grešku na nivou fajla (`after` → `cleanup` bez izvršenog `before`, OD-4); to nije ishod mutacije.
+
+### Ostale provjere (DoD plana, sekcija 10)
+
+| Komanda | Ishod |
+|---|---|
+| `git diff i07 -- firebase/firestore.indexes.json firebase/firestore.rules` | prazno (pravila i indeksi nepromijenjeni) |
+| `git diff i07 --stat -- '*package*.json'` | prazno |
+| `git grep -n "preliminarno" -- firebase/tests` | prazno |
+| `(Get-FileHash docs\srs\FuelPoints_SRS_3_1.docx -Algorithm SHA256).Hash` | `7D866413968C2445BE532876E1F73AB307ACFFD96465C024982D458D41C60228` |
+| `git log i07..HEAD --format=%B \| Select-String -Pattern 'Co-Authored\|Claude\|Generated'` | prazno |
+
+### Poznata ograničenja
+
+Vidi IMPLEMENTATION_LOG i08 i ODLUKE §7 (B-1 i ponašanje ID-a sa kontrolnim znakom u produkciji: do baze se više ne dolazi; AC-12 završno u i11).
