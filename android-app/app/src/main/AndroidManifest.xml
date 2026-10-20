@@ -2,7 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Jedina dozvola (O-45): Backend API i Firebase. Kamera se ne traži (§2.6: samo generisanje QR-a). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
+        android:name=".FuelPointsAplikacija"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -16,7 +20,8 @@
             android:name=".GlavnaAktivnost"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.FuelPoints">
+            android:theme="@style/Theme.FuelPoints"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

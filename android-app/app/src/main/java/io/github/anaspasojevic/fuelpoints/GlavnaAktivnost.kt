@@ -3,16 +3,20 @@ package io.github.anaspasojevic.fuelpoints
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
+import androidx.activity.enableEdgeToEdge
+import io.github.anaspasojevic.fuelpoints.ui.navigacija.NavigacijaAplikacije
+import io.github.anaspasojevic.fuelpoints.ui.tema.TemaFuelPoints
 
-// Jedina početna aktivnost u Iteraciji 1: prazan Compose sadržaj (ekrani dolaze u Iteracijama 9–10).
+// Jedina aktivnost aplikacije.
 class GlavnaAktivnost : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        val zavisnosti = (application as FuelPointsAplikacija).zavisnosti
         setContent {
-            Box(Modifier.fillMaxSize())
+            TemaFuelPoints {
+                NavigacijaAplikacije(zavisnosti)
+            }
         }
     }
 }

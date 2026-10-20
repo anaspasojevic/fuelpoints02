@@ -13,6 +13,7 @@ Jedini normativni dokument je FuelPoints SRS 3.1 (`docs/srs/FuelPoints_SRS_3_1.d
 | `firebase/` | `firestore.rules`, `firestore.indexes.json` i rules testovi u `firebase/tests/` |
 | `firebase.json`, `.firebaserc` | Firebase Emulator Suite: Firestore `127.0.0.1:8080`, Auth `127.0.0.1:9099`, projekat `demo-fuelpoints` |
 | `skripte/provjera.ps1` | sve provjere redom (Definition of Done) |
+| `skripte/pokreniLokalno.ps1` | lokalno okruženje za Android aplikaciju: emulatori, seed i Backend |
 | `docs/` | SRS, sljedivost, dnevnik implementacije, izvještaj o testovima, iteracije, dizajn |
 
 ## Preduslovi
@@ -258,6 +259,26 @@ cd backend; npm run seed:emu
 ```
 
 Seed postavlja tačno stavke iz SRS §12 (`CAR_WASH`, `SHOWER`) i ne briše druge dokumente u kolekciji `rewardDefinitions`.
+
+### Android aplikacija lokalno
+
+Sve tri komande iznad u jednom koraku (emulatori → seed → Backend sa `.env`; gašenje sa Ctrl+C):
+
+```powershell
+.\skripte\pokreniLokalno.ps1
+```
+
+Debug APK (Android emulator, preporučeno API 35) koristi Auth i Firestore emulator na `10.0.2.2:9099` / `10.0.2.2:8080`
+i Backend na `http://10.0.2.2:3000/api/v1/` (`10.0.2.2` je ovaj računar viđen sa Android emulatora; `PORT` u `.env` mora biti `3000`).
+Firebase se inicijalizuje u kodu iz demo vrijednosti, bez `google-services.json` (O-39); cleartext HTTP je dozvoljen samo u debug
+build-u i samo za `10.0.2.2` (O-40). Pokretanje: Android Studio → `android-app` → **Run** na emulatoru, ili:
+
+```powershell
+cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\gradlew.bat assembleDebug; cd ..
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r android-app\app\build\outputs\apk\debug\app-debug.apk
+```
+
+Smoke protokol Iteracije 9: `docs/smoke/i09_smoke.md`.
 
 ## Testovi
 

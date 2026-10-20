@@ -2788,3 +2788,75 @@ izabranog testa prijavljuju grešku na nivou fajla (`after` → `cleanup` bez iz
 ### Poznata ograničenja
 
 Vidi IMPLEMENTATION_LOG i08 i ODLUKE §7 (B-1 i ponašanje ID-a sa kontrolnim znakom u produkciji: do baze se više ne dolazi; AC-12 završno u i11).
+
+## Iteracija 9 — Android 1: Prijava, Registracija, Home, Customer QR
+
+Grana `iteracija-09`. Windows 11 Pro 10.0.22621, Windows PowerShell 5.1, Gradle sa `JAVA_HOME = C:\Program Files\Android\Android Studio\jbr`.
+Sažeto po O-30 (d). Podatke o run-ovima `provjera.ps1` dala je prethodna Builder sesija; smoke je izvršila Ana (2026-10-20).
+
+### Run-ovi `provjera.ps1` (O-30 (a): tačno 2×)
+
+| # | Kada / stablo | Komanda | Exit | Rezultat |
+|---|---|---|---|---|
+| 1 | K5, kod = `5a36837` | `.\skripte\provjera.ps1` | 0 | backend 83/83, emulator 194/194, rules 40/40; Android `assembleDebug` + `testDebugUnitTest` zeleno |
+| 2 | završni (K6), **kod = `b083e7f`**, `android-app\app\build` obrisan prije run-a | `.\skripte\provjera.ps1` | 0 | `SVE PROVJERE PROŠLE` |
+
+**Commit koda završnog run-a: `b083e7f`.** Poslije run-a 2 commit-ovani su samo `docs/*.md` (K7).
+
+### Rezultat po ID-u (I09-T01 … I09-T13)
+
+Komanda (K7, 2026-10-20): `cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\gradlew.bat testDebugUnitTest; cd ..`
+→ exit 0, `BUILD SUCCESSFUL in 2s`. Gradle je task `:app:testDebugUnitTest` prijavio kao **UP-TO-DATE** (ulazi isti kao u posljednjem izvršavanju),
+pa testovi u ovoj komandi nisu ponovo izvršeni. Pročitani su XML izvještaji `android-app\app\build\test-results\testDebugUnitTest\*.xml`
+(vrijeme izvršavanja 2026-10-19 23:57:19–23:57:20 +02:00, poslije commit-a `b083e7f` u 23:29:29, tj. izvršavanje nad kodom `b083e7f`).
+Ukupno 10 test klasa, **67 tests / 67 pass / 0 fail / 0 skipped / 0 errors**.
+
+| ID | Test klasa (`src/test/…/fuelpoints/`) | tests | pass | fail |
+|---|---|---|---|---|
+| I09-T01 | `domen/I09T01ValidacijaLozinkeTest` | 6 | 6 | 0 |
+| I09-T02 | `domen/I09T02ValidacijaImenaTest` | 4 | 4 | 0 |
+| I09-T03 | `ui/registracija/I09T03T11RegistracijaViewModelTest` (metode `I09-T03 …`) | 3 | 3 | 0 |
+| I09-T04 | `ui/prijava/I09T04T05PrijavaViewModelTest` (metode `I09-T04 …`) | 4 | 4 | 0 |
+| I09-T05 | `ui/prijava/I09T04T05PrijavaViewModelTest` (metode `I09-T05 …`) | 2 | 2 | 0 |
+| I09-T06 | `domen/I09T06GeneratorQrTest` (2) + `ui/qr/I09T06QrViewModelTest` (3) | 5 | 5 | 0 |
+| I09-T07 | `podaci/api/I09T07BackendApiTest` | 13 | 13 | 0 |
+| I09-T08 | `domen/I09T08ProvjeraNalogaTest` | 11 | 11 | 0 |
+| I09-T09 | `ui/pocetna/I09T09T10PocetnaViewModelTest` (metode `I09-T09 …`) | 10 | 10 | 0 |
+| I09-T10 | `ui/pocetna/I09T09T10PocetnaViewModelTest` (metoda `I09-T10 …`) | 1 | 1 | 0 |
+| I09-T11 | `ui/registracija/I09T03T11RegistracijaViewModelTest` (metode `I09-T11 …`) | 4 | 4 | 0 |
+| I09-T12 | `I09T12StatickaProvjeraTest` | 4 | 4 | 0 |
+| I09-T13 | — (plan, sekcija 8: inspekcija u smoke-u S11; automatskog testa nema) | — | — | — |
+
+**I09-T13 nije izvršen:** prema planu (sekcija 8) I09-T13 je ručna inspekcija S11 (Layout Inspector), a Compose UI testovi su van opsega.
+S11 je u smoke-u označen N/A, pa NFR-10 (dio i09: touch target ≥ 48×48 dp, contentDescription) u i09 nije provjeren ni automatski ni ručno.
+Vidi IMPLEMENTATION_LOG i09, OD-4.
+
+### Smoke (O-31 (d), `docs/smoke/i09_smoke.md`) — izvršila Ana, 2026-10-20
+
+Emulator **API 26** (protokol i i09/K-2 traže API 35; OD-1). Lokalno okruženje `.\skripte\pokreniLokalno.ps1`, debug APK.
+
+| # | Korak | Rezultat | Napomena |
+|---|---|---|---|
+| S1 | Prvo pokretanje → Prijava (UI-01) | PASS | |
+| S2 | Registracija, §3.6 odbijanje „Lozinka”, pa „Lozinka1” → Home 0 bodova | PASS | |
+| S3 | Moj QR: QR + isti UID kao tekst | PASS | |
+| S4 | POS kupovina 42 730 ml dok je Home otvoren | PASS | registracija sa `ana@primjer.com` umjesto `ana@primjer.ba` (OD-2); `earnedPoints` 42, Home 42 bez osvježavanja |
+| S5 | Ponovno pokretanje → Home bez prijave (AUTH-06) | PASS | |
+| S6 | Airplane mode → marker „Nema mreže…”, bodovi ostaju; marker nestaje | PASS | |
+| S7 | Pogrešna lozinka i nepostojeći e-mail → ista poruka §3.5; ispravna prijava → Home | PASS | |
+| S8 | Reset lozinke → ista neutralna poruka za oba e-maila (AUTH-09) | PASS | |
+| S9 | Nalog samo u Auth emulatoru → prijava → Home „Zdravo, Marko” (AUTH-03) | PASS | |
+| S10 | Tamna tema | N/A | API 26 nema sistemski tamni režim; provjera na API 35 u i11 |
+| S11 | Layout Inspector: ≥ 48×48 dp, contentDescription (NFR-10, I09-T13) | N/A | ručno nije izvršeno; automatskog testa za I09-T13 nema (vidi gore, OD-4) |
+| S12 | Screenshot-i Prijava, Home, Moj QR | odloženo | screenshot-i konačnih ekrana poslije i10 (OD-3); `docs/smoke/` u i09 nema slika |
+| S13 | Logcat: UID, e-mail, `Bearer`, `eyJ` | PASS za token i za kod aplikacije | `Bearer`: 0 pogodaka; nalaz za Firebase Auth SDK — ispod |
+
+**Nalaz S13 (odluka Orchestrator-a i09/K-3):** Firebase Auth SDK (tag `FirebaseAuth`, ne kod aplikacije) ispisuje e-mail na nivou INFO
+(„Creating user with …”, „Logging in as …”, „Password reset request …”) i UID na nivou DEBUG („Notifying id token / auth state listeners about
+user ( <UID> )”). Kod aplikacije ne loguje ništa (I09-T12). Kod se u i09 ne mijenja; poznato ograničenje (ODLUKE §7); obaveza za i11: release build
+sa R8 pravilom koje uklanja `Log.v` / `Log.d` / `Log.i` pozive (uključujući SDK). NFR-07 zabranjuje tajne (ključeve, kredencijale) u logovima;
+e-mail i UID (QR-06) nisu tajne, ali je nalaz bitan za sigurnosni fokus rada.
+
+### Poznata ograničenja
+
+Vidi IMPLEMENTATION_LOG i09 i ODLUKE §7 (nalaz S13; smoke na API 26 bez S10, S11, S12; NFR-10 neprovjeren u i09).
