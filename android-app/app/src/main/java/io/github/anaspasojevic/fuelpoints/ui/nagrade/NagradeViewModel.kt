@@ -6,6 +6,7 @@ import io.github.anaspasojevic.fuelpoints.domen.Dostupnost
 import io.github.anaspasojevic.fuelpoints.domen.GeneratorZahtjeva
 import io.github.anaspasojevic.fuelpoints.domen.Odbrojavanje
 import io.github.anaspasojevic.fuelpoints.domen.PokusajIzdavanja
+import io.github.anaspasojevic.fuelpoints.domen.PorukaZaPrijavu
 import io.github.anaspasojevic.fuelpoints.domen.PorukeGresaka
 import io.github.anaspasojevic.fuelpoints.domen.Preostalo
 import io.github.anaspasojevic.fuelpoints.domen.dostupnost
@@ -80,6 +81,7 @@ class NagradeViewModel(
     private val api: BackendApi,
     generator: GeneratorZahtjeva,
     private val sat: () -> Long,
+    private val porukaZaPrijavu: PorukaZaPrijavu? = null,
 ) : ViewModel() {
 
     private val _stanje = MutableStateFlow(StanjeNagrada())
@@ -270,7 +272,11 @@ class NagradeViewModel(
         val izlaz = when (kod) {
             "ACCOUNT_DELETION_IN_PROGRESS" -> IzlazSaNagrada.BrisanjeUToku
             "ACCOUNT_NOT_INITIALIZED" -> IzlazSaNagrada.Pokretanje
-            "UNAUTHENTICATED" -> IzlazSaNagrada.Prijava
+            "UNAUTHENTICATED" -> {
+                // Login prikazuje poruku poslije preusmjeravanja.
+                porukaZaPrijavu?.postavi(PorukeGresaka.SESIJA_ISTEKLA)
+                IzlazSaNagrada.Prijava
+            }
             else -> return false
         }
         _stanje.update { it.copy(izlaz = izlaz) }

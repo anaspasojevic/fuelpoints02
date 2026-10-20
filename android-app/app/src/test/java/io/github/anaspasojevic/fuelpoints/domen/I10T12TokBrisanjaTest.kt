@@ -122,21 +122,32 @@ class I10T12TokBrisanjaTest {
     }
 
     @Test
-    fun `I10-T12 nastavak iz BrisanjeUToku sa 401 - Zavrseno`() = runTest {
+    fun `I10-T12 nastavak iz BrisanjeUToku - DELETE odmah bez lozinke, 401 je Zavrseno`() = runTest {
         api.odgovoriBrisanja += greska("UNAUTHENTICATED", 401)
         val t = tok(nastavak = true)
-        assertEquals(StanjeBrisanja.UnosLozinke(), t.stanje.value)
-        t.potvrdi("Lozinka1")
+        assertEquals(StanjeBrisanja.URadu, t.stanje.value)
+        t.pokreniNastavak()
         assertEquals(StanjeBrisanja.Zavrseno(PorukeGresaka.NALOG_OBRISAN), t.stanje.value)
+        assertEquals(0, auth.pozivi.count { it.startsWith("potvrdiLozinku") })
     }
 
     @Test
-    fun `I10-T12 nastavak sa reauth NepostojeciKorisnik - Zavrseno, 0 DELETE`() = runTest {
+    fun `I10-T12 nastavak sa 409 REAUTH traje lozinku, pa reauth NepostojeciKorisnik - Zavrseno, 1 DELETE`() = runTest {
+        api.odgovoriBrisanja += greska("REAUTHENTICATION_REQUIRED", 409)
         auth.ishodPotvrde = IshodAutentikacije.NepostojeciKorisnik
         val t = tok(nastavak = true)
+        t.pokreniNastavak()
+        assertEquals(StanjeBrisanja.UnosLozinke(PorukeGresaka.POTVRDITE_LOZINKU), t.stanje.value)
         t.potvrdi("Lozinka1")
         assertEquals(StanjeBrisanja.Zavrseno(PorukeGresaka.NALOG_OBRISAN), t.stanje.value)
-        assertEquals(0, brojObrisi())
+        assertEquals(1, brojObrisi())
+    }
+
+    @Test
+    fun `I10-T12 nastavak sa 204 - Zavrseno bez lozinke`() = runTest {
+        val t = tok(nastavak = true)
+        t.pokreniNastavak()
+        assertTrue(t.stanje.value is StanjeBrisanja.Zavrseno)
         assertEquals(1, auth.pozivi.count { it == "odjavi" })
     }
 

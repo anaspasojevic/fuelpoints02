@@ -33,13 +33,19 @@ class TokBrisanja(
     private val api: BackendApi,
     private val zastavica: ZastavicaBrisanja,
     private val porukaZaPrijavu: PorukaZaPrijavu,
-    nastavak: Boolean = false,
+    val nastavak: Boolean = false,
 ) {
     // true kad je DELETE u ovom toku već poslat (ili je tok nastavak): 401 tada znači da Auth nalog više ne postoji.
     private var pokrenut = nastavak
 
-    private val _stanje = MutableStateFlow<StanjeBrisanja>(if (nastavak) StanjeBrisanja.UnosLozinke() else StanjeBrisanja.Upozorenje)
+    private val _stanje = MutableStateFlow<StanjeBrisanja>(if (nastavak) StanjeBrisanja.URadu else StanjeBrisanja.Upozorenje)
     val stanje: StateFlow<StanjeBrisanja> = _stanje.asStateFlow()
+
+    // Nastavak već pokrenutog brisanja (i10/P-6): odmah DELETE sa svježim tokenom, bez ponovnog unosa lozinke.
+    // 409 REAUTHENTICATION_REQUIRED (prošlo > 5 min) tek tada traži lozinku.
+    suspend fun pokreniNastavak() {
+        if (nastavak && _stanje.value == StanjeBrisanja.URadu) obrisi()
+    }
 
     fun nastavi() {
         if (_stanje.value == StanjeBrisanja.Upozorenje) _stanje.value = StanjeBrisanja.UnosLozinke()

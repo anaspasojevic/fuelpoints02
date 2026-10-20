@@ -12,6 +12,7 @@ import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IzvorAutentikacij
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.IshodUpisaImena
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.IzvorNaloga
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.StanjeDokumenta
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -95,7 +96,12 @@ class ImeViewModel(
         _stanje.update { it.copy(radi = true, greska = null, obavjestenje = null) }
         viewModelScope.launch {
             when (nalog.promijeniIme(uid, s.ime)) {
-                IshodUpisaImena.Uspjeh -> _stanje.update { it.copy(radi = false, obavjestenje = PorukeGresaka.IME_SACUVANO, gotovo = true) }
+                IshodUpisaImena.Uspjeh -> {
+                    // Poruka ostaje kratko vidljiva prije zatvaranja ekrana.
+                    _stanje.update { it.copy(radi = false, obavjestenje = PorukeGresaka.IME_SACUVANO) }
+                    delay(1_200)
+                    _stanje.update { it.copy(gotovo = true) }
+                }
                 IshodUpisaImena.Odbijeno -> _stanje.update { it.copy(radi = false, greska = PorukeGresaka.IME_NEISPRAVNO) }
                 IshodUpisaImena.NemaVeze -> _stanje.update { it.copy(radi = false, obavjestenje = PorukeGresaka.IME_NA_CEKANJU) }
             }
@@ -183,6 +189,10 @@ class LozinkaViewModel(private val auth: IzvorAutentikacije) : ViewModel() {
 // AUTH-05 / API-07: ViewModel oko TokBrisanja (stanje i akcije).
 class BrisanjeNalogaViewModel(private val tok: TokBrisanja) : ViewModel() {
     val stanje: StateFlow<StanjeBrisanja> = tok.stanje
+
+    init {
+        if (tok.nastavak) viewModelScope.launch { tok.pokreniNastavak() }
+    }
 
     fun nastavi() = tok.nastavi()
     fun odustani() = tok.odustani()

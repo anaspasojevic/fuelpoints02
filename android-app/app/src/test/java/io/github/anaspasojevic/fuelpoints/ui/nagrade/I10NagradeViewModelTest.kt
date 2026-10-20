@@ -42,7 +42,7 @@ class I10NagradeViewModelTest {
 
     private fun TestScope.napravi(bodovi: Long? = 72): NagradeViewModel {
         nalog.loyalty.value = StanjeDokumenta.Postoji(LoyaltyNalog(bodovi, 0), false)
-        val vm = NagradeViewModel(auth, nalog, izvor, api, generator) { POCETAK + testScheduler.currentTime }
+        val vm = NagradeViewModel(auth, nalog, izvor, api, generator, { POCETAK + testScheduler.currentTime })
         advanceUntilIdle()
         return vm
     }
@@ -329,6 +329,19 @@ class I10NagradeViewModelTest {
         advanceTimeBy(1)
         assertEquals(IzlazSaNagrada.BrisanjeUToku, vm.stanje.value.izlaz)
         ocisti()
+    }
+
+    @Test
+    fun `I10-T06 401 - poruka za Login i izlaz na prijavu`() = runTest {
+        val poruka = io.github.anaspasojevic.fuelpoints.domen.PorukaZaPrijavu()
+        nalog.loyalty.value = StanjeDokumenta.Postoji(LoyaltyNalog(72, 0), false)
+        val vm = NagradeViewModel(auth, nalog, izvor, api, generator, { POCETAK }, poruka)
+        advanceUntilIdle()
+        api.odgovoriIzdavanja += greska("UNAUTHENTICATED", 401)
+        vm.izdaj("SHOWER")
+        advanceUntilIdle()
+        assertEquals(IzlazSaNagrada.Prijava, vm.stanje.value.izlaz)
+        assertEquals(PorukeGresaka.SESIJA_ISTEKLA, poruka.preuzmi())
     }
 
     @Test

@@ -186,7 +186,8 @@ fun NavigacijaAplikacije(z: Zavisnosti) {
                     viewModel {
                         NagradeViewModel(
                             z.izvorAutentikacije, z.izvorNaloga, z.izvorNagrada, z.backendApi, z.generatorZahtjeva,
-                        ) { System.currentTimeMillis() }
+                            { System.currentTimeMillis() }, z.porukaZaPrijavu,
+                        )
                     },
                     naIzlaz = izlazSaNagrada,
                 )
