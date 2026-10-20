@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,6 +17,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -29,7 +33,6 @@ import io.github.anaspasojevic.fuelpoints.ui.komponente.EkranOkvir
 import io.github.anaspasojevic.fuelpoints.ui.komponente.LcdPanel
 import io.github.anaspasojevic.fuelpoints.ui.komponente.OznakaBezMreze
 import io.github.anaspasojevic.fuelpoints.ui.komponente.SegmentniBroj
-import io.github.anaspasojevic.fuelpoints.ui.komponente.ZutoDugme
 import io.github.anaspasojevic.fuelpoints.ui.komponente.duhZa
 import io.github.anaspasojevic.fuelpoints.ui.tema.LocalBoje
 import io.github.anaspasojevic.fuelpoints.ui.tema.stilNaslovSrednji
@@ -37,7 +40,7 @@ import io.github.anaspasojevic.fuelpoints.ui.tema.stilOznakaEkrana
 
 // UI-03 (3_pocetna.png, 9_pocetna_tamna_offline.png) u obimu O-41: ime, bodovi, rezervisano > 0, offline marker, ulaz na QR.
 @Composable
-fun EkranPocetne(vm: PocetnaViewModel, naQr: () -> Unit, naIzlaz: (IzlazSaPocetne) -> Unit) {
+fun EkranPocetne(vm: PocetnaViewModel, naObavjestenja: () -> Unit, naIzlaz: (IzlazSaPocetne) -> Unit) {
     val stanje by vm.stanje.collectAsState()
     val boje = LocalBoje.current
 
@@ -53,11 +56,17 @@ fun EkranPocetne(vm: PocetnaViewModel, naQr: () -> Unit, naIzlaz: (IzlazSaPocetn
 
     EkranOkvir {
         Spacer(Modifier.height(12.dp))
-        Text(
-            stanje.ime?.let { stringResource(R.string.zdravo, it) } ?: stringResource(R.string.zdravo_bez_imena),
-            style = stilNaslovSrednji,
-            color = boje.tekst,
-        )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stanje.ime?.let { stringResource(R.string.zdravo, it) } ?: stringResource(R.string.zdravo_bez_imena),
+                style = stilNaslovSrednji,
+                color = boje.tekst,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = naObavjestenja, modifier = Modifier.size(48.dp)) {
+                Icon(painterResource(R.drawable.ikona_zvono), contentDescription = stringResource(R.string.obavjestenja_opis), tint = boje.tekst)
+            }
+        }
         Spacer(Modifier.height(14.dp))
         LcdPanel(Modifier.fillMaxWidth()) {
             if (stanje.izKesa) {
@@ -98,7 +107,5 @@ fun EkranPocetne(vm: PocetnaViewModel, naQr: () -> Unit, naIzlaz: (IzlazSaPocetn
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
-        ZutoDugme(stringResource(R.string.moj_qr_kod), naQr, ikona = R.drawable.ikona_qr)
     }
 }
