@@ -1286,3 +1286,81 @@ I04-T03 (a), (b) zeleni bez izmjene); P-4 (AC-12 tabela iz `provjera.ps1` #2). K
 - I08-T01 zavisi od `.md` kopije SRS-a (nepromjenljiva); regeneracija drugim alatom može oboriti test zbog formata (plan 11).
 - Normalizacija red po red je stroža od „samo razmaci”: drugačiji prelom reda u `firestore.rules` obara I08-T01.
 - AC-12 je ovdje backend dio nad emulatorom; završna potvrda u i11 (pravi projekat, O-2).
+
+## Iteracija 9 — Android 1: Prijava, Registracija, Home, Customer QR
+
+Grana `iteracija-09` (iz `main` = merge `2e98999`, tag `i08`). Brief: `docs/iteracije/i09_brief.md`. Plan: `docs/iteracije/i09_plan.md`
+(odobren uz i09/P-1 … P-7, K-1, K-2, sekcija 14; K-3 poslije smoke-a). Uloga: BUILDER, 2026-10-19 – 2026-10-20. Režim: ekspresni (O-30, O-31).
+Unos je sažet po O-30 (d).
+
+### CHANGELOG
+
+- **Toolchain i zavisnosti (O-45, i09/P-1 A):** Kotlin 2.3.21 + `compilerOptions` (`jvmTarget` JVM_11); AGP 8.10.1, Gradle 8.11.1,
+  compileSdk/targetSdk 35, minSdk 26 nepromijenjeni; Firebase BoM 34.19.0 (auth, firestore), Navigation Compose, lifecycle-viewmodel-compose,
+  kotlinx-coroutines (+ play-services), OkHttp 5.3.2 + kotlinx.serialization, ZXing core; test: kotlinx-coroutines-test, mockwebserver.
+- **Konfiguracija (O-39, O-40):** bez `google-services.json` i plugin-a; `FuelPointsAplikacija` inicijalizuje `FirebaseApp` iz BuildConfig
+  (`demo-fuelpoints`, demo vrijednosti); debug: Auth `10.0.2.2:9099`, Firestore `10.0.2.2:8080`, Backend `http://10.0.2.2:3000/api/v1/`;
+  cleartext samo u debug `network_security_config` za `10.0.2.2`; main manifest samo `INTERNET`. Release bez konfiguracije (i09/P-7).
+- **Domen:** `ValidacijaLozinke` (§3.6, i09/P-2 A), `ValidacijaImena` (1–100 UTF-16, i02/P-3), `GeneratorQr` (ZXing, sadržaj = UID),
+  `PorukeGresaka` (§3.5, §27 → srpske poruke, i09/P-4 B), `ProvjeraNaloga` (AUTH-06, AUTH-03 sa i09/P-3 A+B, AUTH-05 (v)).
+- **Podaci:** `OkHttpBackendApi` (API-01, API-06; Bearer `getIdToken` po pozivu; init tijelo tačno `{ displayName, acceptedTermsVersion }`;
+  API-06 `Content-Length: 0` bez `Content-Type`; §27 parsiranje; 503 → jedan ponovni pokušaj poslije 1 000 ms, R-04), `FirebaseIzvorAutentikacije`
+  (prijava, registracija, Auth profil, `sendPasswordResetEmail`), `FirestoreIzvorNaloga` (samo snapshot `users/{uid}`, `loyaltyAccounts/{uid}`,
+  `isFromCache`; nijedan upis, §2.2).
+- **UI (UI-01 … UI-04, O-41, O-44):** ekrani Prijava, Registracija (+ Uslovi 1.0, i09/P-6), Pokretanje / Dovršetak registracije / Brisanje u
+  toku, Home (`displayName`, `availablePoints`, `reservedPoints` > 0, marker NFR-08, API-06 pri ON_START, O-43), Moj QR (QR + UID kao tekst);
+  navigacija u jednoj aktivnosti; tema „displej pumpe” svijetla i tamna, fontovi i ikone kao resursi sa licencama (i09/P-5 A).
+- **Smoke (O-31 (d)):** `skripte/pokreniLokalno.ps1` (emulatori + seed + Backend iz `.env`), `docs/smoke/i09_smoke.md`, README.
+- **Testovi:** I09-T01 … I09-T12 (67 JVM testova, `testDebugUnitTest`, ulaze u `provjera.ps1`); I09-T13 je ručna inspekcija S11 (nije izvršena, OD-4).
+- **Dokumentacija (K7):** TEST_REPORT i09, TRACEABILITY, ODLUKE (§1 i08 ACCEPTED, i09 status; O-39 … O-45; i09/P-n, K-n; §4 dopuna i01/P-8;
+  §7 nalaz S13), ovaj unos. Backend, Rules, SRS i `provjera.ps1` nepromijenjeni.
+
+### Commit-i
+
+| Commit | Korak |
+|---|---|
+| `dfec2fc` i09: odobrenje plana i odluke Orchestrator-a | 0 |
+| `c3d53a8` i09: zavisnosti, Firebase konfiguracija bez google-services i tema (O-39, O-40, O-45) | K1 |
+| `142cae0` i09: validacija, generator QR-a, API klijent i izvori podataka (I09-T01, T02, T06, T07) | K2 + K3 (i09/K-1) |
+| `28c3fa9` i09: tokovi AUTH-01/03/06/09, Home i QR u ViewModel-ima (I09-T03 … T11) | K4 |
+| `5a36837` i09: ekrani Prijava, Registracija, Home i Moj QR (UI-01 … UI-04) | K5 (+ `provjera.ps1` #1) |
+| `b083e7f` i09: skripta za lokalni smoke i protokol (O-31 (d)) | K6 (+ `provjera.ps1` #2, završni, kod `b083e7f`) |
+| (bez commit-a) smoke S1 … S13 — Ana, 2026-10-20 | i09/K-2 |
+| i09: TEST_REPORT, smoke, sljedivost i registar odluka (ovaj unos) | K7 |
+
+### Odstupanja (OD-n)
+
+- **OD-1** — Smoke je izvršen na emulatoru **API 26**, a ne API 35 kako traže O-31 (d), i09/K-2 i protokol. S1 … S9 i S13 PASS na API 26;
+  S10 (tamna tema) N/A jer API 26 nema sistemski tamni režim → provjera na API 35 u i11 (uz NFR-09).
+- **OD-2** — U S4 (i dalje u smoke-u) registracija je urađena sa `ana@primjer.com` umjesto `ana@primjer.ba` iz protokola; bez uticaja na
+  ishod (kupovina 42 730 ml → `earnedPoints` 42, Home 42 bez osvježavanja).
+- **OD-3** — S12 odložen: screenshot-i Prijava, Home i Moj QR nisu u `docs/smoke/` (brief, isporuka; plan K7 i DoD). Snimaju se konačni
+  ekrani poslije i10.
+- **OD-4** — S11 nije ručno izvršen (N/A). Prema planu (sekcija 8) I09-T13 nije automatski test nego upravo inspekcija S11 (Compose UI
+  testovi van opsega), pa za NFR-10 (touch target ≥ 48×48 dp, contentDescription) u i09 nema izvršene provjere. TRACEABILITY: NFR-10
+  „IMPLEMENTIRANO, neprovjereno”. Odluku o tome gdje se provjera nadoknađuje (i10 smoke ili i11) donosi Orchestrator / Reviewer.
+- **OD-5** — `EkranBrisanjaUToku` je funkcija u `ui/pokretanje/EkranPokretanja.kt`, a ne poseban fajl `EkranBrisanjaUToku.kt` iz plana
+  (sekcija 12); ponašanje isto.
+- **Napomena (bez odstupanja):** u K7 komanda `testDebugUnitTest` je za rezultat po ID-u pokrenuta jednom; Gradle je task prijavio kao
+  UP-TO-DATE, pa su pročitani XML izvještaji izvršavanja nad kodom `b083e7f` (TEST_REPORT i09). `provjera.ps1` nije ponovo pokretan.
+
+### Status pitanja i09/P-n
+
+P-1 A (Kotlin 2.3.21; dopuna i01/P-8 u ODLUKE §4); P-2 A (I09-T01); P-3 A sa B kao rezervom (I09-T08, S9); P-4 B (I09-T11); P-5 A
+(`res/font`, `res/drawable`, `android-app/licence/`); P-6 tekst uslova kako je odobren (resurs `uslovi_1_0`); P-7 prihvaćeno. K-1 primijenjen
+(commit `142cae0`); K-2 primijenjen (smoke prije K7, uz OD-1); K-3 upisan (ODLUKE §3, §7).
+
+### Poznata ograničenja
+
+- **Nalaz S13 (i09/K-3):** Firebase Auth SDK (tag `FirebaseAuth`) ispisuje u Logcat e-mail (INFO: „Creating user with …”, „Logging in as …”,
+  „Password reset request …”) i UID (DEBUG: „Notifying id token / auth state listeners about user ( <UID> )”). Token se ne ispisuje; kod
+  aplikacije ne loguje (I09-T12). E-mail i UID nisu tajne u smislu NFR-07, ali je nalaz bitan za sigurnosni fokus rada. Kod se u i09 ne
+  mijenja. **Obaveza za i11:** release build sa R8 pravilom koje uklanja `Log.v` / `Log.d` / `Log.i` pozive (uključujući SDK).
+- NFR-10 u i09 neprovjeren (OD-4); tamna tema neprovjerena na uređaju (OD-1); screenshot-i odloženi (OD-3).
+- Emulator nema password policy ni Email Enumeration Protection: slabu lozinku zaustavlja samo klijent; konačno u i11 (O-2).
+- `isFromCache` marker se pali tek kad Firestore SDK zaključi da je offline (do ~10 s; S6 PASS).
+- `BrisanjeUToku` nema akciju (logout je i10).
+- QR-06: statični UID se može fotografisati — prihvaćen rizik; QR nosi samo UID (AC-04).
+- Kombinacija AGP 8.10.1 + Kotlin 2.3.21 radi, ali nije zvanično testirana za svaku buduću biblioteku; Firebase BoM 35.x i novije androidx
+  linije traže viši AGP / compileSdk (i09/P-1).
+- Debug APK bez minifikacije; release i minifikacija u i11.

@@ -21,8 +21,9 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i05 Voucher cancel i account reconcile | ITERATION ACCEPTED (re-review nije bio potreban) | tag `i05` (merge `5a2f8cc`, PR #5) |
 | i06 Voucher redeem (API-04) | ITERATION ACCEPTED (O-31: bez re-run-a `provjera.ps1`; NOTE R-01 … R-04) | tag `i06` (merge `9aae907`, PR #6) |
 | i07 Brisanje naloga (API-07) | ITERATION ACCEPTED (O-31; MINOR R-01 → §7, NOTE R-02 → §8) | tag `i07` (merge `3d2ec94`, PR #7) |
-| i08 Security Rules lockdown 12/12 i B-1 | BUILDER ZAVRŠIO — čeka review | grana `iteracija-08` (PR → main, bez merge-a i taga) |
-| i09 – i11 | nije počelo | — |
+| i08 Security Rules lockdown 12/12 i B-1 | ITERATION ACCEPTED | tag `i08` (merge `2e98999`, PR #8) |
+| i09 Android 1: Prijava, Registracija, Home, Customer QR | U TOKU — BUILDER ZAVRŠIO, čeka review | grana `iteracija-09` (PR → main, bez merge-a i taga) |
+| i10 – i11 | nije počelo | — |
 
 ## 2. Odluke Ane (O-n)
 
@@ -85,6 +86,14 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | O-37 (Orchestrator, brief i08) | Dokaz identičnosti pravila je automatski test (I08-T01) koji čita normativni tekst §31; normalizacija samo razmaci / prazni redovi. Status: implementirano u i08 — `firebase/tests/normativnaPravila.test.js` nad `.md` (i08/P-1 A, P-2 A), jednokratna `.docx` provjera u TEST_REPORT i08 (77 = 77 redova, 0 razlika). | i08 brief |
 | O-38 (Orchestrator, brief i08) | R-01 review-a i07 (prozor K1 → K4a) upisan u §7 kao poznato ograničenje; R-02 i07 (NOTE, 503 pod opterećenjem) u §8 bez roka. Bez izmjene koda. | i08 brief |
 | i08/P-1 … P-4, K-1 (Orchestrator, odobrenje plana i08) | P-1 A: I08-T01 čita `.md` sa uklonjenim markdown escape-ovima, ručna `.docx` provjera u TEST_REPORT (pri razlici normativan je `.docx`); P-2 A: poređenje red po red (trim, razmaci u jedan, bez praznih redova); P-3 B: `\p{Cc}` zabrana u `jeIspravanIdDokumenta`, lokalna provjera u `zahtjevIzdavanja.js` uklonjena kao duplikat; P-4: „jedan završni run” za AC-12 = jedno izvršavanje `provjera.ps1` sa exit 0; K-1: D06 = uklanjanje `\p{Cc}` provjere, mora oboriti I08-T03 i I04-T03. Detalji: `docs/iteracije/i08_plan.md`, sekcija 14. | i08 plan |
+| O-39 (Orchestrator, brief i09) | Bez `google-services.json` i bez google-services plugin-a; `FirebaseApp` se inicijalizuje u kodu iz BuildConfig (projectId `demo-fuelpoints`, demo vrijednosti koje nisu tajne); debug koristi Auth i Firestore emulator na `10.0.2.2` (portovi iz `firebase.json`); pravi projekat u i11 iz lokalnog fajla van repoa (O-2). Status: implementirano u i09 (`FuelPointsAplikacija.kt`, `app/build.gradle.kts`), I09-T12. | i09 brief |
+| O-40 (Orchestrator, brief i09) | Backend bazni URL iz BuildConfig (debug `http://10.0.2.2:3000`); cleartext samo u debug `network_security_config` i samo za `10.0.2.2`; main manifest bez cleartext-a (HTTPS je obaveza produkcije, van MVP-a §1.3). Status: implementirano u i09 (`src/debug/*`), I09-T12. | i09 brief |
+| O-41 (Orchestrator, brief i09) | Home u i09 prikazuje samo funkcije čiji ekrani postoje (QR); ulazi za Purchases, Rewards, Notifications, Settings u i10; nema „mrtvih” dugmadi ni TODO ekrana. Status: implementirano u i09 (`ui/pocetna/EkranPocetne.kt`). | i09 brief |
+| O-42 (Orchestrator, brief i09) | AUTH-03 ponovni init traži `displayName`; tok predlaže Planner (riješeno kao i09/P-3). Status: implementirano u i09 (`domen/ProvjeraNaloga.kt`, `ui/pokretanje/*`), I09-T08, smoke S9. | i09 brief |
+| O-43 (Orchestrator, brief i09) | API-06 pri svakom otvaranju Home-a (ON_START), POST bez tijela (`Content-Length: 0`, (s)); greška API-06 ne blokira prikaz stanja; 503 → jedan ponovni pokušaj sa pauzom (R-04); 409 `ACCOUNT_DELETION_IN_PROGRESS` / `ACCOUNT_NOT_INITIALIZED` → AUTH-05 / AUTH-03 tok. Status: implementirano u i09 (`ui/pocetna/PocetnaViewModel.kt`, `podaci/api/OkHttpBackendApi.kt`), I09-T07, I09-T09. | i09 brief |
+| O-44 (Orchestrator, brief i09) | Tekst uslova korišćenja verzije „1.0” je kratak statički tekst u resursima; tekst odobrila Ana (i09/P-6). Status: implementirano u i09 (resurs `uslovi_1_0`, `ui/registracija/EkranRegistracije.kt` `EkranUslova`). | i09 brief |
+| O-45 (Orchestrator, brief i09) | Dozvoljene Android zavisnosti: Firebase BoM (auth, firestore), Navigation Compose, lifecycle-viewmodel-compose, kotlinx-coroutines (+ play-services), OkHttp sa kotlinx.serialization (izbor Planner-a), ZXing core; test: kotlinx-coroutines-test, okhttp mockwebserver; ništa drugo bez i09/P-n; dozvola samo `INTERNET`. Status: implementirano u i09 (`gradle/libs.versions.toml`, `app/build.gradle.kts`), I09-T12. | i09 brief |
+| i09/P-1 … P-7, K-1 … K-3 (Orchestrator, odobrenje plana i09) | P-1 A: Kotlin 2.3.21 (+ `compilerOptions` `jvmTarget` JVM_11); AGP 8.10.1, Gradle 8.11.1, compileSdk/targetSdk 35, minSdk 26 ostaju; dopuna i01/P-8 (§4). P-2 A: §3.6 kao Firebase policy — `String.length` ≥ 8, bar jedan `A`–`Z`, bar jedan `0`–`9`. P-3 A sa B kao rezervom: `displayName` u Firebase Auth profil prije init-a; AUTH-03 ga čita za ponovni init sa `"1.0"`; nedostaje / neispravan → forma „Dovršite registraciju”. P-4 B: neutralna poruka „Registracija nije uspjela. Ako već imate nalog, prijavite se ili zatražite novu lozinku.” P-5 A: fontovi (SIL OFL 1.1) u `res/font`, ikone kao vektorski drawable-i, licence u `android-app/licence/`, bez nove Gradle zavisnosti. P-6: tekst uslova 1.0 (6 tačaka) odobrila Ana 2026-10-19. P-7: release bez konfiguracije do i11, bez TODO-a. K-1: K2 i K3 plana spojeni u jedan commit. K-2: smoke S1 … S13 izvršava Ana poslije K6, prije K7. K-3 (nalaz S13, 2026-10-20): Firebase Auth SDK loguje e-mail (INFO) i UID (DEBUG); kod se u i09 ne mijenja; poznato ograničenje (§7); obaveza i11: release build sa R8 pravilom koje uklanja `Log.v` / `Log.d` / `Log.i` (uključujući SDK). Detalji: `docs/iteracije/i09_plan.md`, sekcija 14. | i09 plan |
 
 ## 4. Odluke iz planova bitne za buduće iteracije
 
@@ -142,6 +151,11 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i05/P-14 | Informativno: `reconciledCount` pod kontencijom broji samo voucher-e koje je ta transakcija zaista oslobodila. U README. |
 | i05/K-1 | I05-T14 dokazuje ishod bez oslanjanja na kontenciju / 503 i bez oslanjanja na to da upit nad `vouchers` serijalizuje transakcije (pouka i04 R-01). |
 | i05/K-3 | Test pod kontencijom sa 500 (R19) ili test koji nije 10/10 u oba smjera → Builder staje i javlja. |
+| i09/P-1 | Dopuna i01/P-8 (ne briše je): verzija zavisnosti je „posljednja stabilna verzija starija od 14 dana KOMPATIBILNA sa toolchain-om iz i01” (AGP 8.10.1, Gradle 8.11.1, compileSdk 35); Kotlin podignut na 2.3.21 zbog Firebase BoM 34.x. |
+| i09/P-2 | §3.6 na klijentu = Firebase policy: dužina u UTF-16 jedinicama ≥ 8, bar jedan `A`–`Z`, bar jedna `0`–`9` (`Čokolada1` se odbija). |
+| i09/P-3 | `displayName` se pri registraciji upisuje u Firebase Auth profil prije init-a; AUTH-03 ponovni init koristi to ime i `"1.0"`; inače forma „Dovršite registraciju”. |
+| i09/P-4 | Kolizija e-maila pri registraciji → neutralna poruka (bez otkrivanja postojanja naloga). |
+| i09/P-7 | `release` build nema konfiguraciju (`KORISTI_EMULATOR = false`, prazan `BACKEND_BAZNI_URL`) do i11 (O-2). |
 
 ## 5. Tehnika (obavezujuća za sve iteracije, i02–i03)
 
@@ -315,6 +329,16 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
   (`users` ACTIVE bez `loyaltyAccounts`, Auth postoji); ponovljen DELETE → 204 i čisto stanje. Samo sopstveni nalog, traži paralelan init i
   DELETE (Android po (v) to ne radi). Poznato ograničenje, bez izmjene koda.
 - i08 (B-1): ponašanje produkcionog Firestore-a za ID sa kontrolnim znakom više nije relevantno za `loyaltyUid` i `rewardId` (odbija se prije baze).
+- i09/K-3 (nalaz smoke S13): Firebase Auth SDK (tag `FirebaseAuth`, ne kod aplikacije) ispisuje u Logcat e-mail na nivou INFO („Creating user
+  with …”, „Logging in as …”, „Password reset request …”) i UID na nivou DEBUG („Notifying id token / auth state listeners about user ( <UID> )”).
+  Token se ne ispisuje (`Bearer`: 0 pogodaka); kod aplikacije ne loguje (I09-T12). NFR-07 zabranjuje tajne (ključeve, kredencijale) u logovima;
+  e-mail i UID (QR-06) nisu tajne, ali je nalaz bitan za sigurnosni fokus rada. Kod se u i09 ne mijenja. Obaveza za i11: release build sa R8
+  pravilom koje uklanja `Log.v` / `Log.d` / `Log.i` pozive (uključujući SDK).
+- i09: smoke je izvršen na API 26 umjesto API 35 (OD-1 i09); S10 (tamna tema) → API 35 u i11; S11 (NFR-10, I09-T13) nije izvršen i
+  automatskog testa nema — NFR-10 je u i09 neprovjeren; S12 screenshot-i odloženi do konačnih ekrana poslije i10.
+- i09: emulator nema password policy ni Email Enumeration Protection — slabu lozinku u i09 zaustavlja samo klijent (§3.6), konačno u i11 (O-2).
+- i09: `isFromCache` marker se pali tek kad Firestore SDK zaključi da je offline (do ~10 s).
+- i09: stanje `BrisanjeUToku` nema akciju (logout je i10).
 
 ## 8. Backlog
 
