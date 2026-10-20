@@ -499,3 +499,17 @@ smoke Ane ~45 min (S9 opciono +15 min).
 
 ## 14. Odluke Orchestrator-a (odobrenje plana)
 
+Plan i10 (commit c325194) je ODOBREN (Ana). Datum: 2026-10-20.
+
+i10/P-1  — ODOBRILA ANA: tekst Pomoći i čestih pitanja tačno kako je predložen u 5.10 (7 stavki), resurs pomoc_cesta_pitanja.
+i10/P-2  — A: API-03 `500` i odgovor bez čitljivog §27 tijela = NEZAVRŠEN pokušaj; „Pokušaj ponovo” šalje isti requestId.
+i10/P-3  — A: „otvaranje” = tap na pojedinačnu stavku; readAt samo za nju, samo kad je readAt == null.
+i10/P-4  — A: donja navigacija iz prototipa + zvono na Home-u; dugme „Moj QR kod” se uklanja; elementi prototipa van SRS-a se ne prave.
+i10/P-5  — A: red „Uslovi korišćenja” na Profilu otvara postojeći ekran `uslovi`.
+i10/P-6  — A: `BrisanjeUToku` dobija „Nastavi brisanje” i „Odjavi se”.
+i10/P-7  — A: 401 na DELETE = završeno samo kad je DELETE u toku već poslat ili je tok nastavak iz `BrisanjeUToku`; inače istekla sesija;
+           u nastavku reauth „korisnik ne postoji / onemogućen” = završeno; uvijek signOut → Login.
+i10/P-8  — A: dijalog potvrde za izdavanje i otkazivanje; requestId nastaje na tap „Izdaj” u dijalogu.
+i10/P-9  — A: vouchers `orderBy('expiresAt','asc')` + composite indeks (uid, status, expiresAt).
+i10/P-10 — A: izmjena imena samo u users/{uid} (displayName + updatedAt), rok potvrde 10 s; Auth profil se ne mijenja.
+i10/P-11 — prihvaćeno: format prikaza Istorije kao u 5.2.
