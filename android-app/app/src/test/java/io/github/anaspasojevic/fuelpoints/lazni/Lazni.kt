@@ -1,5 +1,6 @@
 package io.github.anaspasojevic.fuelpoints.lazni
 
+import io.github.anaspasojevic.fuelpoints.domen.GeneratorZahtjeva
 import io.github.anaspasojevic.fuelpoints.podaci.api.BackendApi
 import io.github.anaspasojevic.fuelpoints.podaci.api.OdgovorInita
 import io.github.anaspasojevic.fuelpoints.podaci.api.OdgovorUskladjivanja
@@ -8,10 +9,19 @@ import io.github.anaspasojevic.fuelpoints.podaci.api.RezultatApi
 import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IshodAutentikacije
 import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IzvorAutentikacije
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.IshodUpisaImena
+import io.github.anaspasojevic.fuelpoints.podaci.kupovine.IshodStranice
+import io.github.anaspasojevic.fuelpoints.podaci.kupovine.IzvorKupovina
+import io.github.anaspasojevic.fuelpoints.podaci.kupovine.Kursor
+import io.github.anaspasojevic.fuelpoints.podaci.nagrade.AktivniVoucher
+import io.github.anaspasojevic.fuelpoints.podaci.nagrade.IzvorNagrada
+import io.github.anaspasojevic.fuelpoints.podaci.nagrade.Nagrada
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.IzvorNaloga
+import io.github.anaspasojevic.fuelpoints.podaci.obavjestenja.IzvorObavjestenja
+import io.github.anaspasojevic.fuelpoints.podaci.obavjestenja.Obavjestenje
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.Korisnik
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.LoyaltyNalog
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.StanjeDokumenta
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -140,12 +150,14 @@ class LazniBackendApi : BackendApi {
     val odgovoriOtkazivanja = ArrayDeque<RezultatApi<OdgovorVouchera>>()
     val odgovoriBrisanja = ArrayDeque<RezultatApi<Unit>>()
     val zahtjeviIzdavanja = mutableListOf<Pair<String, String>>()
+    var kapijaIzdavanja: CompletableDeferred<Unit>? = null
 
     private fun voucher(rewardId: String) = OdgovorVouchera("v".repeat(64), rewardId, 50, "ACTIVE", "2026-10-20T10:00:00.000Z", "2026-10-20T10:15:00.000Z")
 
     override suspend fun izdajNagradu(rewardId: String, requestId: String): RezultatApi<OdgovorVouchera> {
         pozivi += "izdaj:$rewardId:$requestId"
         zahtjeviIzdavanja += rewardId to requestId
+        kapijaIzdavanja?.await()
         return odgovoriIzdavanja.removeFirstOrNull() ?: RezultatApi.Uspjeh(voucher(rewardId))
     }
 
@@ -160,4 +172,44 @@ class LazniBackendApi : BackendApi {
     }
 
     val brojInita get() = pozivi.count { it.startsWith("init:") }
+}
+
+class LazniGeneratorZahtjeva : GeneratorZahtjeva {
+    var brojac = 0
+    override fun noviRequestId() = "req-${++brojac}"
+}
+
+class LazniIzvorKupovina : IzvorKupovina {
+    val ishodi = ArrayDeque<IshodStranice>()
+    val kursori = mutableListOf<Kursor?>()
+    var kapija: CompletableDeferred<Unit>? = null
+
+    override suspend fun stranica(uid: String, kursor: Kursor?): IshodStranice {
+        kursori += kursor
+        kapija?.await()
+        return ishodi.removeFirst()
+    }
+}
+
+class LazniIzvorNagrada : IzvorNagrada {
+    val katalog = MutableStateFlow<StanjeDokumenta<List<Nagrada>>?>(
+        StanjeDokumenta.Postoji(listOf(Nagrada("SHOWER", "Besplatan tuš", 30), Nagrada("CAR_WASH", "Besplatno pranje", 50)), false),
+    )
+    val vauceri = MutableStateFlow<StanjeDokumenta<List<AktivniVoucher>>?>(StanjeDokumenta.Postoji(emptyList(), false))
+
+    override fun posmatrajKatalog() = katalog.filterNotNull()
+    override fun posmatrajAktivneVouchere(uid: String) = vauceri.filterNotNull()
+}
+
+class LazniIzvorObavjestenja : IzvorObavjestenja {
+    val lista = MutableStateFlow<StanjeDokumenta<List<Obavjestenje>>?>(StanjeDokumenta.Postoji(emptyList(), false))
+    val oznacena = mutableListOf<String>()
+    var uspjehUpisa = true
+
+    override fun posmatraj(uid: String) = lista.filterNotNull()
+
+    override suspend fun oznaciProcitano(id: String): Boolean {
+        oznacena += id
+        return uspjehUpisa
+    }
 }
