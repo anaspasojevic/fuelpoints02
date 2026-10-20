@@ -2860,3 +2860,22 @@ e-mail i UID (QR-06) nisu tajne, ali je nalaz bitan za sigurnosni fokus rada.
 ### Poznata ograničenja
 
 Vidi IMPLEMENTATION_LOG i09 i ODLUKE §7 (nalaz S13; smoke na API 26 bez S10, S11, S12; NFR-10 neprovjeren u i09).
+
+---
+
+## Iteracija 10 (Builder, 2026-10-20)
+
+Prema uputi korisnika Builder NIJE pokretao `skripte/provjera.ps1` ni smoke testove (API 35 / API 26); to radi Ana ručno. Ovdje su samo komande koje su stvarno izvršene.
+
+| Komanda | Rezultat |
+|---|---|
+| `cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\gradlew.bat assembleDebug testDebugUnitTest --offline` | BUILD SUCCESSFUL; 154 JVM testa, 0 neuspjelih |
+
+Novi testovi po ID-u (svi zeleni): I10-T01, T03, T04 (domen), T05, T08, T11 (MockWebServer, 12), T12 (13), T15 (statička provjera: upisi, upiti, indeksi, zavisnosti);
+ViewModel suite: Nagrade (I10-T02, T03, T04, T06; 20 testova), Istorija (I10-T07; 6), Obavještenja (I10-T09; 4), Profil (I10-T10, T13; 11), Home sa zastavicom (I10-T14; 2).
+I09-T01 … T12 su zeleni (regresija). I10-T16 je inspekcija u smoke-u (S17, S18).
+
+Otvoreno (čeka Anu): `provjera.ps1` (2×, O-30), smoke S1 … S20 na API 35 sa PASS/FAIL tabelom, screenshot-i u `docs/smoke/` (`i10_login.png`, `i10_home.png`,
+`i10_qr.png`, `i10_nagrade_voucher.png`). Ručna provjera na emulatoru nije izvršena. Odstupanje od plana: testovi i kod su pisani zajedno po koracima (crvena faza
+nije posebno izvršena); PR prema `main` nije otvoren.
+
