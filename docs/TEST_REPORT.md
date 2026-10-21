@@ -2879,3 +2879,42 @@ Otvoreno (čeka Anu): `provjera.ps1` (2×, O-30), smoke S1 … S20 na API 35 sa 
 `i10_qr.png`, `i10_nagrade_voucher.png`). Ručna provjera na emulatoru nije izvršena. Odstupanje od plana: testovi i kod su pisani zajedno po koracima (crvena faza
 nije posebno izvršena); PR prema `main` nije otvoren.
 
+
+### Smoke i10 (O-31 (d), `docs/smoke/i10_smoke.md`) — izvršila Ana, 2026-10-21
+
+Emulator **API 35**, lokalno okruženje `.\skripte\pokreniLokalno.ps1`, debug APK. Rezultate je Ana prijavila ručno; Builder ih samo upisuje.
+
+| # | Korak | Rezultat | Napomena |
+|---|---|---|---|
+| S1 | Registracija „Ana”, Home, donja navigacija (5), zvono | PASS | |
+| S2 | POS kupovine 42 730 ml i 30 000 ml → Home 72 boda | PASS | |
+| S3 | Istorija: 2 stavke, novija prva | PASS | |
+| S4 | 20 dodatnih kupovina, „Učitaj starije kupovine” | PASS | |
+| S5 | Nagrade: CAR_WASH i SHOWER „dostupno” | PASS | |
+| S6 | Izdavanje CAR_WASH, aktivni voucher sa QR-om | PASS | |
+| S7 | Screenshot Nagrade sa voucher-om | PASS | `docs/smoke/i10_nagrade_voucher.png` |
+| S8 | Otkazivanje voucher-a, bodovi vraćeni | PASS | |
+| S9 | (opciono) isticanje voucher-a SHOWER | NIJE IZVRŠENO | preskočeno (opciono, 15 min); isticanje i API-06 pokriveni JVM testovima I10-T04, T06, T11 i backend testovima iz i04/i07, ne i ručno |
+| S10 | Obavještenja, `readAt` | PASS | |
+| S11 | Profil, ime za prikaz, 101 znak | PASS | |
+| S12 | Promjena lozinke, reset | PASS | |
+| S13 | Pomoć i česta pitanja, Uslovi korišćenja | PASS | kozmetička primjedba: raspored ekrana „Pomoć i česta pitanja” nije najpregledniji; ne blokira; otvorena stavka za i11 |
+| S14 | Odjava, prijava (AC-01) | PASS | |
+| S15 | Brisanje naloga | PASS | |
+| S16 | Tamni režim | PASS | |
+| S17 | Layout Inspector (NFR-10, I10-T16) | PASS | |
+| S18 | NFR-09 lista na API 35 | PASS | |
+| S19 | Logcat | PASS | detalji nalaza SDK-a (i09/K-3) nisu posebno prijavljeni; ostaje poznato ograničenje za i11 |
+| S20 | Screenshot-i Login, Home, Moj QR | PASS | `i10_login.png`, `i10_home.png`, `i10_qr.png` |
+
+Zbir: 19 PASS, 0 FAIL, 1 nije izvršen (S9, opciono).
+
+### `provjera.ps1` (O-30) — Ana
+
+`.\skripte\provjera.ps1` pokrenut 2× zaredom, oba puta PASS (O-30 ispunjeno). Brojači testova i trajanje nisu dostavljeni uz prijavu pa se ovdje
+ne navode; izlaz nije ovdje preuzet.
+
+### Otvorene stavke za i11
+
+- Raspored ekrana „Pomoć i česta pitanja” (S13): kozmetika, kod se u i10 ne mijenja.
+- Nasljeđe: R8 pravilo za `Log.v/d/i` (i09/K-3), provjera composite indeksa nad pravim projektom, Email Enumeration Protection / password policy (O-2).

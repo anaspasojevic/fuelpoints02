@@ -1379,3 +1379,10 @@ Grana `iteracija-10`, commit-i: K1 `918bebe` (API klijent, izvori, indeksi), K2 
 - Bez promjena: `backend/`, `firestore.rules`, `docs/srs/`, Gradle zavisnosti (I10-T15).
 - Poznato: poruka „Ime je sačuvano.” se ne vidi jer se ekran odmah zatvara; 401 na Rewards ekranu vodi na Login bez poruke; Kotlin pozivi `startAfter`, `ESTIMATE`, `reauthenticate` prvi put na uređaju u smoke-u.
 
+
+### Iteracija 10 — smoke i zatvaranje (2026-10-21)
+
+Ana je izvršila smoke S1 … S20 na API 35: 19 PASS, S9 (opciono, isticanje voucher-a) nije rađen, 0 FAIL. `provjera.ps1` 2× PASS (O-30). Screenshot-i
+u `docs/smoke/`. Rezultati su upisani u TEST_REPORT i10; TRACEABILITY redovi i10 prebačeni u PASS. Kod nije mijenjan.
+
+**Otvorena stavka za i11:** raspored ekrana „Pomoć i česta pitanja” nije najpregledniji (kozmetička primjedba iz S13, ne blokira).
