@@ -32,3 +32,10 @@ captures/
 # OS
 Thumbs.db
 .DS_Store
+
+# Lokalna konfiguracija pravog Firebase projekta i potpisivanje (NFR-07, i11)
+android-app/firebase.local.properties
+android-app/*.keystore
+android-app/*.jks
+.env.real*
+docs/**/*.apk
