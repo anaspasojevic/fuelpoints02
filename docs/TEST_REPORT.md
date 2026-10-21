@@ -2955,7 +2955,19 @@ Dakle `-assumenosideeffects` uklanja v/d/i iz cijelog koda (uključujući biblio
 | I11-T03 | PASS (`test:emu:ciljano`) |
 | I11-T05, I11-T06, I11-T07, I11-T09 | PASS (JVM) |
 | I11-T08 | PASS (`backend`, `npm test`) |
-| Kontrolne mutacije (plan, sekcija 6) | nisu rađene; T09 ima ugrađenu kontrolu (bez indeksa test pada), T05/T06/T08 nisu mutirani |
+| Kontrolne mutacije (plan, sekcija 6) | 5/5 uhvaćeno, vidi tabelu ispod (T06 i T08 nisu mutirani; plan ih ne navodi) |
+
+### Kontrolne mutacije i11 (plan, sekcija 6; svaka privremena, vraćena `git checkout --`, funkcionalni kod u commit-u nepromijenjen)
+
+| # | Mutacija | Test | Sa mutacijom (crveno) | Poslije vraćanja (zeleno) |
+|---|---|---|---|---|
+| 1 | `release`: `isMinifyEnabled = false` (uz `isShrinkResources = false`, inače Gradle odbija build) | I11-T05 | PAD „release ima R8 minifikaciju” (1 od 5) | 10/10 JVM testova I11-T0x PASS |
+| 2 | `proguard-rules.pro`: `-assumenosideeffects` pretvoreno u komentar | I11-T05 | PAD „pravilo uklanja Log v d i, a ne w i e” (1 od 5) | PASS |
+| 3 | `logika.js`: `stationId: 'SIM01'` dodat u tijelo kupovine | I11-T01 | PAD „tijelo kupovine ima tačno 6 polja SRS-a…” (pos-simulator: 12 pass, 1 fail) | 13/13 PASS |
+| 4 | `index.html`: `console.log(kljuc)` | I11-T02 | PAD „izvori stranice ne čuvaju ključ…” (12 pass, 1 fail) | 13/13 PASS |
+| 5 | `firestore.indexes.json`: uklonjen `vouchers` indeks | I11-T09 | PAD „svaki upit sa orderBy ima composite indeks” i „kontrola” (2 od 3) | PASS |
+
+Komande: `.\gradlew.bat testDebugUnitTest --tests "*I11T05*"` / `"*I11T09*"` (android-app, JBR; rezultati iz `appuild	est-results`), `cd pos-simulator; npm test`.
 
 ### Ručni koraci koji čekaju Anu
 
