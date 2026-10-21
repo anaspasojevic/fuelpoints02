@@ -87,3 +87,24 @@ NFR-10 (I10-T16) i NFR-09 (API 35) — smoke S17/S18 PASS prema TEST_REPORT-u (A
 2. R-02 zabilježen (ili kod usklađen) u IMPLEMENTATION_LOG / ODLUKE / TRACEABILITY.
 3. R-03 ispravljen (TEST_REPORT dosljedan, commit završnog run-a, PR otvoren bez merge-a).
 4. Ako R-01 mijenja kod u `android-app/`: ponovni `provjera.ps1` je potreban samo ako Orchestrator tako odluči (O-30 (a)/O-31 — promjena je u Android sloju koji `provjera.ps1` ne pokriva osim backend/Rules regresije); JVM testovi obavezni.
+
+---
+
+## Ponovni pregled poslije FIX LOOP-a 1 (commit `3129b67`)
+
+Pregledan diff `fb182cc..3129b67` (`EkraniProfila.kt`, `I10T12TokBrisanjaTest.kt`, IMPLEMENTATION_LOG, ODLUKE, TEST_REPORT, TRACEABILITY).
+
+- **R-01 — ISPRAVLJEN.** `EkranBrisanjaNaloga` ima `BackHandler(enabled = stanje != URadu && stanje !is Zavrseno) { vm.odustani() }`; sistemsko „nazad” gasi zastavicu isto kao „Odustani”,
+  a dok traje DELETE (`URadu`) je onemogućeno, pa se ne ostavlja nepoznato stanje. Dodata dva JVM testa (`ViewModel odustani poslije 409` i `poslije 503`) koja provjeravaju ugašenu zastavicu.
+  Napomena: testovi pozivaju `vm.odustani()` direktno, a ne sam `BackHandler`; povezanost „nazad” → `odustani()` pokriva kod (jedan red) i Anina ručna provjera (unos lozinke → „nazad”, bez 409).
+  Ručna reprodukcija 409 + „nazad” nije izvodljiva na Auth emulatoru (ne poštuje realan `auth_time`); prihvatam to kao dokumentovano ograničenje.
+- **R-02 — ISPRAVLJEN.** OD-1 upisan u IMPLEMENTATION_LOG („Odstupanja od plana”), napomena uz i10/P-6 u ODLUKE §3, TRACEABILITY red za §23 ažuriran.
+- **R-03 — ISPRAVLJEN.** TEST_REPORT: zastarjele rečenice uklonjene, 154 → 156 → 158 objašnjeno, naveden commit `0c882c3` za `provjera.ps1` i smoke, a Anina prijava `provjera.ps1`
+  izričito označena kao usmena (ne izvršena komanda u evidenciji), što je iskreno i prihvatljivo. PR #10 `iteracija-10` → `main` otvoren (OPEN, bez merge-a).
+- **Provjera testova (Reviewer).** `gradlew.bat testDebugUnitTest --offline` sa `JAVA_HOME` = JDK iz Android Studio-a, na `3129b67`, poslije brisanja starih izvještaja:
+  BUILD SUCCESSFUL, **158 testova, 0 failures/errors, 0 skipped**. (Prvi pokušaj bez `JAVA_HOME` pao je u konfiguraciji Gradle-a, ne u testovima; ponovljen sa ispravnim JDK-om.)
+- Novi nalazi: nema. R-04 … R-06 (NOTE) ostaju kao ranije (S9 i API 26 u i11).
+
+## Konačna odluka: **ITERATION ACCEPTED**
+
+Svi uslovi iz odjeljka „Uslovi za ITERATION ACCEPTED” su ispunjeni. Merge `iteracija-10` → `main` i anotirani tag `i10` rade se po CLAUDE.md tek poslije ove odluke (Orchestrator/Ana); otvorene stavke za i11 ostaju u TEST_REPORT-u.
