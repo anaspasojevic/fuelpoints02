@@ -2,8 +2,167 @@
 <html lang="sr-Latn">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FuelPoints POS Simulator</title>
+  <style>
+    :root { color-scheme: dark; --pozadina: #101216; --kartica: #1b1f26; --linija: #343b46; --tekst: #e8eaee; --prigusen: #9aa3b0; --naglasak: #ffc400; --greska: #ff6b6b; --uspjeh: #5bd68a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: var(--pozadina); color: var(--tekst); font: 16px/1.4 system-ui, sans-serif; }
+    main { max-width: 640px; margin: 0 auto; display: grid; gap: 16px; }
+    h1 { font-size: 1.3rem; margin: 0; color: var(--naglasak); }
+    h2 { font-size: 1.05rem; margin: 0 0 8px; }
+    section { background: var(--kartica); border: 1px solid var(--linija); border-radius: 8px; padding: 16px; }
+    label { display: block; margin: 10px 0 4px; color: var(--prigusen); font-size: 0.9rem; }
+    input { width: 100%; padding: 10px; background: var(--pozadina); color: var(--tekst); border: 1px solid var(--linija); border-radius: 6px; font: inherit; }
+    .red { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .dugmad { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--linija); border-radius: 6px; background: var(--linija); color: var(--tekst); font: inherit; cursor: pointer; }
+    button.glavno { background: var(--naglasak); color: #000; border-color: var(--naglasak); }
+    .prikaz { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, monospace; font-size: 0.9rem; }
+    .greska { color: var(--greska); }
+    .uspjeh { color: var(--uspjeh); }
+    .mala { color: var(--prigusen); font-size: 0.85rem; margin: 6px 0 0; }
+  </style>
 </head>
 <body>
+<main>
+  <h1>FuelPoints POS Simulator</h1>
+  <p class="mala">Simulator kase benzinske pumpe (SRS §2.5). Stanicu određuje Backend na osnovu POS API ključa; simulator je nikad ne šalje.</p>
+
+  <section>
+    <h2>Podešavanje</h2>
+    <label for="posKljuc">POS API ključ</label>
+    <input id="posKljuc" type="password" autocomplete="off" spellcheck="false">
+    <p class="mala">Ključ ostaje samo u memoriji ove stranice: ne čuva se u pregledniku, ne ispisuje se i šalje se samo u zaglavlju zahtjeva.</p>
+  </section>
+
+  <section>
+    <h2>Kupovina goriva (API-02)</h2>
+    <form id="formaKupovine" autocomplete="off">
+      <label for="loyaltyUid">Loyalty UID (sa ekrana „Moj QR”)</label>
+      <input id="loyaltyUid" required spellcheck="false">
+      <label for="posTransactionId">POS transaction ID</label>
+      <input id="posTransactionId" required spellcheck="false">
+      <div class="red">
+        <div><label for="litri">Količina goriva (l)</label><input id="litri" inputmode="decimal" value="42,730" required></div>
+        <div><label for="iznos">Iznos (EUR)</label><input id="iznos" inputmode="decimal" value="70,50" required></div>
+      </div>
+      <label for="occurredAt">Vrijeme kupovine (UTC)</label>
+      <input id="occurredAt" required spellcheck="false">
+      <div class="dugmad">
+        <button type="submit" class="glavno">Pošalji kupovinu</button>
+        <button type="button" id="novaTransakcija">Nova transakcija</button>
+        <button type="button" id="ponoviKupovinu">Ponovi isti zahtjev</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h2>Otkup nagrade (API-04)</h2>
+    <form id="formaOtkupa" autocomplete="off">
+      <label for="voucherId">Voucher ID</label>
+      <input id="voucherId" required spellcheck="false">
+      <label for="redemptionRequestId">Redemption request ID</label>
+      <input id="redemptionRequestId" required spellcheck="false">
+      <div class="dugmad">
+        <button type="submit" class="glavno">Otkupi voucher</button>
+        <button type="button" id="noviOtkup">Novi zahtjev</button>
+      </div>
+    </form>
+  </section>
+
+  <section aria-live="polite">
+    <h2>Odgovor</h2>
+    <div id="odgovor" class="prikaz">Još nema odgovora.</div>
+    <div class="dugmad"><button type="button" id="ponoviPoslije503" hidden>Pokušaj ponovo istim ID-em</button></div>
+  </section>
+</main>
+
+<script type="module">
+import {
+  napraviZahtjevKupovine, napraviZahtjevOtkupa, novaTransakcijaId, opisiMreznuGresku, opisiOdgovor,
+} from './logika.js';
+
+const $ = (id) => document.getElementById(id);
+let zadnjiZahtjev = null;
+
+function novoVrijeme() {
+  return new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+}
+
+function novaTransakcija() {
+  $('posTransactionId').value = novaTransakcijaId();
+  $('occurredAt').value = novoVrijeme();
+}
+
+function prikazi(opis, zahtjev) {
+  const polje = $('odgovor');
+  polje.className = 'prikaz';
+  $('ponoviPoslije503').hidden = !opis.mozePonovo;
+  zadnjiZahtjev = opis.mozePonovo ? zahtjev : null;
+  if (opis.vrsta === 'uspjeh') {
+    polje.classList.add('uspjeh');
+    polje.textContent = `HTTP ${opis.status}\n${JSON.stringify(opis.tijelo, null, 2)}`;
+  } else if (opis.vrsta === 'greska') {
+    polje.classList.add('greska');
+    polje.textContent = `HTTP ${opis.status}\ncode: ${opis.code}\nmessage: ${opis.message}\ncorrelationId: ${opis.correlationId ?? '-'}`;
+  } else {
+    polje.classList.add('greska');
+    polje.textContent = opis.poruka;
+  }
+}
+
+function prikaziGreskeUnosa(greske) {
+  $('ponoviPoslije503').hidden = true;
+  $('odgovor').className = 'prikaz greska';
+  $('odgovor').textContent = greske.join('\n');
+}
+
+async function posalji(zahtjev) {
+  const kljuc = $('posKljuc').value;
+  try {
+    const odgovor = await fetch(zahtjev.putanja, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-POS-API-Key': kljuc },
+      body: JSON.stringify(zahtjev.tijelo),
+    });
+    prikazi(opisiOdgovor(odgovor.status, await odgovor.text()), zahtjev);
+  } catch {
+    prikazi(opisiMreznuGresku(), zahtjev);
+  }
+}
+
+function citajKupovinu() {
+  return napraviZahtjevKupovine({
+    loyaltyUid: $('loyaltyUid').value,
+    posTransactionId: $('posTransactionId').value,
+    litri: $('litri').value,
+    iznos: $('iznos').value,
+    occurredAt: $('occurredAt').value,
+  });
+}
+
+function citajOtkup() {
+  return napraviZahtjevOtkupa({ voucherId: $('voucherId').value, redemptionRequestId: $('redemptionRequestId').value });
+}
+
+function obradi(zahtjev) {
+  if (zahtjev.greske) {
+    prikaziGreskeUnosa(zahtjev.greske);
+    return;
+  }
+  posalji(zahtjev);
+}
+
+$('formaKupovine').addEventListener('submit', (dogadjaj) => { dogadjaj.preventDefault(); obradi(citajKupovinu()); });
+$('ponoviKupovinu').addEventListener('click', () => obradi(citajKupovinu()));
+$('novaTransakcija').addEventListener('click', novaTransakcija);
+$('formaOtkupa').addEventListener('submit', (dogadjaj) => { dogadjaj.preventDefault(); obradi(citajOtkup()); });
+$('noviOtkup').addEventListener('click', () => { $('redemptionRequestId').value = crypto.randomUUID(); });
+$('ponoviPoslije503').addEventListener('click', () => { if (zadnjiZahtjev) posalji(zadnjiZahtjev); });
+
+novaTransakcija();
+$('redemptionRequestId').value = crypto.randomUUID();
+</script>
 </body>
 </html>

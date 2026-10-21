@@ -101,6 +101,12 @@ try {
         }
     }
 
+    Korak 'POS Simulator: npm test' {
+        UDirektorijumu 'pos-simulator' {
+            Nativno 'npm test' { npm test }
+        }
+    }
+
     Korak 'Backend: backend start smoke (node src/pokreni.js) (404 NOT_FOUND na /api/v1, 401 UNAUTHENTICATED na /account/init bez token-a, 401 UNAUTHENTICATED_POS na /pos/purchases bez ključa, 401 UNAUTHENTICATED na /rewards/CAR_WASH/issue bez token-a, 401 UNAUTHENTICATED na /vouchers/{voucherId}/cancel i /account/vouchers/reconcile bez token-a, 401 UNAUTHENTICATED_POS na /pos/vouchers/{voucherId}/redeem bez ključa, 401 UNAUTHENTICATED na DELETE /account bez token-a)' {
         $env:PORT = $portSmoke
         $env:FIREBASE_PROJECT_ID = 'demo-fuelpoints'

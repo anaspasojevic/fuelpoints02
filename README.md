@@ -9,7 +9,7 @@ Jedini normativni dokument je FuelPoints SRS 3.1 (`docs/srs/FuelPoints_SRS_3_1.d
 |---|---|
 | `android-app/` | Android App (Kotlin, Jetpack Compose, minSdk 26, compileSdk/targetSdk 35) |
 | `backend/` | Loyalty Backend (Node.js 24 LTS, Express, Firebase Admin SDK), testovi u `backend/test/` |
-| `pos-simulator/` | POS Simulator (kostur; forme dolaze u Iteraciji 11) |
+| `pos-simulator/` | POS Simulator: HTML stranica + lokalni proxy `server.js` (Iteracija 11), testovi u `pos-simulator/test/` |
 | `firebase/` | `firestore.rules`, `firestore.indexes.json` i rules testovi u `firebase/tests/` |
 | `firebase.json`, `.firebaserc` | Firebase Emulator Suite: Firestore `127.0.0.1:8080`, Auth `127.0.0.1:9099`, projekat `demo-fuelpoints` |
 | `skripte/provjera.ps1` | sve provjere redom (Definition of Done) |
