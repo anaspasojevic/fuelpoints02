@@ -1399,3 +1399,27 @@ u `docs/smoke/`. Rezultati su upisani u TEST_REPORT i10; TRACEABILITY redovi i10
 test „nastavak + `NepostojeciKorisnik` → `Zavrseno`, 0 DELETE”. Implementirano (`TokBrisanja(nastavak = true)`, `pokreniNastavak()`, commit `0c882c3`): DELETE
 odmah sa svježim tokenom, lozinka tek poslije `409 REAUTHENTICATION_REQUIRED`; test očekuje 1 DELETE. Razlog: §23.4 — nastavak je ponovljen DELETE, a Backend
 sam odlučuje o svježini prijave (O-35). Ponašanje je prihvaćeno kao razumno; kod nije mijenjan.
+
+## Iteracija 11 — POS Simulator, pravi Firebase projekat, Release, završna NFR provjera (Builder, 2026-10-21)
+
+Grana `iteracija-11`. Backend (`backend/src`) i `firebase/firestore.rules` nisu mijenjani (P-1 A).
+
+- **K1** (`f436cfc`): odluke P-1 … P-9 u `ODLUKE.md`, status i10/i11; `.gitignore` za `firebase.local.properties`, `*.keystore`, `*.jks`, `.env.real*`, `docs/**/*.apk`.
+- **K2** (`f31c78d`): `pos-simulator/` — `index.html` (forme API-02 i API-04, ključ samo u memoriji, `type=password`), `logika.js` (čista logika: konverzije litara/EUR u `volumeMl`/`amountMinor` nad ciframa teksta, tijela zahtjeva, prikaz odgovora), `server.js` (`node:http`, proxy samo za dvije POS rute, bez logovanja ključa/tijela). Testovi I11-T01, T02, T04 (`pos-simulator/test/`), I11-T03 (`backend/test/emulator/posSimulator.test.js`). Korak „POS Simulator: npm test” u `provjera.ps1`.
+- **K3** (`9865c7e`): Pomoć kao padajuća pitanja (P-6): `pomoc_p1…p6`, `pomoc_o1…o6`, `pomoc_kontakt_naslov`, `pomoc_kontakt`; zaglavlje pitanja ima ulogu dugmeta, `stateDescription` (Prošireno/Skupljeno), `heading()`, ≥ 48 dp, podrazumijevano skupljeno. I11-T07.
+- **K4** (`1901635`): `release` — `isMinifyEnabled`/`isShrinkResources`, `-assumenosideeffects` za `Log.v/d/i`, Firebase konfiguracija i `backend.baseUrl` iz `android-app/firebase.local.properties` (`https://` obavezan); `releaseProba` (`initWith(release)`, debug potpis, cleartext samo `10.0.2.2`). Demo vrijednosti ostaju samo u `debug`. I11-T05, T06.
+- **K5/K8** : `docs/uputstva/pravi_firebase_projekat.md`, `android-app/firebase.local.properties.example`, `docs/smoke/i11_smoke.md`.
+- **K6/K9 (statika)**: I11-T09 (Android upiti sa `orderBy` ↔ `firestore.indexes.json`), I11-T08 (tajne u praćenim fajlovima).
+
+#### Odstupanja od plana
+
+**OD-1 — FAQ ima 6 pitanja, ne 7.** Plan (K3, I11-T07) navodi 7 pitanja/odgovora (`pomoc_p1…p7`), ali odobreni tekst iz i10 ima 6 pitanja i blok „Kontakt” (ukupno 7 blokova; „Kontakt” nije pitanje i ne završava sa „?”). Tekst nije mijenjan; I11-T07 provjerava 6 pitanja + Kontakt i doslovnu jednakost sa tekstom iz taga `i10`.
+
+**OD-2 — I11-T08 koristi PEM marker sa crticama** (`-----BEGIN … PRIVATE KEY-----`) umjesto `BEGIN … PRIVATE KEY` iz plana, jer su stariji `docs/iteracije/*.md` samo pominjali taj izraz kao tekst obrasca (nije ključ).
+
+**OD-3 — `releaseProba` nije jedini build type sa cleartext-om:** `debug` ga ima od i09 (O-40); testovi I11-T06 traže tačno skup {debug, releaseProba}, oba samo za `10.0.2.2`.
+
+**OD-4 — I11-T03 neprovjeren** (vidi TEST_REPORT i11).
+
+**Otvoreno:** K5 … K8 i AC-12 završni run čekaju Aninu ručnu akciju; dokumentacija K10 (TRACEABILITY redovi u PASS, README, ODLUKE §7) se dovršava poslije njih.
+

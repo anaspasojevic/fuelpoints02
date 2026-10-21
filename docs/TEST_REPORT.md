@@ -2922,3 +2922,42 @@ u ovoj evidenciji:** tačan izlaz, brojači testova i trajanje nisu dostavljeni,
 
 - Raspored ekrana „Pomoć i česta pitanja” (S13): kozmetika, kod se u i10 ne mijenja.
 - Nasljeđe: R8 pravilo za `Log.v/d/i` (i09/K-3), provjera composite indeksa nad pravim projektom, Email Enumeration Protection / password policy (O-2).
+
+## Iteracija 11 (Builder, 2026-10-21) — stanje poslije K1 … K4, K6 (statika), K9 (T08)
+
+Samo komande koje je Builder stvarno izvršio. `provjera.ps1` i smoke koraci nisu pokretani (rade se ručno, Ana).
+Redoslijed „crveno prije koda” (plan, sekcija 5) za K2 nije zabilježen: stranica i logika su napisane prije testova; testovi su zatim izvršeni.
+
+| Komanda | Rezultat |
+|---|---|
+| `cd pos-simulator; npm test` | 13/13 PASS (I11-T01 ×5, I11-T04 ×3, I11-T02 ×5) |
+| `cd backend; npm test` | 86/86 PASS (uključuje I11-T08 ×3, `test/jedinicni/tajneURepou.test.js`) |
+| `.\gradlew.bat testDebugUnitTest` (android-app, JBR) | BUILD SUCCESSFUL, 168 JVM testova, 0 padova (uključuje I11-T05 ×2, I11-T06 ×3, I11-T07 ×2, I11-T09 ×3) |
+| `.\gradlew.bat assembleRelease assembleReleaseProba` | BUILD SUCCESSFUL (R8 upozorenje „parsing kotlin metadata”: Kotlin 2.3.21 noviji od R8 u AGP 8.10.1; build uspijeva) |
+| `npm run test:emu:ciljano -- test/emulator/posSimulator.test.js` (I11-T03) | **prvi run FAIL** (500 umjesto 200 na prvom otkupu: test je pripremio nalog sa `reservedPoints` 0 < cijena voucher-a, pa Backend ispravno vraća 500). Ispravljena priprema testa (nalog 0/60). **Ponovni run NIJE izvršen**: port 8080 drži zaostali Java proces Firestore emulatora iz prekinutog Builder run-a (PID 21308), a gašenje procesa nije bilo dozvoljeno. I11-T03 se računa kao neprovjeren do sljedećeg `provjera.ps1`. |
+
+### Dex dokaz R8 (K4): broj poziva `android.util.Log` u APK-u
+
+`dexdump -d` (build-tools 35.0.1) nad `classes*.dex`, brojanje `Landroid/util/Log;.<metoda>:`:
+
+| APK | Log.v | Log.d | Log.i | Log.w | Log.e |
+|---|---|---|---|---|---|
+| `release` (R8, `app-release-unsigned.apk`) | 0 | 0 | 0 | 108 | 107 |
+| `debug` (kontrola) | 75 | 65 | 92 | 208 | 240 |
+
+Dakle `-assumenosideeffects` uklanja v/d/i iz cijelog koda (uključujući biblioteke), a w/e ostaju. Ručni Logcat dokaz na uređaju (`releaseProba`) ostaje za Anu (`docs/smoke/i11_smoke.md`, E12).
+
+### Rezultat po ID-u (i11)
+
+| ID | Status |
+|---|---|
+| I11-T01, I11-T02, I11-T04 | PASS (`pos-simulator`, `npm test`) |
+| I11-T03 | NEPROVJEREN (vidi gore) |
+| I11-T05, I11-T06, I11-T07, I11-T09 | PASS (JVM) |
+| I11-T08 | PASS (`backend`, `npm test`) |
+| Kontrolne mutacije (plan, sekcija 6) | nisu rađene; T09 ima ugrađenu kontrolu (bez indeksa test pada), T05/T06/T08 nisu mutirani |
+
+### Ručni koraci koji čekaju Anu
+
+K5 (pravi projekat, konzola, REST dokazi), K6 (indeksi nad produkcijom), K7 (end-to-end), K8 (NFR-09 ×2, S9, NFR-10, screenshot-i): `docs/uputstva/pravi_firebase_projekat.md`, `docs/smoke/i11_smoke.md`. AC-12 završni run (`provjera.ps1`) takođe radi Ana.
+
