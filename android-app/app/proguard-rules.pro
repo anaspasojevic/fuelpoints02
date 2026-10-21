@@ -1,21 +1,8 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# R8 pravila za release (i11/K4, NFR-07, ODLUKE i09/K-3).
+# Firebase Auth SDK loguje e-mail (Log.i) i UID (Log.d); -assumenosideeffects uklanja pozive Log.v/d/i
+# iz cijelog koda, uključujući biblioteke. Log.w i Log.e ostaju (greške su dijagnostički vidljive).
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
