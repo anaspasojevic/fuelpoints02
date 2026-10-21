@@ -245,6 +245,18 @@ ne poredi (O-10a, i07/P-5); drugačiji iznos → `409 IDEMPOTENCY_CONFLICT`. Ret
 vraća prvi rezultat nego `409` / `404` (i07/P-6). Android (i10) poslije pokretanja brisanja ne poziva init ni drugi API dok ne dobije
 `204` (ili `401` na ponovljen `DELETE`).
 
+## Release build i pravi Firebase projekat (Iteracija 11)
+
+| Build type | Firebase | Backend | R8 | Namjena |
+|---|---|---|---|---|
+| `debug` | emulatori (`demo-fuelpoints`) | `http://10.0.2.2:3000` | ne | razvoj i smoke nad emulatorom |
+| `releaseProba` | pravi projekat iz `android-app/firebase.local.properties` | `http://10.0.2.2:3000` (cleartext samo za tu adresu) | da | probni R8-minifikovan kod na uređaju; ne distribuira se |
+| `release` | pravi projekat iz `android-app/firebase.local.properties` | `backend.baseUrl` (mora biti `https://`) | da | predaja; bez fajla build uspijeva sa praznim vrijednostima |
+
+R8 pravilo (`proguard-rules.pro`) uklanja `Log.v/d/i` iz cijelog koda, uključujući Firebase Auth SDK (NFR-07). Postavljanje
+pravog Spark projekta, konzole, REST dokaza i ručnog end-to-end testa: `docs/uputstva/pravi_firebase_projekat.md`.
+Lokalni fajlovi sa tajnama (`firebase.local.properties`, service account, POS ključ) se ne commit-uju.
+
 ## Pokretanje
 
 ```powershell
