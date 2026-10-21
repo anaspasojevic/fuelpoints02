@@ -1419,7 +1419,7 @@ Grana `iteracija-11`. Backend (`backend/src`) i `firebase/firestore.rules` nisu 
 
 **OD-3 — `releaseProba` nije jedini build type sa cleartext-om:** `debug` ga ima od i09 (O-40); testovi I11-T06 traže tačno skup {debug, releaseProba}, oba samo za `10.0.2.2`.
 
-**OD-4 — I11-T03 neprovjeren** (vidi TEST_REPORT i11).
+**OD-4 — I11-T03:** prvi run pao zbog pogrešne pripreme naloga u testu; ispravljeno i ponovljeno, PASS (vidi TEST_REPORT i11).
 
 **Otvoreno:** K5 … K8 i AC-12 završni run čekaju Aninu ručnu akciju; dokumentacija K10 (TRACEABILITY redovi u PASS, README, ODLUKE §7) se dovršava poslije njih.
 

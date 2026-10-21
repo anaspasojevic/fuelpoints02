@@ -2934,7 +2934,7 @@ Redoslijed „crveno prije koda” (plan, sekcija 5) za K2 nije zabilježen: str
 | `cd backend; npm test` | 86/86 PASS (uključuje I11-T08 ×3, `test/jedinicni/tajneURepou.test.js`) |
 | `.\gradlew.bat testDebugUnitTest` (android-app, JBR) | BUILD SUCCESSFUL, 168 JVM testova, 0 padova (uključuje I11-T05 ×2, I11-T06 ×3, I11-T07 ×2, I11-T09 ×3) |
 | `.\gradlew.bat assembleRelease assembleReleaseProba` | BUILD SUCCESSFUL (R8 upozorenje „parsing kotlin metadata”: Kotlin 2.3.21 noviji od R8 u AGP 8.10.1; build uspijeva) |
-| `npm run test:emu:ciljano -- test/emulator/posSimulator.test.js` (I11-T03) | **prvi run FAIL** (500 umjesto 200 na prvom otkupu: test je pripremio nalog sa `reservedPoints` 0 < cijena voucher-a, pa Backend ispravno vraća 500). Ispravljena priprema testa (nalog 0/60). **Ponovni run NIJE izvršen**: port 8080 drži zaostali Java proces Firestore emulatora iz prekinutog Builder run-a (PID 21308), a gašenje procesa nije bilo dozvoljeno. I11-T03 se računa kao neprovjeren do sljedećeg `provjera.ps1`. |
+| `npm run test:emu:ciljano -- test/emulator/posSimulator.test.js` (I11-T03) | prvi run FAIL (500 umjesto 200: pogrešna priprema naloga u testu, `reservedPoints` 0 < cijena voucher-a); ispravljena priprema. Sljedeći pokušaj: emulator se sam ugasio pri startu (exit 3221225786, nije test). Završni ponovni run: **PASS** (1/1). |
 
 ### Dex dokaz R8 (K4): broj poziva `android.util.Log` u APK-u
 
@@ -2952,7 +2952,7 @@ Dakle `-assumenosideeffects` uklanja v/d/i iz cijelog koda (uključujući biblio
 | ID | Status |
 |---|---|
 | I11-T01, I11-T02, I11-T04 | PASS (`pos-simulator`, `npm test`) |
-| I11-T03 | NEPROVJEREN (vidi gore) |
+| I11-T03 | PASS (`test:emu:ciljano`) |
 | I11-T05, I11-T06, I11-T07, I11-T09 | PASS (JVM) |
 | I11-T08 | PASS (`backend`, `npm test`) |
 | Kontrolne mutacije (plan, sekcija 6) | nisu rađene; T09 ima ugrađenu kontrolu (bez indeksa test pada), T05/T06/T08 nisu mutirani |
