@@ -2865,20 +2865,23 @@ Vidi IMPLEMENTATION_LOG i09 i ODLUKE §7 (nalaz S13; smoke na API 26 bez S10, S1
 
 ## Iteracija 10 (Builder, 2026-10-20)
 
-Prema uputi korisnika Builder NIJE pokretao `skripte/provjera.ps1` ni smoke testove (API 35 / API 26); to radi Ana ručno. Ovdje su samo komande koje su stvarno izvršene.
+Komande koje su stvarno izvršene (Builder; `JAVA_HOME` = JDK iz Android Studio-a):
 
 | Komanda | Rezultat |
 |---|---|
-| `cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\gradlew.bat assembleDebug testDebugUnitTest --offline` | BUILD SUCCESSFUL; 154 JVM testa, 0 neuspjelih |
+| `cd android-app; .\gradlew.bat assembleDebug testDebugUnitTest --offline` (kod K1 … K3, prije `0c882c3`) | BUILD SUCCESSFUL; 154 JVM testa, 0 neuspjelih |
+| `cd android-app; .\gradlew.bat testDebugUnitTest --offline` (Reviewer, vrh `b10c469`) | BUILD SUCCESSFUL; 156 JVM testova, 0 failures, 0 errors, 0 skipped |
+| `cd android-app; .\gradlew.bat testDebugUnitTest --offline` (FIX LOOP 1, poslije R-01) | BUILD SUCCESSFUL; 158 JVM testova, 0 failures, 0 errors (+2 testa `I10-T12 ViewModel odustani poslije 409 / 503`) |
 
-Novi testovi po ID-u (svi zeleni): I10-T01, T03, T04 (domen), T05, T08, T11 (MockWebServer, 12), T12 (13), T15 (statička provjera: upisi, upiti, indeksi, zavisnosti);
-ViewModel suite: Nagrade (I10-T02, T03, T04, T06; 20 testova), Istorija (I10-T07; 6), Obavještenja (I10-T09; 4), Profil (I10-T10, T13; 11), Home sa zastavicom (I10-T14; 2).
+Razlika 154 → 156 potiče od testova dodatih u `0c882c3` („ispravke prije smoke-a”); 156 → 158 od FIX LOOP-a (R-01).
+
+Novi testovi po ID-u (svi zeleni): I10-T01, T03, T04 (domen), T05, T08, T11 (MockWebServer, 12), T12 (15), T15 (statička provjera: upisi, upiti, indeksi, zavisnosti);
+ViewModel suite: Nagrade (I10-T02, T03, T04, T06), Istorija (I10-T07), Obavještenja (I10-T09), Profil (I10-T10, T13), Home sa zastavicom (I10-T14).
 I09-T01 … T12 su zeleni (regresija). I10-T16 je inspekcija u smoke-u (S17, S18).
+Odstupanje od plana: testovi i kod su pisani zajedno po koracima (crvena faza nije posebno izvršena).
 
-Otvoreno (čeka Anu): `provjera.ps1` (2×, O-30), smoke S1 … S20 na API 35 sa PASS/FAIL tabelom, screenshot-i u `docs/smoke/` (`i10_login.png`, `i10_home.png`,
-`i10_qr.png`, `i10_nagrade_voucher.png`). Ručna provjera na emulatoru nije izvršena. Odstupanje od plana: testovi i kod su pisani zajedno po koracima (crvena faza
-nije posebno izvršena); PR prema `main` nije otvoren.
-
+**Commit na kojem su izvršeni `provjera.ps1` (2×) i smoke S1 … S20: `0c882c3`** (posljednji commit koji mijenja `android-app/` prije smoke-a; kasniji commit-i mijenjaju samo dokumentaciju
+i screenshot-e do FIX LOOP-a). R-01 (BackHandler) mijenja `android-app/` poslije smoke-a; smoke se zbog toga nije ponavljao (Reviewer: JVM testovi obavezni).
 
 ### Smoke i10 (O-31 (d), `docs/smoke/i10_smoke.md`) — izvršila Ana, 2026-10-21
 
@@ -2911,8 +2914,9 @@ Zbir: 19 PASS, 0 FAIL, 1 nije izvršen (S9, opciono).
 
 ### `provjera.ps1` (O-30) — Ana
 
-`.\skripte\provjera.ps1` pokrenut 2× zaredom, oba puta PASS (O-30 ispunjeno). Brojači testova i trajanje nisu dostavljeni uz prijavu pa se ovdje
-ne navode; izlaz nije ovdje preuzet.
+Na commit-u `0c882c3` Ana je usmeno prijavila da je `.\skripte\provjera.ps1` pokrenut 2× zaredom i oba puta prošao (PASS). **Ovo je usmena prijava, ne izvršena komanda
+u ovoj evidenciji:** tačan izlaz, brojači testova i trajanje nisu dostavljeni, nisu preuzeti, i Builder/Reviewer ih nisu ponovo izvršili. Za `backend/` i `firestore.rules`
+`git diff main` je prazan, pa vrijedi i11 završni run.
 
 ### Otvorene stavke za i11
 

@@ -1386,3 +1386,16 @@ Ana je izvršila smoke S1 … S20 na API 35: 19 PASS, S9 (opciono, isticanje vou
 u `docs/smoke/`. Rezultati su upisani u TEST_REPORT i10; TRACEABILITY redovi i10 prebačeni u PASS. Kod nije mijenjan.
 
 **Otvorena stavka za i11:** raspored ekrana „Pomoć i česta pitanja” nije najpregledniji (kozmetička primjedba iz S13, ne blokira).
+
+### Iteracija 10 — FIX LOOP 1 (nalazi R-01 … R-03 iz `docs/iteracije/i10_review.md`)
+
+- **R-01:** `EkranBrisanjaNaloga` ima `BackHandler` koji poziva `vm.odustani()` (gasi zastavicu „brisanje u toku”); onemogućen dok je stanje `URadu` (DELETE u toku) i poslije `Zavrseno`. Novi JVM testovi u `I10T12TokBrisanjaTest`: `ViewModel odustani poslije 409` i `poslije 503` → zastavica ugašena.
+- **R-02:** zabilježeno odstupanje OD-1 ispod; kod nije mijenjan.
+- **R-03:** TEST_REPORT i10 usklađen (zastarjele rečenice uklonjene, hash koda, broj JVM testova); PR `iteracija-10` → `main` otvoren bez merge-a.
+
+#### Odstupanja od plana
+
+**OD-1 — „Nastavi brisanje” šalje DELETE odmah, lozinka se traži tek na 409 (i10/P-6, plan 5.8).** Plan: nastavak ide od unosa lozinke (reauth → DELETE) i
+test „nastavak + `NepostojeciKorisnik` → `Zavrseno`, 0 DELETE”. Implementirano (`TokBrisanja(nastavak = true)`, `pokreniNastavak()`, commit `0c882c3`): DELETE
+odmah sa svježim tokenom, lozinka tek poslije `409 REAUTHENTICATION_REQUIRED`; test očekuje 1 DELETE. Razlog: §23.4 — nastavak je ponovljen DELETE, a Backend
+sam odlučuje o svježini prijave (O-35). Ponašanje je prihvaćeno kao razumno; kod nije mijenjan.

@@ -1,5 +1,6 @@
 package io.github.anaspasojevic.fuelpoints.ui.profil
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -161,6 +162,9 @@ fun EkranPomoci(naNazad: () -> Unit) {
 fun EkranBrisanjaNaloga(vm: BrisanjeNalogaViewModel, naNazad: () -> Unit, naPrijavu: () -> Unit) {
     val stanje by vm.stanje.collectAsState()
     var lozinka by remember { mutableStateOf("") }
+
+    // R-01: sistemsko „nazad” je isto što i „Odustani” (gasi zastavicu); dok traje DELETE ne radi ništa.
+    BackHandler(enabled = stanje != StanjeBrisanja.URadu && stanje !is StanjeBrisanja.Zavrseno) { vm.odustani() }
 
     LaunchedEffect(stanje) {
         when (stanje) {

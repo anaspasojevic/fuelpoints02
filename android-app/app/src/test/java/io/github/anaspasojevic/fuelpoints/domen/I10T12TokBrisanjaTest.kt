@@ -4,6 +4,7 @@ import io.github.anaspasojevic.fuelpoints.lazni.LazniBackendApi
 import io.github.anaspasojevic.fuelpoints.lazni.LazniIzvorAutentikacije
 import io.github.anaspasojevic.fuelpoints.podaci.api.RezultatApi
 import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IshodAutentikacije
+import io.github.anaspasojevic.fuelpoints.ui.profil.BrisanjeNalogaViewModel
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -180,5 +181,32 @@ class I10T12TokBrisanjaTest {
         t.odustani()
         assertFalse(zastavica.jeUkljucena())
         assertEquals(StanjeBrisanja.Odustao, t.stanje.value)
+    }
+
+    // R-01: sistemsko „nazad” poziva ViewModel.odustani() (BackHandler) → zastavica ugašena i poslije 409 i poslije 503.
+    @Test
+    fun `I10-T12 ViewModel odustani poslije 409 gasi zastavicu`() = runTest {
+        api.odgovoriBrisanja += greska("REAUTHENTICATION_REQUIRED", 409)
+        val t = tok()
+        val vm = BrisanjeNalogaViewModel(t)
+        vm.nastavi()
+        t.potvrdi("Lozinka1")
+        assertTrue(zastavica.jeUkljucena())
+        vm.odustani()
+        assertFalse(zastavica.jeUkljucena())
+        assertEquals(StanjeBrisanja.Odustao, vm.stanje.value)
+    }
+
+    @Test
+    fun `I10-T12 ViewModel odustani poslije 503 gasi zastavicu`() = runTest {
+        api.odgovoriBrisanja += greska("SERVICE_UNAVAILABLE", 503)
+        val t = tok()
+        val vm = BrisanjeNalogaViewModel(t)
+        vm.nastavi()
+        t.potvrdi("Lozinka1")
+        assertTrue(vm.stanje.value is StanjeBrisanja.MozePonoviti)
+        assertTrue(zastavica.jeUkljucena())
+        vm.odustani()
+        assertFalse(zastavica.jeUkljucena())
     }
 }
