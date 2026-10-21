@@ -1,0 +1,7 @@
+# Kopirati u firebase.local.properties (taj fajl je u .gitignore) i popuniti vrijednostima pravog projekta (i11/P-3).
+# Nikad ne commit-ovati popunjen fajl.
+firebase.projectId=
+firebase.applicationId=
+firebase.apiKey=
+# Za pravi release mora počinjati sa https:// (NFR-01); prazno = release bez Backend-a. releaseProba koristi http://10.0.2.2:3000/api/v1/.
+backend.baseUrl=
