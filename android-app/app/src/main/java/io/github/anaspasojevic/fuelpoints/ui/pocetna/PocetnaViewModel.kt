@@ -2,6 +2,7 @@ package io.github.anaspasojevic.fuelpoints.ui.pocetna
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.anaspasojevic.fuelpoints.domen.ZastavicaBrisanja
 import io.github.anaspasojevic.fuelpoints.podaci.api.BackendApi
 import io.github.anaspasojevic.fuelpoints.podaci.api.RezultatApi
 import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IzvorAutentikacije
@@ -37,6 +38,7 @@ class PocetnaViewModel(
     private val auth: IzvorAutentikacije,
     private val nalog: IzvorNaloga,
     private val api: BackendApi,
+    private val zastavica: ZastavicaBrisanja = ZastavicaBrisanja(),
 ) : ViewModel() {
 
     private val _stanje = MutableStateFlow(StanjePocetne())
@@ -55,7 +57,8 @@ class PocetnaViewModel(
                     when (snimak) {
                         is StanjeDokumenta.Postoji -> {
                             _stanje.update { it.copy(ime = snimak.podaci.displayName) }
-                            if (snimak.podaci.accountStatus == "DELETION_IN_PROGRESS") izadji(IzlazSaPocetne.BrisanjeUToku)
+                            // (v): dok traje tok brisanja naloga, Home ne navigira na „Nalog se briše”.
+                            if (snimak.podaci.accountStatus == "DELETION_IN_PROGRESS" && !zastavica.jeUkljucena()) izadji(IzlazSaPocetne.BrisanjeUToku)
                         }
                         is StanjeDokumenta.NePostoji -> if (!snimak.izKesa) izadji(IzlazSaPocetne.Pokretanje)
                         StanjeDokumenta.Greska -> Unit
@@ -90,6 +93,8 @@ class PocetnaViewModel(
 
     // O-43: API-06 pri svakom otvaranju Home-a; greška ne blokira prikaz i ne prikazuje se.
     fun priOtvaranju() {
+        // (v): za vrijeme brisanja naloga nema drugih poziva.
+        if (zastavica.jeUkljucena()) return
         viewModelScope.launch {
             val rezultat = api.uskladiVaucere()
             if (rezultat is RezultatApi.GreskaBackenda) {

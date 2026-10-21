@@ -111,13 +111,20 @@ fun EkranDovrsetkaRegistracije(vm: DovrsetakRegistracijeViewModel, naUslove: () 
     }
 }
 
-// AUTH-05 (dio): nalog u brisanju — poruka bez Home funkcija i bez dugmadi (logout je i10, O-41).
+// AUTH-05, AUTH-07 (i10/P-6): nalog u brisanju — poruka, „Nastavi brisanje” i „Odjavi se”.
 @Composable
-fun EkranBrisanjaUToku() {
+fun EkranBrisanjaUToku(vm: BrisanjeUTokuViewModel, naNastavak: () -> Unit, naPrijavu: () -> Unit) {
+    val izlaz by vm.izlazNaPrijavu.collectAsState()
+    LaunchedEffect(izlaz) { if (izlaz) naPrijavu() }
+
     EkranOkvir {
         Spacer(Modifier.height(48.dp))
         Naslov(stringResource(R.string.brisanje_naslov))
         Spacer(Modifier.height(8.dp))
         Podnaslov(io.github.anaspasojevic.fuelpoints.domen.PorukeGresaka.BRISANJE_U_TOKU)
+        Spacer(Modifier.height(24.dp))
+        ZutoDugme(stringResource(R.string.nastavi_brisanje), naNastavak)
+        Spacer(Modifier.height(10.dp))
+        io.github.anaspasojevic.fuelpoints.ui.komponente.SporednoDugme(stringResource(R.string.odjavi_se), vm::odjavi, Modifier.fillMaxWidth())
     }
 }

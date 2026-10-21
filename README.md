@@ -278,7 +278,12 @@ cd android-app; $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; .\
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r android-app\app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Smoke protokol Iteracije 9: `docs/smoke/i09_smoke.md`.
+Ekrani (i10): donja navigacija Početna · Istorija · QR · Nagrade · Profil, zvono „Obavještenja” na Početnoj; Istorija kupovina
+(UI-05), Nagrade sa izdavanjem i otkazivanjem voucher-a (UI-06, API-03, API-05), Obavještenja (UI-07), Profil sa promjenom imena
+i lozinke, odjavom i brisanjem naloga (UI-08, API-07). Android piše u Firestore samo `users/{uid}.{displayName, updatedAt}` i
+`notifications/{id}.readAt`. Composite indeksi za upite: `firebase/firestore.indexes.json`.
+
+Smoke protokol Iteracije 9: `docs/smoke/i09_smoke.md`; Iteracije 10: `docs/smoke/i10_smoke.md`.
 
 ## Testovi
 

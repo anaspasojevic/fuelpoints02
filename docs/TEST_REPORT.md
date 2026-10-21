@@ -2860,3 +2860,65 @@ e-mail i UID (QR-06) nisu tajne, ali je nalaz bitan za sigurnosni fokus rada.
 ### Poznata ograničenja
 
 Vidi IMPLEMENTATION_LOG i09 i ODLUKE §7 (nalaz S13; smoke na API 26 bez S10, S11, S12; NFR-10 neprovjeren u i09).
+
+---
+
+## Iteracija 10 (Builder, 2026-10-20)
+
+Komande koje su stvarno izvršene (Builder; `JAVA_HOME` = JDK iz Android Studio-a):
+
+| Komanda | Rezultat |
+|---|---|
+| `cd android-app; .\gradlew.bat assembleDebug testDebugUnitTest --offline` (kod K1 … K3, prije `0c882c3`) | BUILD SUCCESSFUL; 154 JVM testa, 0 neuspjelih |
+| `cd android-app; .\gradlew.bat testDebugUnitTest --offline` (Reviewer, vrh `b10c469`) | BUILD SUCCESSFUL; 156 JVM testova, 0 failures, 0 errors, 0 skipped |
+| `cd android-app; .\gradlew.bat testDebugUnitTest --offline` (FIX LOOP 1, poslije R-01) | BUILD SUCCESSFUL; 158 JVM testova, 0 failures, 0 errors (+2 testa `I10-T12 ViewModel odustani poslije 409 / 503`) |
+
+Razlika 154 → 156 potiče od testova dodatih u `0c882c3` („ispravke prije smoke-a”); 156 → 158 od FIX LOOP-a (R-01).
+
+Novi testovi po ID-u (svi zeleni): I10-T01, T03, T04 (domen), T05, T08, T11 (MockWebServer, 12), T12 (15), T15 (statička provjera: upisi, upiti, indeksi, zavisnosti);
+ViewModel suite: Nagrade (I10-T02, T03, T04, T06), Istorija (I10-T07), Obavještenja (I10-T09), Profil (I10-T10, T13), Home sa zastavicom (I10-T14).
+I09-T01 … T12 su zeleni (regresija). I10-T16 je inspekcija u smoke-u (S17, S18).
+Odstupanje od plana: testovi i kod su pisani zajedno po koracima (crvena faza nije posebno izvršena).
+
+**Commit na kojem su izvršeni `provjera.ps1` (2×) i smoke S1 … S20: `0c882c3`** (posljednji commit koji mijenja `android-app/` prije smoke-a; kasniji commit-i mijenjaju samo dokumentaciju
+i screenshot-e do FIX LOOP-a). R-01 (BackHandler) mijenja `android-app/` poslije smoke-a; smoke se zbog toga nije ponavljao (Reviewer: JVM testovi obavezni).
+
+### Smoke i10 (O-31 (d), `docs/smoke/i10_smoke.md`) — izvršila Ana, 2026-10-21
+
+Emulator **API 35**, lokalno okruženje `.\skripte\pokreniLokalno.ps1`, debug APK. Rezultate je Ana prijavila ručno; Builder ih samo upisuje.
+
+| # | Korak | Rezultat | Napomena |
+|---|---|---|---|
+| S1 | Registracija „Ana”, Home, donja navigacija (5), zvono | PASS | |
+| S2 | POS kupovine 42 730 ml i 30 000 ml → Home 72 boda | PASS | |
+| S3 | Istorija: 2 stavke, novija prva | PASS | |
+| S4 | 20 dodatnih kupovina, „Učitaj starije kupovine” | PASS | |
+| S5 | Nagrade: CAR_WASH i SHOWER „dostupno” | PASS | |
+| S6 | Izdavanje CAR_WASH, aktivni voucher sa QR-om | PASS | |
+| S7 | Screenshot Nagrade sa voucher-om | PASS | `docs/smoke/i10_nagrade_voucher.png` |
+| S8 | Otkazivanje voucher-a, bodovi vraćeni | PASS | |
+| S9 | (opciono) isticanje voucher-a SHOWER | NIJE IZVRŠENO | preskočeno (opciono, 15 min); isticanje i API-06 pokriveni JVM testovima I10-T04, T06, T11 i backend testovima iz i04/i07, ne i ručno |
+| S10 | Obavještenja, `readAt` | PASS | |
+| S11 | Profil, ime za prikaz, 101 znak | PASS | |
+| S12 | Promjena lozinke, reset | PASS | |
+| S13 | Pomoć i česta pitanja, Uslovi korišćenja | PASS | kozmetička primjedba: raspored ekrana „Pomoć i česta pitanja” nije najpregledniji; ne blokira; otvorena stavka za i11 |
+| S14 | Odjava, prijava (AC-01) | PASS | |
+| S15 | Brisanje naloga | PASS | |
+| S16 | Tamni režim | PASS | |
+| S17 | Layout Inspector (NFR-10, I10-T16) | PASS | |
+| S18 | NFR-09 lista na API 35 | PASS | |
+| S19 | Logcat | PASS | detalji nalaza SDK-a (i09/K-3) nisu posebno prijavljeni; ostaje poznato ograničenje za i11 |
+| S20 | Screenshot-i Login, Home, Moj QR | PASS | `i10_login.png`, `i10_home.png`, `i10_qr.png` |
+
+Zbir: 19 PASS, 0 FAIL, 1 nije izvršen (S9, opciono).
+
+### `provjera.ps1` (O-30) — Ana
+
+Na commit-u `0c882c3` Ana je usmeno prijavila da je `.\skripte\provjera.ps1` pokrenut 2× zaredom i oba puta prošao (PASS). **Ovo je usmena prijava, ne izvršena komanda
+u ovoj evidenciji:** tačan izlaz, brojači testova i trajanje nisu dostavljeni, nisu preuzeti, i Builder/Reviewer ih nisu ponovo izvršili. Za `backend/` i `firestore.rules`
+`git diff main` je prazan, pa vrijedi i11 završni run.
+
+### Otvorene stavke za i11
+
+- Raspored ekrana „Pomoć i česta pitanja” (S13): kozmetika, kod se u i10 ne mijenja.
+- Nasljeđe: R8 pravilo za `Log.v/d/i` (i09/K-3), provjera composite indeksa nad pravim projektom, Email Enumeration Protection / password policy (O-2).

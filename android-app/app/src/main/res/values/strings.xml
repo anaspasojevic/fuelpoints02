@@ -57,4 +57,78 @@
     <string name="qr_opis">QR kod sa vašim identifikatorom</string>
     <string name="vas_identifikator">Vaš identifikator</string>
     <string name="qr_napomena">Ovim kodom se samo sakupljaju bodovi.</string>
+
+    <!-- i10: navigacija -->
+    <string name="tab_pocetna">Početna</string>
+    <string name="tab_istorija">Istorija</string>
+    <string name="tab_nagrade">Nagrade</string>
+    <string name="tab_profil">Profil</string>
+    <string name="tab_qr_opis">Moj QR kod</string>
+    <string name="obavjestenja_opis">Obavještenja</string>
+
+    <!-- UI-05 Istorija -->
+    <string name="istorija_naslov">Istorija</string>
+    <string name="istorija_prazno">Još nema kupovina. Pokažite QR kod na kasi.</string>
+    <string name="istorija_napomena">1 bod za svaki pun litar</string>
+    <string name="ucitaj_starije">Učitaj starije kupovine</string>
+
+    <!-- UI-06 Nagrade -->
+    <string name="nagrade_naslov">Nagrade</string>
+    <string name="izaberite_nagradu">Izaberite nagradu</string>
+    <string name="aktivni_voucher">Aktivni voucher</string>
+    <string name="vazi_jos">Važi još</string>
+    <string name="voucher_istekao">Voucher je istekao</string>
+    <string name="otkazi">Otkaži</string>
+    <string name="qr_voucher_opis">QR kod voucher-a</string>
+    <string name="dostupno">dostupno</string>
+    <string name="izdaj">Izdaj</string>
+    <string name="odustani">Odustani</string>
+    <string name="ne">Ne</string>
+    <string name="otkazi_voucher">Otkaži voucher</string>
+    <string name="otkazi_dijalog">Otkazati voucher? Rezervisani bodovi se vraćaju.</string>
+
+    <!-- UI-07 Obavještenja -->
+    <string name="obavjestenja_naslov">Obavještenja</string>
+    <string name="obavjestenja_prazno">Nema obavještenja.</string>
+    <string name="obavjestenja_napomena">Žuta traka označava nepročitano. Prikazuje se 50 najnovijih obavještenja.</string>
+
+    <!-- UI-08 Profil -->
+    <string name="profil_ime">Ime za prikaz</string>
+    <string name="profil_email">E-mail</string>
+    <string name="email_ne_moze">ne može se mijenjati</string>
+    <string name="profil_lozinka">Promjena lozinke</string>
+    <string name="profil_pomoc">Pomoć i česta pitanja</string>
+    <string name="profil_uslovi">Uslovi korišćenja</string>
+    <string name="odjavi_se">Odjavi se</string>
+    <string name="obrisi_nalog">Obriši nalog</string>
+    <string name="sacuvaj">Sačuvaj</string>
+    <string name="trenutna_lozinka">Trenutna lozinka</string>
+    <string name="nova_lozinka">Nova lozinka</string>
+    <string name="promijeni_lozinku">Promijeni lozinku</string>
+    <string name="posalji_reset">Pošalji link za promjenu lozinke</string>
+    <string name="pomoc_naslov">Pomoć i česta pitanja</string>
+    <string name="brisanje_upozorenje">Brisanje naloga je trajno. Bodovi, aktivni voucher-i i obavještenja se brišu; istorija kupovina ostaje bez veze sa vama. Nastaviti?</string>
+    <string name="nastavi">Nastavi</string>
+    <string name="nastavi_brisanje">Nastavi brisanje</string>
+    <string name="brisanje_lozinka_podnaslov">Unesite lozinku da potvrdite brisanje naloga.</string>
+    <string name="pomoc_cesta_pitanja">Kako dobijam bodove?
+Za svaki pun litar goriva dobijate jedan bod (42,73 l = 42 boda). Pokažite svoj QR kod na kasi prije plaćanja.
+
+Kada bodovi stižu?
+Odmah po evidentiranju kupovine na kasi. Obavještenje o bodovima vidite u odjeljku Obavještenja.
+
+Kako uzimam nagradu?
+U odjeljku Nagrade izaberite dostupnu nagradu. Dobijate voucher sa posebnim QR kodom; bodovi se rezervišu.
+
+Koliko važi voucher?
+15 minuta. Ako ga ne iskoristite ili ga otkažete, rezervisani bodovi se vraćaju.
+
+Koja je razlika između dva QR koda?
+QR kod naloga služi samo za sakupljanje bodova. Voucher QR služi samo za preuzimanje jedne nagrade.
+
+Šta se dešava kad obrišem nalog?
+Bodovi, voucher-i i obavještenja se brišu. Istorija kupovina ostaje bez veze sa vama. Brisanje se ne može poništiti.
+
+Kontakt
+FuelPoints je diplomski projekat (PMF Banja Luka) i nema korisničku podršku.</string>
 </resources>

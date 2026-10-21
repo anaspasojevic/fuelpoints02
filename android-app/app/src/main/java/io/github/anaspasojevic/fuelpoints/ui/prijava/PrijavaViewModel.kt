@@ -3,6 +3,7 @@ package io.github.anaspasojevic.fuelpoints.ui.prijava
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.anaspasojevic.fuelpoints.domen.OdredisteNaloga
+import io.github.anaspasojevic.fuelpoints.domen.PorukaZaPrijavu
 import io.github.anaspasojevic.fuelpoints.domen.PorukeGresaka
 import io.github.anaspasojevic.fuelpoints.domen.ProvjeraNaloga
 import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IshodAutentikacije
@@ -26,9 +27,11 @@ data class StanjePrijave(
 class PrijavaViewModel(
     private val auth: IzvorAutentikacije,
     private val provjera: ProvjeraNaloga,
+    porukaZaPrijavu: PorukaZaPrijavu? = null,
 ) : ViewModel() {
 
-    private val _stanje = MutableStateFlow(StanjePrijave())
+    // Jednokratna poruka poslije brisanja naloga ili isteka sesije (i10).
+    private val _stanje = MutableStateFlow(StanjePrijave(obavjestenje = porukaZaPrijavu?.preuzmi()))
     val stanje: StateFlow<StanjePrijave> = _stanje.asStateFlow()
 
     fun promijeniEmail(email: String) = _stanje.update { it.copy(email = email) }

@@ -1364,3 +1364,38 @@ P-1 A (Kotlin 2.3.21; dopuna i01/P-8 u ODLUKE §4); P-2 A (I09-T01); P-3 A sa B 
 - Kombinacija AGP 8.10.1 + Kotlin 2.3.21 radi, ali nije zvanično testirana za svaku buduću biblioteku; Firebase BoM 35.x i novije androidx
   linije traže viši AGP / compileSdk (i09/P-1).
 - Debug APK bez minifikacije; release i minifikacija u i11.
+
+---
+
+## Iteracija 10 — Android 2 (Builder, 2026-10-20)
+
+Grana `iteracija-10`, commit-i: K1 `918bebe` (API klijent, izvori, indeksi), K2 `39aa7fb` (domen i ViewModel-i), K3 `ce21ab6` (ekrani), K4 `ca2f508` (smoke protokol, README), K5 (dokumentacija).
+
+- API klijent: `izdajNagradu`, `otkaziVoucher`, `obrisiNalog` (DELETE, svjež token); segmenti putanje kodirani; 503 → jedan ponovni pokušaj sa istim tijelom; `ZastavicaBrisanja` blokira sve osim API-07.
+- Izvori (samo čitanje, osim dva upisa): `FirestoreIzvorKupovina` (limit 20, `startAfter`), `FirestoreIzvorNagrada` (katalog; voucher-i `uid`, `status == ACTIVE`, `orderBy expiresAt`, limit 20), `FirestoreIzvorObavjestenja` (limit 50; `readAt` sa `ESTIMATE`; jedini upis `readAt`), `FirestoreIzvorNaloga.promijeniIme` (jedini upis u `users`, rok 10 s).
+- `firebase/firestore.indexes.json`: tri composite indeksa (nisu provjereni nad emulatorom; provjera nad pravim projektom u i11).
+- Domen: `GeneratorZahtjeva`, `PokusajIzdavanja` (i10/P-2), `Odbrojavanje`, `Prihvatljivost`, `Prikaz`, `TokBrisanja` (i10/P-7), `PorukaZaPrijavu` (jednokratna poruka za Login), `PorukeGresaka` (dopuna §27).
+- UI: donja navigacija (QR centralno), zvono na Home-u (dugme „Moj QR kod” uklonjeno, i10/P-4), ekrani Istorija, Nagrade (QR = tačno `voucherId`), Obavještenja, Profil (+ ime, lozinka, pomoć, brisanje), `EkranBrisanjaUToku` sa akcijama; globalni prelaz na Login pri gubitku sesije (osim za vrijeme brisanja).
+- Bez promjena: `backend/`, `firestore.rules`, `docs/srs/`, Gradle zavisnosti (I10-T15).
+- Poznato: poruka „Ime je sačuvano.” se ne vidi jer se ekran odmah zatvara; 401 na Rewards ekranu vodi na Login bez poruke; Kotlin pozivi `startAfter`, `ESTIMATE`, `reauthenticate` prvi put na uređaju u smoke-u.
+
+
+### Iteracija 10 — smoke i zatvaranje (2026-10-21)
+
+Ana je izvršila smoke S1 … S20 na API 35: 19 PASS, S9 (opciono, isticanje voucher-a) nije rađen, 0 FAIL. `provjera.ps1` 2× PASS (O-30). Screenshot-i
+u `docs/smoke/`. Rezultati su upisani u TEST_REPORT i10; TRACEABILITY redovi i10 prebačeni u PASS. Kod nije mijenjan.
+
+**Otvorena stavka za i11:** raspored ekrana „Pomoć i česta pitanja” nije najpregledniji (kozmetička primjedba iz S13, ne blokira).
+
+### Iteracija 10 — FIX LOOP 1 (nalazi R-01 … R-03 iz `docs/iteracije/i10_review.md`)
+
+- **R-01:** `EkranBrisanjaNaloga` ima `BackHandler` koji poziva `vm.odustani()` (gasi zastavicu „brisanje u toku”); onemogućen dok je stanje `URadu` (DELETE u toku) i poslije `Zavrseno`. Novi JVM testovi u `I10T12TokBrisanjaTest`: `ViewModel odustani poslije 409` i `poslije 503` → zastavica ugašena.
+- **R-02:** zabilježeno odstupanje OD-1 ispod; kod nije mijenjan.
+- **R-03:** TEST_REPORT i10 usklađen (zastarjele rečenice uklonjene, hash koda, broj JVM testova); PR `iteracija-10` → `main` otvoren bez merge-a.
+
+#### Odstupanja od plana
+
+**OD-1 — „Nastavi brisanje” šalje DELETE odmah, lozinka se traži tek na 409 (i10/P-6, plan 5.8).** Plan: nastavak ide od unosa lozinke (reauth → DELETE) i
+test „nastavak + `NepostojeciKorisnik` → `Zavrseno`, 0 DELETE”. Implementirano (`TokBrisanja(nastavak = true)`, `pokreniNastavak()`, commit `0c882c3`): DELETE
+odmah sa svježim tokenom, lozinka tek poslije `409 REAUTHENTICATION_REQUIRED`; test očekuje 1 DELETE. Razlog: §23.4 — nastavak je ponovljen DELETE, a Backend
+sam odlučuje o svježini prijave (O-35). Ponašanje je prihvaćeno kao razumno; kod nije mijenjan.

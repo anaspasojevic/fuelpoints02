@@ -17,8 +17,18 @@ interface IzvorAutentikacije {
     suspend fun postaviIme(displayName: String): IshodAutentikacije
     suspend fun posaljiReset(email: String): IshodAutentikacije
 
-    // Svjež ID token (§3.3); null bez sesije; IOException kad mreža nije dostupna.
-    suspend fun dobaviToken(): String?
+    // Auth e-mail prijavljenog korisnika (UI-08, samo za prikaz).
+    fun email(): String?
+
+    // AUTH-07: samo FirebaseAuth.signOut(); bez Backend poziva i bez Firestore upisa.
+    fun odjavi()
+
+    // AUTH-08, AUTH-05: ponovna provjera trenutne lozinke (EmailAuthProvider), pa promjena lozinke.
+    suspend fun potvrdiLozinku(lozinka: String): IshodAutentikacije
+    suspend fun promijeniLozinku(novaLozinka: String): IshodAutentikacije
+
+    // ID token (§3.3); osvjezi = true traži novi token sa svježim auth_time (O-35); null bez sesije; IOException kad mreža nije dostupna.
+    suspend fun dobaviToken(osvjezi: Boolean = false): String?
 }
 
 sealed interface IshodAutentikacije {

@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.zxing.common.BitMatrix
 import io.github.anaspasojevic.fuelpoints.R
-import io.github.anaspasojevic.fuelpoints.ui.komponente.DugmeNazad
 import io.github.anaspasojevic.fuelpoints.ui.komponente.EkranOkvir
 import io.github.anaspasojevic.fuelpoints.ui.komponente.Naslov
 import io.github.anaspasojevic.fuelpoints.ui.komponente.Podnaslov
@@ -46,7 +45,7 @@ private val tamnaQr = Color(0xFF13262B)
 
 // UI-04 (4_moj_qr.png): QR sa UID-om i UID kao tekst; bez dugmeta za kopiranje i bez nagrada (i10).
 @Composable
-fun EkranQr(vm: QrViewModel, naNazad: () -> Unit, naPrijavu: () -> Unit) {
+fun EkranQr(vm: QrViewModel, naPrijavu: () -> Unit) {
     val stanje by vm.stanje.collectAsState()
     val boje = LocalBoje.current
 
@@ -58,7 +57,7 @@ fun EkranQr(vm: QrViewModel, naNazad: () -> Unit, naPrijavu: () -> Unit) {
     val slika = remember(prikaz.matrica) { uSliku(prikaz.matrica) }
 
     EkranOkvir {
-        DugmeNazad(naNazad)
+        Spacer(Modifier.height(12.dp))
         Naslov(stringResource(R.string.qr_naslov))
         Spacer(Modifier.height(8.dp))
         Podnaslov(stringResource(R.string.qr_podnaslov))
@@ -124,7 +123,7 @@ private fun UgloviOkvira(modifier: Modifier) {
     }
 }
 
-private fun uSliku(matrica: BitMatrix): ImageBitmap {
+internal fun uSliku(matrica: BitMatrix): ImageBitmap {
     val sirina = matrica.width
     val visina = matrica.height
     val tamna = android.graphics.Color.rgb(0x13, 0x26, 0x2B)

@@ -1,15 +1,27 @@
 package io.github.anaspasojevic.fuelpoints.lazni
 
+import io.github.anaspasojevic.fuelpoints.domen.GeneratorZahtjeva
 import io.github.anaspasojevic.fuelpoints.podaci.api.BackendApi
 import io.github.anaspasojevic.fuelpoints.podaci.api.OdgovorInita
 import io.github.anaspasojevic.fuelpoints.podaci.api.OdgovorUskladjivanja
+import io.github.anaspasojevic.fuelpoints.podaci.api.OdgovorVouchera
 import io.github.anaspasojevic.fuelpoints.podaci.api.RezultatApi
 import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IshodAutentikacije
 import io.github.anaspasojevic.fuelpoints.podaci.autentikacija.IzvorAutentikacije
+import io.github.anaspasojevic.fuelpoints.podaci.nalog.IshodUpisaImena
+import io.github.anaspasojevic.fuelpoints.podaci.kupovine.IshodStranice
+import io.github.anaspasojevic.fuelpoints.podaci.kupovine.IzvorKupovina
+import io.github.anaspasojevic.fuelpoints.podaci.kupovine.Kursor
+import io.github.anaspasojevic.fuelpoints.podaci.nagrade.AktivniVoucher
+import io.github.anaspasojevic.fuelpoints.podaci.nagrade.IzvorNagrada
+import io.github.anaspasojevic.fuelpoints.podaci.nagrade.Nagrada
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.IzvorNaloga
+import io.github.anaspasojevic.fuelpoints.podaci.obavjestenja.IzvorObavjestenja
+import io.github.anaspasojevic.fuelpoints.podaci.obavjestenja.Obavjestenje
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.Korisnik
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.LoyaltyNalog
 import io.github.anaspasojevic.fuelpoints.podaci.nalog.StanjeDokumenta
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +77,33 @@ class LazniIzvorAutentikacije(
         return ishodReseta
     }
 
-    override suspend fun dobaviToken() = sesija.value?.let { "token" }
+    // I10: Profil, promjena lozinke i brisanje naloga.
+    var emailNaloga: String? = "ana@primjer.ba"
+    var ishodPotvrde: IshodAutentikacije = IshodAutentikacije.Uspjeh
+    var ishodPromjeneLozinke: IshodAutentikacije = IshodAutentikacije.Uspjeh
+    val zahtjeviZaOsvjezavanje = mutableListOf<Boolean>()
+
+    override fun email() = emailNaloga
+
+    override fun odjavi() {
+        pozivi += "odjavi"
+        sesija.value = null
+    }
+
+    override suspend fun potvrdiLozinku(lozinka: String): IshodAutentikacije {
+        pozivi += "potvrdiLozinku:$lozinka"
+        return ishodPotvrde
+    }
+
+    override suspend fun promijeniLozinku(novaLozinka: String): IshodAutentikacije {
+        pozivi += "promijeniLozinku:$novaLozinka"
+        return ishodPromjeneLozinke
+    }
+
+    override suspend fun dobaviToken(osvjezi: Boolean): String? {
+        zahtjeviZaOsvjezavanje += osvjezi
+        return sesija.value?.let { "token" }
+    }
 }
 
 class LazniIzvorNaloga : IzvorNaloga {
@@ -81,6 +119,14 @@ class LazniIzvorNaloga : IzvorNaloga {
 
     override fun posmatrajKorisnika(uid: String) = korisnik.filterNotNull()
     override fun posmatrajLoyaltyNalog(uid: String) = loyalty.filterNotNull()
+
+    var ishodImena: IshodUpisaImena = IshodUpisaImena.Uspjeh
+    val upisanaImena = mutableListOf<Pair<String, String>>()
+
+    override suspend fun promijeniIme(uid: String, displayName: String): IshodUpisaImena {
+        upisanaImena += uid to displayName
+        return ishodImena
+    }
 }
 
 class LazniBackendApi : BackendApi {
@@ -99,5 +145,71 @@ class LazniBackendApi : BackendApi {
         return odgovorUskladjivanja
     }
 
+    // I10: odgovori po redu (prazan red → uspjeh); pozivi se bilježe kao tekst.
+    val odgovoriIzdavanja = ArrayDeque<RezultatApi<OdgovorVouchera>>()
+    val odgovoriOtkazivanja = ArrayDeque<RezultatApi<OdgovorVouchera>>()
+    val odgovoriBrisanja = ArrayDeque<RezultatApi<Unit>>()
+    val zahtjeviIzdavanja = mutableListOf<Pair<String, String>>()
+    var kapijaIzdavanja: CompletableDeferred<Unit>? = null
+
+    private fun voucher(rewardId: String) = OdgovorVouchera("v".repeat(64), rewardId, 50, "ACTIVE", "2026-10-20T10:00:00.000Z", "2026-10-20T10:15:00.000Z")
+
+    override suspend fun izdajNagradu(rewardId: String, requestId: String): RezultatApi<OdgovorVouchera> {
+        pozivi += "izdaj:$rewardId:$requestId"
+        zahtjeviIzdavanja += rewardId to requestId
+        kapijaIzdavanja?.await()
+        return odgovoriIzdavanja.removeFirstOrNull() ?: RezultatApi.Uspjeh(voucher(rewardId))
+    }
+
+    override suspend fun otkaziVoucher(voucherId: String): RezultatApi<OdgovorVouchera> {
+        pozivi += "otkazi:$voucherId"
+        return odgovoriOtkazivanja.removeFirstOrNull() ?: RezultatApi.Uspjeh(voucher("CAR_WASH"))
+    }
+
+    override suspend fun obrisiNalog(): RezultatApi<Unit> {
+        pozivi += "obrisi"
+        return odgovoriBrisanja.removeFirstOrNull() ?: RezultatApi.Uspjeh(Unit)
+    }
+
     val brojInita get() = pozivi.count { it.startsWith("init:") }
+}
+
+class LazniGeneratorZahtjeva : GeneratorZahtjeva {
+    var brojac = 0
+    override fun noviRequestId() = "req-${++brojac}"
+}
+
+class LazniIzvorKupovina : IzvorKupovina {
+    val ishodi = ArrayDeque<IshodStranice>()
+    val kursori = mutableListOf<Kursor?>()
+    var kapija: CompletableDeferred<Unit>? = null
+
+    override suspend fun stranica(uid: String, kursor: Kursor?): IshodStranice {
+        kursori += kursor
+        kapija?.await()
+        return ishodi.removeFirst()
+    }
+}
+
+class LazniIzvorNagrada : IzvorNagrada {
+    val katalog = MutableStateFlow<StanjeDokumenta<List<Nagrada>>?>(
+        StanjeDokumenta.Postoji(listOf(Nagrada("SHOWER", "Besplatan tuš", 30), Nagrada("CAR_WASH", "Besplatno pranje", 50)), false),
+    )
+    val vauceri = MutableStateFlow<StanjeDokumenta<List<AktivniVoucher>>?>(StanjeDokumenta.Postoji(emptyList(), false))
+
+    override fun posmatrajKatalog() = katalog.filterNotNull()
+    override fun posmatrajAktivneVouchere(uid: String) = vauceri.filterNotNull()
+}
+
+class LazniIzvorObavjestenja : IzvorObavjestenja {
+    val lista = MutableStateFlow<StanjeDokumenta<List<Obavjestenje>>?>(StanjeDokumenta.Postoji(emptyList(), false))
+    val oznacena = mutableListOf<String>()
+    var uspjehUpisa = true
+
+    override fun posmatraj(uid: String) = lista.filterNotNull()
+
+    override suspend fun oznaciProcitano(id: String): Boolean {
+        oznacena += id
+        return uspjehUpisa
+    }
 }
