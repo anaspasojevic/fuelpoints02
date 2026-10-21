@@ -111,24 +111,20 @@
     <string name="nastavi">Nastavi</string>
     <string name="nastavi_brisanje">Nastavi brisanje</string>
     <string name="brisanje_lozinka_podnaslov">Unesite lozinku da potvrdite brisanje naloga.</string>
-    <string name="pomoc_cesta_pitanja">Kako dobijam bodove?
-Za svaki pun litar goriva dobijate jedan bod (42,73 l = 42 boda). Pokažite svoj QR kod na kasi prije plaćanja.
-
-Kada bodovi stižu?
-Odmah po evidentiranju kupovine na kasi. Obavještenje o bodovima vidite u odjeljku Obavještenja.
-
-Kako uzimam nagradu?
-U odjeljku Nagrade izaberite dostupnu nagradu. Dobijate voucher sa posebnim QR kodom; bodovi se rezervišu.
-
-Koliko važi voucher?
-15 minuta. Ako ga ne iskoristite ili ga otkažete, rezervisani bodovi se vraćaju.
-
-Koja je razlika između dva QR koda?
-QR kod naloga služi samo za sakupljanje bodova. Voucher QR služi samo za preuzimanje jedne nagrade.
-
-Šta se dešava kad obrišem nalog?
-Bodovi, voucher-i i obavještenja se brišu. Istorija kupovina ostaje bez veze sa vama. Brisanje se ne može poništiti.
-
-Kontakt
-FuelPoints je diplomski projekat (PMF Banja Luka) i nema korisničku podršku.</string>
+    <string name="pomoc_p1">Kako dobijam bodove?</string>
+    <string name="pomoc_o1">Za svaki pun litar goriva dobijate jedan bod (42,73 l = 42 boda). Pokažite svoj QR kod na kasi prije plaćanja.</string>
+    <string name="pomoc_p2">Kada bodovi stižu?</string>
+    <string name="pomoc_o2">Odmah po evidentiranju kupovine na kasi. Obavještenje o bodovima vidite u odjeljku Obavještenja.</string>
+    <string name="pomoc_p3">Kako uzimam nagradu?</string>
+    <string name="pomoc_o3">U odjeljku Nagrade izaberite dostupnu nagradu. Dobijate voucher sa posebnim QR kodom; bodovi se rezervišu.</string>
+    <string name="pomoc_p4">Koliko važi voucher?</string>
+    <string name="pomoc_o4">15 minuta. Ako ga ne iskoristite ili ga otkažete, rezervisani bodovi se vraćaju.</string>
+    <string name="pomoc_p5">Koja je razlika između dva QR koda?</string>
+    <string name="pomoc_o5">QR kod naloga služi samo za sakupljanje bodova. Voucher QR služi samo za preuzimanje jedne nagrade.</string>
+    <string name="pomoc_p6">Šta se dešava kad obrišem nalog?</string>
+    <string name="pomoc_o6">Bodovi, voucher-i i obavještenja se brišu. Istorija kupovina ostaje bez veze sa vama. Brisanje se ne može poništiti.</string>
+    <string name="pomoc_kontakt_naslov">Kontakt</string>
+    <string name="pomoc_kontakt">FuelPoints je diplomski projekat (PMF Banja Luka) i nema korisničku podršku.</string>
+    <string name="pomoc_prosireno">Prošireno</string>
+    <string name="pomoc_skupljeno">Skupljeno</string>
 </resources>
