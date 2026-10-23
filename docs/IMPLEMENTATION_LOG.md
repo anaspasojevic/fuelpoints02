@@ -1421,5 +1421,6 @@ Grana `iteracija-11`. Backend (`backend/src`) i `firebase/firestore.rules` nisu 
 
 **OD-4 — I11-T03:** prvi run pao zbog pogrešne pripreme naloga u testu; ispravljeno i ponovljeno, PASS (vidi TEST_REPORT i11).
 
-**Otvoreno:** K5 … K8 i AC-12 završni run čekaju Aninu ručnu akciju; dokumentacija K10 (TRACEABILITY redovi u PASS, README, ODLUKE §7) se dovršava poslije njih.
+**Otvoreno:** K8 i AC-12 završni run čekaju Aninu ručnu akciju; dokumentacija K10 (TRACEABILITY redovi u PASS, README, ODLUKE §7) se dovršava poslije njih.
 
+**OD-5 — K7 nad `debug` + Emulator Suite umjesto nad pravim projektom (O-51).** Android emulator ne dostiže Firebase Auth/Firestore (`FirebaseNetworkException`), iako REST dokazi (uputstvo, odjeljak 5), Backend na `10.0.2.2:3000` i opšti HTTPS rade; uzrok je mreža razvojnog okruženja. Mentor je usmeno odobrio zamjenu 21.10.2026; `docs/smoke/i11_smoke.md` odjeljak K7 ažuriran. Kod nije mijenjan.

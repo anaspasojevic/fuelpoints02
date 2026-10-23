@@ -84,34 +84,36 @@ Ako je ijedan element ispod 48 dp: **FAIL** → javiti, ide u FIX LOOP (Builder 
 
 | Provjera | Očekivano | Rezultat / stvarno stanje |
 |---|---|---|
-| Email Enumeration Protection u konzoli | Enabled (slika `i11_konzola_eep.png`) | |
-| Password policy u konzoli | Require, 8, A–Z, 0–9 (slika `i11_konzola_lozinka.png`) | |
-| REST 5a: `abcdefg1`, `Abcdefgh`, `Ab1` | `PASSWORD_DOES_NOT_MEET_REQUIREMENTS` za sve tri | |
-| REST 5a: `Lozinka1` | uspjeh (probni nalog obrisan) | |
-| REST 5b: nepostojeći e-mail vs. pogrešna lozinka | isti `INVALID_LOGIN_CREDENTIALS` | |
-| Composite indeksi (3) | svi Enabled (`i11_konzola_indeksi.png`) | |
-| `rewardDefinitions` (CAR_WASH 50, SHOWER 30, `active: true`) | postoje | |
-| Backend nad pravim projektom, `account/init` bez token-a | 401 `UNAUTHENTICATED` | |
+| Email Enumeration Protection u konzoli | Enabled (slika `i11_konzola_eep.png`) | **PASS** — Enabled, potvrđeno u konzoli (Email/Password uključen, bez verifikacije e-maila) |
+| Password policy u konzoli | Require, 8, A–Z, 0–9 (slika `i11_konzola_lozinka.png`) | **PASS** — Enforcement = Require, min 8, uppercase + numeric obavezni, potvrđeno u konzoli |
+| REST 5a: `abcdefg1`, `Abcdefgh`, `Ab1` | `PASSWORD_DOES_NOT_MEET_REQUIREMENTS` za sve tri | **PASS** — sve tri odbijene sa `PASSWORD_DOES_NOT_MEET_REQUIREMENTS` (§3.6) |
+| REST 5a: `Lozinka1` | uspjeh (probni nalog obrisan) | **PASS** — prihvaćena (ok=True), probni nalog obrisan |
+| REST 5b: nepostojeći e-mail vs. pogrešna lozinka | isti `INVALID_LOGIN_CREDENTIALS` | **PASS** — identičan odgovor `INVALID_LOGIN_CREDENTIALS` (§3.5); password reset za postojeći i nepostojeći e-mail vraća identičan uspješan odgovor |
+| Composite indeksi (3) | svi Enabled (`i11_konzola_indeksi.png`) | **PASS** — purchases, notifications, vouchers: deployovani i Enabled |
+| `rewardDefinitions` (CAR_WASH 50, SHOWER 30, `active: true`) | postoje | **PASS** — CAR_WASH i SHOWER ručno seedovani u pravoj bazi (Firestore production mode + pravila deployovani) |
+| Backend nad pravim projektom, `account/init` bez token-a | 401 `UNAUTHENTICATED` | **PASS** — 401 `UNAUTHENTICATED`; service account i Backend protiv pravog projekta potvrđeni |
 
 Ako Spark ne nudi Password policy „Require” ili Email Enumeration Protection bez nadogradnje (P-7): **ne nadograđivati**, upisati ovdje
 tačno šta konzola piše (i sliku). §3.5 / §3.6 tada nisu ispunjeni na server strani; ide u ODLUKE §7 kao poznato ograničenje.
 
-## 6. K7 — end-to-end nad pravim projektom (`releaseProba`, API 35, Backend lokalno, POS Simulator)
+## 6. K7 — end-to-end (`debug` + Firebase Emulator Suite; zamjena za pravi projekat, O-51)
+
+**Zamjena (O-51):** scenarij E1–E12 se izvodi nad `debug` build-om i lokalnim Firebase Emulator Suite-om (API 35, Backend lokalno, POS Simulator), a ne nad pravim projektom `fuelpoints02`. Razlog: iz Android emulatora Firebase Auth/Firestore nisu dostupni (`FirebaseNetworkException`, „Could not reach Cloud Firestore backend”), iako opšti HTTPS (google.com), lokalni Backend (`10.0.2.2:3000`) i REST pozivi sa host mašine ka istim endpoint-ima rade (`docs/uputstva/pravi_firebase_projekat.md`, odjeljak 5), a isključenje Windows Defender Firewall-a nije pomoglo. Uzrok je ograničenje razvojnog okruženja, ne greška implementacije. Mentor je usmeno odobrio zamjenu 21.10.2026. `release` i `releaseProba` su napravljeni i instalirani; konfiguracija pravog projekta potvrđena je REST dokazima (odjeljak 5). U koracima ispod „Firestore konzola” znači Emulator UI (`http://127.0.0.1:4000`), a E12 kontrola nad `debug` ostaje, uz napomenu da `releaseProba` Logcat provjera nije izvedena ručnim tokom.
 
 | # | Korak | Očekivano | Rezultat |
 |---|---|---|---|
-| E1 | Registracija sa „Lozinka1” (slaba lozinka se na serveru provjerava REST-om, odjeljak 5) | Home 0 bodova | |
-| E2 | Simulator: kupovina 42,730 l | Home 42 boda (AC-03) | |
-| E3 | Simulator: „Ponovi isti zahtjev” | 200, bodovi 42 | |
-| E4 | Nagrade → izdaj SHOWER; `voucherId` iz Firestore konzole (`vouchers`) | voucher QR, „Rezervisano 30” | |
-| E5 | Simulator: otkup (`voucherId` + novi `redemptionRequestId`) | 200 `REDEEMED`; voucher nestaje (AC-07) | |
-| E6 | Simulator: isti otkup ponovo | 200 isto tijelo | |
-| E7 | Simulator: drugi voucher, bez POS ključa | 401 `UNAUTHENTICATED_POS` (NFR-02) | |
-| E8 | Istorija, Obavještenja, Nagrade (tri upita sa indeksima) | učitavaju se; **bez** `FAILED_PRECONDITION` | |
-| E9 | Firestore konzola: `loyaltyLedger` | `earn_`, `reserve_`, `redeem_` zapisi (AC-09) | |
-| E10 | Direktan upis u `loyaltyAccounts/<uid>` sa ID token-om vlasnika (Rules Playground ili REST) | 403 `PERMISSION_DENIED` (AC-02) | |
-| E11 | Odjava; brisanje naloga; ponovna prijava | odbijena generičkom porukom | |
-| E12 | Logcat nad `releaseProba`: `adb logcat -d \| Select-String "FirebaseAuth\|ana@\|Creating user\|Logging in as\|Notifying id token"` | **0 pogodaka**; ista komanda nad `debug` (kontrola) daje pogotke | |
+| E1 | Registracija sa „Lozinka1” (slaba lozinka se na serveru provjerava REST-om, odjeljak 5) | Home 0 bodova | **PASS** — nalog kreiran, 0 bodova |
+| E2 | Simulator: kupovina 42,730 l | Home 42 boda (AC-03) | **PASS** — `earnedPoints=42` |
+| E3 | Simulator: „Ponovi isti zahtjev” | 200, bodovi 42 | **PASS** — retry istog `posTransactionId`, bodovi ostali 42 (idempotentno) |
+| E4 | Nagrade → izdaj SHOWER; `voucherId` iz Firestore konzole (`vouchers`) | voucher QR, „Rezervisano 30” | **PASS** — 12 dostupno, 30 rezervisano |
+| E5 | Simulator: otkup (`voucherId` + novi `redemptionRequestId`) | 200 `REDEEMED`; voucher nestaje (AC-07) | **PASS** — status `REDEEMED` |
+| E6 | Simulator: isti otkup ponovo | 200 isto tijelo | **PASS** — identičan odgovor (idempotentno) |
+| E7 | Simulator: drugi voucher, bez POS ključa | 401 `UNAUTHENTICATED_POS` (NFR-02) | **PASS** — 401 `UNAUTHENTICATED_POS` |
+| E8 | Istorija, Obavještenja, Nagrade (tri upita sa indeksima) | učitavaju se; **bez** `FAILED_PRECONDITION` | **PASS** — rade bez grešaka |
+| E9 | Firestore konzola: `loyaltyLedger` | `earn_`, `reserve_`, `redeem_` zapisi (AC-09) | **PASS** — provjereno direktno u Firestore emulatoru: EARN +42, RESERVE −30/+30, REDEEM −30; stanja se poklapaju |
+| E10 | Direktan upis u `loyaltyAccounts/<uid>` sa ID token-om vlasnika (Rules Playground ili REST) | 403 `PERMISSION_DENIED` (AC-02) | **Nije ponovo ručno izvedeno** — pokriveno postojećim automatskim RULE testovima iz ranijih iteracija |
+| E11 | Odjava; brisanje naloga; ponovna prijava | odbijena generičkom porukom | **PASS** — odjava, ponovna prijava, brisanje naloga i odbijena prijava poslije brisanja |
+| E12 | Logcat nad `releaseProba`: `adb logcat -d \| Select-String "FirebaseAuth\|ana@\|Creating user\|Logging in as\|Notifying id token"` | **0 pogodaka**; ista komanda nad `debug` (kontrola) daje pogotke | **Nije izvedeno ručno** — ostaje zabilježeno u O-51 kao van dometa ove zamjene |
 
 Ako produkcija traži dodatni indeks (poruka sa linkom): **STOP**, ne popravljati u hodu; javiti (P-9).
 Poslije testa obrisati probne naloge (Authentication → Users).
