@@ -2973,3 +2973,55 @@ Komande: `.\gradlew.bat testDebugUnitTest --tests "*I11T05*"` / `"*I11T09*"` (an
 
 K5 (pravi projekat, konzola, REST dokazi), K6 (indeksi nad produkcijom), K7 (end-to-end), K8 (NFR-09 ×2, S9, NFR-10, screenshot-i): `docs/uputstva/pravi_firebase_projekat.md`, `docs/smoke/i11_smoke.md`. AC-12 završni run (`provjera.ps1`) takođe radi Ana.
 
+## Iteracija 11 (Builder, 2026-10-23) — K9: AC-12 završni run i §34.1
+
+Komanda: `.\skripte\provjera.ps1; $LASTEXITCODE` (nad emulatorom, P-4), kod `e34acbb`. Prvi pokušaji: (1) pao na koraku „Bez TODO/FIXME” jer je
+`I11T07PomocTekstTest.kt` sadržao literal te oznake u provjeri odsustva; literal razdvojen (`"TO" + "DO"`), I11-T07 PASS, commit `e34acbb`;
+(2) pao na koraku „Portovi 8080 i 9099 su slobodni” (lokalni procesi iz K7); zaustavljeni. Treći run: **EXIT=0**.
+
+| Korak provjera.ps1 | Rezultat iz izlaza |
+|---|---|
+| Alati, SRS integritet, NFR-07 (tajne), TODO/FIXME, portovi | prošli |
+| Backend `npm test` | 86 testova, 86 pass, 0 fail |
+| Backend `npm run test:emu` | 195 testova, 195 pass, 0 fail |
+| POS Simulator `npm test` | 13 testova, 13 pass, 0 fail |
+| Backend start smoke | 404 `NOT_FOUND`, 401 `UNAUTHENTICATED` / `UNAUTHENTICATED_POS` na svim provjerenim rutama bez token-a / ključa |
+| Firestore rules `npm test` | 40 testova, 40 pass, 0 fail |
+| Android `assembleDebug`, `testDebugUnitTest` | BUILD SUCCESSFUL |
+
+**AC-12:** API-T01 … API-T12 i RULE-T01 … RULE-T12 svi prisutni sa ✔ u izlazu istog run-a (12/12 API, 12/12 Rules).
+`git diff i10 --stat -- backend/src firebase/firestore.rules`: prazno (Backend i pravila netaknuti u i11).
+
+| ID | Primjer iz izlaza | Status |
+|---|---|---|
+| API-T01 | validan init kreira profil i balance 0/0 | PASS |
+| API-T02 | 42 730 ml → 42 boda | PASS |
+| API-T03 | ponovljeni isti (stationId, posTransactionId) → 200 | PASS |
+| API-T04 | isti purchase ID, drugi podaci → 409 | PASS |
+| API-T05 | 49 bodova → 409 INSUFFICIENT_POINTS | PASS |
+| API-T06 | 50 bodova → 201 rezervacija; retry → 200 | PASS |
+| API-T07 | dva paralelna CAR_WASH → nikad oba uspješna | PASS |
+| API-T08 | otkup → REDEEMED | PASS |
+| API-T09 | retry → 200 isto tijelo; IDEMPOTENCY_CONFLICT | PASS |
+| API-T10 | istekao ACTIVE → 409 VOUCHER_EXPIRED | PASS |
+| API-T11 | cancel → CANCELLED, bodovi vraćeni | PASS |
+| API-T12 | DELETE naloga → 204; nastavak poslije prekida | PASS |
+| RULE-T01 … RULE-T12 | svi ✔ (users, loyaltyAccounts, purchases, notifications, loyaltyLedger, vouchers, internal/unknown kolekcije) | PASS |
+
+### §34.1 — komponente (prisutna i funkcionalna)
+
+| Komponenta | Lokacija | Dokaz |
+|---|---|---|
+| Android App | `android-app/` | `assembleDebug`, `testDebugUnitTest` u `provjera.ps1`; K7 E1–E11 na `debug` |
+| Node/Express Backend | `backend/` | 86/86 `npm test`, 195/195 `test:emu`, start smoke |
+| Firebase Authentication | emulator + pravi projekat | `test:emu`; K5 REST dokazi (`docs/smoke/i11_smoke.md` odj. 5) |
+| Cloud Firestore | emulator + pravi projekat | `test:emu`; 3 composite indeksa Enabled, `rewardDefinitions` seedovani (K6) |
+| Firebase Emulator Suite | `firebase.json`, `skripte/pokreniLokalno.ps1` | `provjera.ps1` radi nad emulatorom |
+| POS Simulator | `pos-simulator/` | 13/13 `npm test`, I11-T03, K7 E2–E7 |
+| Firestore Security Rules | `firebase/firestore.rules` | 40/40 rules testova, RULE-T01 … RULE-T12 |
+
+### Smoke K5/K6/K7 (ručno, Ana; upisano u `docs/smoke/i11_smoke.md`)
+
+K5/K6 (odj. 5): sve provjere PASS. K7 (odj. 6, zamjena O-51): E1–E9 i E11 PASS; E10 pokriven RULE testovima; E12 nije izvedeno ručno.
+Još nije izvršeno: K8 (NFR-09 API 26 + API 35, S9, NFR-10, screenshot-i).
+

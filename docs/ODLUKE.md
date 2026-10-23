@@ -24,7 +24,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 | i08 Security Rules lockdown 12/12 i B-1 | ITERATION ACCEPTED | tag `i08` (merge `2e98999`, PR #8) |
 | i09 Android 1: Prijava, Registracija, Home, Customer QR | ITERATION ACCEPTED | tag `i09` (merge `7dab954`, PR #9) |
 | i10 Android 2: Purchases, Rewards, Notifications, Settings | ITERATION ACCEPTED | tag `i10` (merge `061e106`, PR #10) |
-| i11 POS Simulator, pravi Firebase projekat, Release, završna NFR provjera | U TOKU — Builder radi K1 … K4, K5 … K8 čekaju Aninu ručnu akciju | grana `iteracija-11` |
+| i11 POS Simulator, pravi Firebase projekat, Release, završna NFR provjera | U TOKU — K1 … K7 i K9 završeni (AC-12 12/12 + 12/12); K8 (NFR-09, S9, NFR-10, screenshot-i) čeka Aninu ručnu akciju | grana `iteracija-11` |
 
 ## 2. Odluke Ane (O-n)
 
@@ -342,6 +342,7 @@ Oznake: **O-n** odluka Ane (autor SRS-a); **D-n** odluka Orchestrator-a; **iNN/P
 - i09: smoke je izvršen na API 26 umjesto API 35 (OD-1 i09); S10 (tamna tema) → API 35 u i11; S11 (NFR-10, I09-T13) nije izvršen i
   automatskog testa nema — NFR-10 je u i09 neprovjeren; S12 screenshot-i odloženi do konačnih ekrana poslije i10.
 - i09: emulator nema password policy ni Email Enumeration Protection — slabu lozinku u i09 zaustavlja samo klijent (§3.6), konačno u i11 (O-2).
+  i11 K5: ZATVORENO – na pravom Spark projektu su Email Enumeration Protection i Password policy (Require) uključeni, potvrđeno konzolom i REST dokazima.
 - i09: `isFromCache` marker se pali tek kad Firestore SDK zaključi da je offline (do ~10 s).
 - i09: stanje `BrisanjeUToku` nema akciju (logout je i10).
 
