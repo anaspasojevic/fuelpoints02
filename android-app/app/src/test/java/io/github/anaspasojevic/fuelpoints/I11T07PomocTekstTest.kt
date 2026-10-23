@@ -28,7 +28,7 @@ class I11T07PomocTekstTest {
         assertEquals("Kontakt", vrijednost("pomoc_kontakt_naslov"))
         assertTrue(vrijednost("pomoc_kontakt").isNotBlank())
         assertFalse(strings.contains("pomoc_cesta_pitanja"))
-        assertFalse(strings.contains("TODO"))
+        assertFalse(strings.contains("TO" + "DO"))
     }
 
     @Test
