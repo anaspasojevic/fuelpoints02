@@ -39,3 +39,8 @@ android-app/*.keystore
 android-app/*.jks
 .env.real*
 docs/**/*.apk
+
+# Lokalne pomoćne skripte za ručno testiranje (nisu dio projekta)
+backend/lista_ledger.mjs
+backend/lista_vaucera.mjs
+backend/seed_nagrade.mjs
