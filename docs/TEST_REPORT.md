@@ -3023,5 +3023,38 @@ Komanda: `.\skripte\provjera.ps1; $LASTEXITCODE` (nad emulatorom, P-4), kod `e34
 ### Smoke K5/K6/K7 (ručno, Ana; upisano u `docs/smoke/i11_smoke.md`)
 
 K5/K6 (odj. 5): sve provjere PASS. K7 (odj. 6, zamjena O-51): E1–E9 i E11 PASS; E10 pokriven RULE testovima; E12 nije izvedeno ručno.
-Još nije izvršeno: K8 (NFR-09 API 26 + API 35, S9, NFR-10, screenshot-i).
+
+## Iteracija 11 (Ana + Builder, 2026-10-23 … 2026-10-25) — K8: NFR-09 ×2, S9, NFR-10, screenshot-i
+
+Izvršeno ručno (Ana, `docs/smoke/i11_smoke.md`), commit-i `ddfa64c`, `8505b47`, `84469c4` na `iteracija-11`.
+
+**NFR-09 (odjeljak 1):** S1 … S19 izvedeni na oba emulatora, API 26 i API 35 (`debug`, lokalni Firebase Emulator Suite + POS Simulator).
+Svi redovi **PASS** na oba emulatora (S16 samo API 35, n/a na API 26 — nema sistemskog tamnog režima). S19 (Logcat filtriran po paketu)
+PASS uz napomenu: e-mail/UID se pojavljuju isključivo iz Firebase SDK-ovog internog logovanja (`Creating user...`, `Logging in as...`,
+`Notifying ... listeners`), ne iz koda aplikacije — poznat, već dokumentovan nalaz (K-3), očekivan u `debug` build-u.
+
+**S9 — isticanje vaučera (odjeljak 2):** izvedeno na API 35. Izdat CAR_WASH (50 bodova) umjesto SHOWER — isti mehanizam §20.5, ne
+utiče na rezultat. Poslije isteka (15 min): **PASS** na sve tri provjere.
+- Aplikacija: „Voucher je istekao”, vaučer nestao iz Nagrada.
+- Firestore (potvrđeno direktno): `vouchers/<id>` → `status: EXPIRED`; `loyaltyLedger/release_<id>` → `type: REWARD_RELEASE`,
+  `deltaAvailable: +50`, `deltaReserved: -50`; `loyaltyAccounts` → `availablePoints: 60`, `reservedPoints: 0`.
+- Simulator: otkup istog `voucherId`-a → HTTP 409 `VOUCHER_EXPIRED`.
+
+**NFR-10 (odjeljak 3):** Layout Inspector se u Android Studiju nije mogao pouzdano otvoriti (alat ne reaguje na pokretanje). Zamjena:
+pregled izvornog Compose koda (`android-app/.../ui/*`) — pouzdaniji dokaz jer veličine dolaze direktno iz `Modifier`-a koji se
+stvarno renderuje. Svi dijeljeni UI elementi (`ZutoDugme`, `SporednoDugme`, `LinkTekst`, `RedListe`, `PrihvatanjeUslova`,
+`DonjaNavigacija`, `IconButton`) imaju eksplicitnu dodirnu površinu ≥ 48×48 dp i ispravne `contentDescription` vrijednosti (`null`
+samo kad je ikona uz vidljiv tekst).
+
+**Nalaz i FIX LOOP:** `TextButton` u 3 `AlertDialog`-a (izdavanje/otkazivanje vaučera — `EkranNagrada.kt`; brisanje naloga —
+`EkraniProfila.kt`) nije imao eksplicitnu visinu; Material3 podrazumijevano daje ~40 dp, ispod zahtjeva. Ispravljeno dodavanjem
+`Modifier.heightIn(min = 48.dp)` na svih 6 dugmadi (commit `8505b47`). `compileDebugKotlin` → **BUILD SUCCESSFUL**. Svi ekrani iz
+tabele (Prijava, Registracija, Uslovi korišćenja, „Dovršite registraciju”, Home, Moj QR, Istorija, Nagrade, Obavještenja, Profil,
+Promjena lozinke, Pomoć i česta pitanja, Brisanje naloga): **PASS**.
+
+**Screenshot-i (odjeljak 4, zatvara i09/S12):** svih 9 traženih snimljeno u `docs/smoke/` (API 35, svijetla tema, konzistentna
+sesija): `i11_prijava.png`, `i11_registracija.png`, `i11_home.png`, `i11_moj_qr.png`, `i11_istorija.png`, `i11_nagrade.png`,
+`i11_obavjestenja.png`, `i11_profil.png`, `i11_pomoc.png`.
+
+K8 **ZATVORENO** — sve stavke PASS.
 
