@@ -2922,3 +2922,139 @@ u ovoj evidenciji:** tačan izlaz, brojači testova i trajanje nisu dostavljeni,
 
 - Raspored ekrana „Pomoć i česta pitanja” (S13): kozmetika, kod se u i10 ne mijenja.
 - Nasljeđe: R8 pravilo za `Log.v/d/i` (i09/K-3), provjera composite indeksa nad pravim projektom, Email Enumeration Protection / password policy (O-2).
+
+## Iteracija 11 (Builder, 2026-10-21) — stanje poslije K1 … K4, K6 (statika), K9 (T08)
+
+Samo komande koje je Builder stvarno izvršio. `provjera.ps1` i smoke koraci nisu pokretani (rade se ručno, Ana).
+Redoslijed „crveno prije koda” (plan, sekcija 5) za K2 nije zabilježen: stranica i logika su napisane prije testova; testovi su zatim izvršeni.
+
+| Komanda | Rezultat |
+|---|---|
+| `cd pos-simulator; npm test` | 13/13 PASS (I11-T01 ×5, I11-T04 ×3, I11-T02 ×5) |
+| `cd backend; npm test` | 86/86 PASS (uključuje I11-T08 ×3, `test/jedinicni/tajneURepou.test.js`) |
+| `.\gradlew.bat testDebugUnitTest` (android-app, JBR) | BUILD SUCCESSFUL, 168 JVM testova, 0 padova (uključuje I11-T05 ×2, I11-T06 ×3, I11-T07 ×2, I11-T09 ×3) |
+| `.\gradlew.bat assembleRelease assembleReleaseProba` | BUILD SUCCESSFUL (R8 upozorenje „parsing kotlin metadata”: Kotlin 2.3.21 noviji od R8 u AGP 8.10.1; build uspijeva) |
+| `npm run test:emu:ciljano -- test/emulator/posSimulator.test.js` (I11-T03) | prvi run FAIL (500 umjesto 200: pogrešna priprema naloga u testu, `reservedPoints` 0 < cijena voucher-a); ispravljena priprema. Sljedeći pokušaj: emulator se sam ugasio pri startu (exit 3221225786, nije test). Završni ponovni run: **PASS** (1/1). |
+
+### Dex dokaz R8 (K4): broj poziva `android.util.Log` u APK-u
+
+`dexdump -d` (build-tools 35.0.1) nad `classes*.dex`, brojanje `Landroid/util/Log;.<metoda>:`:
+
+| APK | Log.v | Log.d | Log.i | Log.w | Log.e |
+|---|---|---|---|---|---|
+| `release` (R8, `app-release-unsigned.apk`) | 0 | 0 | 0 | 108 | 107 |
+| `debug` (kontrola) | 75 | 65 | 92 | 208 | 240 |
+
+Dakle `-assumenosideeffects` uklanja v/d/i iz cijelog koda (uključujući biblioteke), a w/e ostaju. Ručni Logcat dokaz na uređaju (`releaseProba`) ostaje za Anu (`docs/smoke/i11_smoke.md`, E12).
+
+### Rezultat po ID-u (i11)
+
+| ID | Status |
+|---|---|
+| I11-T01, I11-T02, I11-T04 | PASS (`pos-simulator`, `npm test`) |
+| I11-T03 | PASS (`test:emu:ciljano`) |
+| I11-T05, I11-T06, I11-T07, I11-T09 | PASS (JVM) |
+| I11-T08 | PASS (`backend`, `npm test`) |
+| Kontrolne mutacije (plan, sekcija 6) | 5/5 uhvaćeno, vidi tabelu ispod (T06 i T08 nisu mutirani; plan ih ne navodi) |
+
+### Kontrolne mutacije i11 (plan, sekcija 6; svaka privremena, vraćena `git checkout --`, funkcionalni kod u commit-u nepromijenjen)
+
+| # | Mutacija | Test | Sa mutacijom (crveno) | Poslije vraćanja (zeleno) |
+|---|---|---|---|---|
+| 1 | `release`: `isMinifyEnabled = false` (uz `isShrinkResources = false`, inače Gradle odbija build) | I11-T05 | PAD „release ima R8 minifikaciju” (1 od 5) | 10/10 JVM testova I11-T0x PASS |
+| 2 | `proguard-rules.pro`: `-assumenosideeffects` pretvoreno u komentar | I11-T05 | PAD „pravilo uklanja Log v d i, a ne w i e” (1 od 5) | PASS |
+| 3 | `logika.js`: `stationId: 'SIM01'` dodat u tijelo kupovine | I11-T01 | PAD „tijelo kupovine ima tačno 6 polja SRS-a…” (pos-simulator: 12 pass, 1 fail) | 13/13 PASS |
+| 4 | `index.html`: `console.log(kljuc)` | I11-T02 | PAD „izvori stranice ne čuvaju ključ…” (12 pass, 1 fail) | 13/13 PASS |
+| 5 | `firestore.indexes.json`: uklonjen `vouchers` indeks | I11-T09 | PAD „svaki upit sa orderBy ima composite indeks” i „kontrola” (2 od 3) | PASS |
+
+Komande: `.\gradlew.bat testDebugUnitTest --tests "*I11T05*"` / `"*I11T09*"` (android-app, JBR; rezultati iz `appuild	est-results`), `cd pos-simulator; npm test`.
+
+### Ručni koraci koji čekaju Anu
+
+K5 (pravi projekat, konzola, REST dokazi), K6 (indeksi nad produkcijom), K7 (end-to-end), K8 (NFR-09 ×2, S9, NFR-10, screenshot-i): `docs/uputstva/pravi_firebase_projekat.md`, `docs/smoke/i11_smoke.md`. AC-12 završni run (`provjera.ps1`) takođe radi Ana.
+
+## Iteracija 11 (Builder, 2026-10-23) — K9: AC-12 završni run i §34.1
+
+Komanda: `.\skripte\provjera.ps1; $LASTEXITCODE` (nad emulatorom, P-4), kod `e34acbb`. Prvi pokušaji: (1) pao na koraku „Bez TODO/FIXME” jer je
+`I11T07PomocTekstTest.kt` sadržao literal te oznake u provjeri odsustva; literal razdvojen (`"TO" + "DO"`), I11-T07 PASS, commit `e34acbb`;
+(2) pao na koraku „Portovi 8080 i 9099 su slobodni” (lokalni procesi iz K7); zaustavljeni. Treći run: **EXIT=0**.
+
+| Korak provjera.ps1 | Rezultat iz izlaza |
+|---|---|
+| Alati, SRS integritet, NFR-07 (tajne), TODO/FIXME, portovi | prošli |
+| Backend `npm test` | 86 testova, 86 pass, 0 fail |
+| Backend `npm run test:emu` | 195 testova, 195 pass, 0 fail |
+| POS Simulator `npm test` | 13 testova, 13 pass, 0 fail |
+| Backend start smoke | 404 `NOT_FOUND`, 401 `UNAUTHENTICATED` / `UNAUTHENTICATED_POS` na svim provjerenim rutama bez token-a / ključa |
+| Firestore rules `npm test` | 40 testova, 40 pass, 0 fail |
+| Android `assembleDebug`, `testDebugUnitTest` | BUILD SUCCESSFUL |
+
+**AC-12:** API-T01 … API-T12 i RULE-T01 … RULE-T12 svi prisutni sa ✔ u izlazu istog run-a (12/12 API, 12/12 Rules).
+`git diff i10 --stat -- backend/src firebase/firestore.rules`: prazno (Backend i pravila netaknuti u i11).
+
+| ID | Primjer iz izlaza | Status |
+|---|---|---|
+| API-T01 | validan init kreira profil i balance 0/0 | PASS |
+| API-T02 | 42 730 ml → 42 boda | PASS |
+| API-T03 | ponovljeni isti (stationId, posTransactionId) → 200 | PASS |
+| API-T04 | isti purchase ID, drugi podaci → 409 | PASS |
+| API-T05 | 49 bodova → 409 INSUFFICIENT_POINTS | PASS |
+| API-T06 | 50 bodova → 201 rezervacija; retry → 200 | PASS |
+| API-T07 | dva paralelna CAR_WASH → nikad oba uspješna | PASS |
+| API-T08 | otkup → REDEEMED | PASS |
+| API-T09 | retry → 200 isto tijelo; IDEMPOTENCY_CONFLICT | PASS |
+| API-T10 | istekao ACTIVE → 409 VOUCHER_EXPIRED | PASS |
+| API-T11 | cancel → CANCELLED, bodovi vraćeni | PASS |
+| API-T12 | DELETE naloga → 204; nastavak poslije prekida | PASS |
+| RULE-T01 … RULE-T12 | svi ✔ (users, loyaltyAccounts, purchases, notifications, loyaltyLedger, vouchers, internal/unknown kolekcije) | PASS |
+
+### §34.1 — komponente (prisutna i funkcionalna)
+
+| Komponenta | Lokacija | Dokaz |
+|---|---|---|
+| Android App | `android-app/` | `assembleDebug`, `testDebugUnitTest` u `provjera.ps1`; K7 E1–E11 na `debug` |
+| Node/Express Backend | `backend/` | 86/86 `npm test`, 195/195 `test:emu`, start smoke |
+| Firebase Authentication | emulator + pravi projekat | `test:emu`; K5 REST dokazi (`docs/smoke/i11_smoke.md` odj. 5) |
+| Cloud Firestore | emulator + pravi projekat | `test:emu`; 3 composite indeksa Enabled, `rewardDefinitions` seedovani (K6) |
+| Firebase Emulator Suite | `firebase.json`, `skripte/pokreniLokalno.ps1` | `provjera.ps1` radi nad emulatorom |
+| POS Simulator | `pos-simulator/` | 13/13 `npm test`, I11-T03, K7 E2–E7 |
+| Firestore Security Rules | `firebase/firestore.rules` | 40/40 rules testova, RULE-T01 … RULE-T12 |
+
+### Smoke K5/K6/K7 (ručno, Ana; upisano u `docs/smoke/i11_smoke.md`)
+
+K5/K6 (odj. 5): sve provjere PASS. K7 (odj. 6, zamjena O-51): E1–E9 i E11 PASS; E10 pokriven RULE testovima; E12 nije izvedeno ručno.
+
+## Iteracija 11 (Ana + Builder, 2026-10-23 … 2026-10-25) — K8: NFR-09 ×2, S9, NFR-10, screenshot-i
+
+Izvršeno ručno (Ana, `docs/smoke/i11_smoke.md`), commit-i `ddfa64c`, `8505b47`, `84469c4` na `iteracija-11`.
+
+**NFR-09 (odjeljak 1):** S1 … S19 izvedeni na oba emulatora, API 26 i API 35 (`debug`, lokalni Firebase Emulator Suite + POS Simulator).
+Svi redovi **PASS** na oba emulatora (S16 samo API 35, n/a na API 26 — nema sistemskog tamnog režima). S19 (Logcat filtriran po paketu)
+PASS uz napomenu: e-mail/UID se pojavljuju isključivo iz Firebase SDK-ovog internog logovanja (`Creating user...`, `Logging in as...`,
+`Notifying ... listeners`), ne iz koda aplikacije — poznat, već dokumentovan nalaz (K-3), očekivan u `debug` build-u.
+
+**S9 — isticanje vaučera (odjeljak 2):** izvedeno na API 35. Izdat CAR_WASH (50 bodova) umjesto SHOWER — isti mehanizam §20.5, ne
+utiče na rezultat. Poslije isteka (15 min): **PASS** na sve tri provjere.
+- Aplikacija: „Voucher je istekao”, vaučer nestao iz Nagrada.
+- Firestore (potvrđeno direktno): `vouchers/<id>` → `status: EXPIRED`; `loyaltyLedger/release_<id>` → `type: REWARD_RELEASE`,
+  `deltaAvailable: +50`, `deltaReserved: -50`; `loyaltyAccounts` → `availablePoints: 60`, `reservedPoints: 0`.
+- Simulator: otkup istog `voucherId`-a → HTTP 409 `VOUCHER_EXPIRED`.
+
+**NFR-10 (odjeljak 3):** Layout Inspector se u Android Studiju nije mogao pouzdano otvoriti (alat ne reaguje na pokretanje). Zamjena:
+pregled izvornog Compose koda (`android-app/.../ui/*`) — pouzdaniji dokaz jer veličine dolaze direktno iz `Modifier`-a koji se
+stvarno renderuje. Svi dijeljeni UI elementi (`ZutoDugme`, `SporednoDugme`, `LinkTekst`, `RedListe`, `PrihvatanjeUslova`,
+`DonjaNavigacija`, `IconButton`) imaju eksplicitnu dodirnu površinu ≥ 48×48 dp i ispravne `contentDescription` vrijednosti (`null`
+samo kad je ikona uz vidljiv tekst).
+
+**Nalaz i FIX LOOP:** `TextButton` u 3 `AlertDialog`-a (izdavanje/otkazivanje vaučera — `EkranNagrada.kt`; brisanje naloga —
+`EkraniProfila.kt`) nije imao eksplicitnu visinu; Material3 podrazumijevano daje ~40 dp, ispod zahtjeva. Ispravljeno dodavanjem
+`Modifier.heightIn(min = 48.dp)` na svih 6 dugmadi (commit `8505b47`). `compileDebugKotlin` → **BUILD SUCCESSFUL**. Svi ekrani iz
+tabele (Prijava, Registracija, Uslovi korišćenja, „Dovršite registraciju”, Home, Moj QR, Istorija, Nagrade, Obavještenja, Profil,
+Promjena lozinke, Pomoć i česta pitanja, Brisanje naloga): **PASS**.
+
+**Screenshot-i (odjeljak 4, zatvara i09/S12):** svih 9 traženih snimljeno u `docs/smoke/` (API 35, svijetla tema, konzistentna
+sesija): `i11_prijava.png`, `i11_registracija.png`, `i11_home.png`, `i11_moj_qr.png`, `i11_istorija.png`, `i11_nagrade.png`,
+`i11_obavjestenja.png`, `i11_profil.png`, `i11_pomoc.png`.
+
+K8 **ZATVORENO** — sve stavke PASS.
+

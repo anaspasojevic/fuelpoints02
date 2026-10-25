@@ -3,6 +3,15 @@ package io.github.anaspasojevic.fuelpoints.ui.profil
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -152,8 +161,63 @@ fun EkranPomoci(naNazad: () -> Unit) {
         DugmeNazad(naNazad)
         Naslov(stringResource(R.string.pomoc_naslov))
         Spacer(Modifier.height(14.dp))
-        Text(stringResource(R.string.pomoc_cesta_pitanja), style = MaterialTheme.typography.bodyMedium, color = boje.tekst)
+        PITANJA_POMOCI.forEachIndexed { indeks, (pitanje, odgovor) ->
+            StavkaPitanja(stringResource(pitanje), stringResource(odgovor))
+            HorizontalDivider(color = boje.linija)
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            stringResource(R.string.pomoc_kontakt_naslov),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = boje.zuta,
+            modifier = Modifier.semantics { heading() },
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.pomoc_kontakt), style = MaterialTheme.typography.bodyMedium, color = boje.tekst)
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+// Pomoć (P-6): pitanja i odgovori su odobreni tekst (O-47); svako pitanje je zaglavlje koje otkriva odgovor, podrazumijevano skupljeno.
+private val PITANJA_POMOCI = listOf(
+    R.string.pomoc_p1 to R.string.pomoc_o1,
+    R.string.pomoc_p2 to R.string.pomoc_o2,
+    R.string.pomoc_p3 to R.string.pomoc_o3,
+    R.string.pomoc_p4 to R.string.pomoc_o4,
+    R.string.pomoc_p5 to R.string.pomoc_o5,
+    R.string.pomoc_p6 to R.string.pomoc_o6,
+)
+
+@Composable
+private fun StavkaPitanja(pitanje: String, odgovor: String) {
+    val boje = LocalBoje.current
+    var prosireno by rememberSaveable { mutableStateOf(false) }
+    val stanje = stringResource(if (prosireno) R.string.pomoc_prosireno else R.string.pomoc_skupljeno)
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(role = Role.Button) { prosireno = !prosireno }
+                .semantics { heading(); stateDescription = stanje }
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                pitanje,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = boje.zuta,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(if (prosireno) "−" else "+", style = MaterialTheme.typography.titleMedium, color = boje.zuta)
+        }
+        if (prosireno) {
+            Text(odgovor, style = MaterialTheme.typography.bodyMedium, color = boje.tekst, modifier = Modifier.padding(bottom = 12.dp))
+        }
     }
 }
 
@@ -206,8 +270,9 @@ fun EkranBrisanjaNaloga(vm: BrisanjeNalogaViewModel, naNazad: () -> Unit, naPrij
         AlertDialog(
             onDismissRequest = vm::odustani,
             text = { Text(stringResource(R.string.brisanje_upozorenje)) },
-            confirmButton = { TextButton(vm::nastavi) { Text(stringResource(R.string.nastavi), fontWeight = FontWeight.Bold) } },
-            dismissButton = { TextButton(vm::odustani) { Text(stringResource(R.string.odustani)) } },
+            // Dodirna površina ≥ 48 dp (NFR-10); Material3 podrazumijevano daje ~40 dp.
+            confirmButton = { TextButton(onClick = vm::nastavi, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.nastavi), fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton(onClick = vm::odustani, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.odustani)) } },
         )
     }
 }

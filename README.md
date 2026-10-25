@@ -9,7 +9,7 @@ Jedini normativni dokument je FuelPoints SRS 3.1 (`docs/srs/FuelPoints_SRS_3_1.d
 |---|---|
 | `android-app/` | Android App (Kotlin, Jetpack Compose, minSdk 26, compileSdk/targetSdk 35) |
 | `backend/` | Loyalty Backend (Node.js 24 LTS, Express, Firebase Admin SDK), testovi u `backend/test/` |
-| `pos-simulator/` | POS Simulator (kostur; forme dolaze u Iteraciji 11) |
+| `pos-simulator/` | POS Simulator: HTML stranica + lokalni proxy `server.js` (Iteracija 11), testovi u `pos-simulator/test/` |
 | `firebase/` | `firestore.rules`, `firestore.indexes.json` i rules testovi u `firebase/tests/` |
 | `firebase.json`, `.firebaserc` | Firebase Emulator Suite: Firestore `127.0.0.1:8080`, Auth `127.0.0.1:9099`, projekat `demo-fuelpoints` |
 | `skripte/provjera.ps1` | sve provjere redom (Definition of Done) |
@@ -244,6 +244,18 @@ Posljedice brisanja za druge endpointe: POS retry kupovine istog `(stationId, po
 ne poredi (O-10a, i07/P-5); drugačiji iznos → `409 IDEMPOTENCY_CONFLICT`. Retry izdavanja / otkupa poslije brisanja mapping-a više ne
 vraća prvi rezultat nego `409` / `404` (i07/P-6). Android (i10) poslije pokretanja brisanja ne poziva init ni drugi API dok ne dobije
 `204` (ili `401` na ponovljen `DELETE`).
+
+## Release build i pravi Firebase projekat (Iteracija 11)
+
+| Build type | Firebase | Backend | R8 | Namjena |
+|---|---|---|---|---|
+| `debug` | emulatori (`demo-fuelpoints`) | `http://10.0.2.2:3000` | ne | razvoj i smoke nad emulatorom |
+| `releaseProba` | pravi projekat iz `android-app/firebase.local.properties` | `http://10.0.2.2:3000` (cleartext samo za tu adresu) | da | probni R8-minifikovan kod na uređaju; ne distribuira se |
+| `release` | pravi projekat iz `android-app/firebase.local.properties` | `backend.baseUrl` (mora biti `https://`) | da | predaja; bez fajla build uspijeva sa praznim vrijednostima |
+
+R8 pravilo (`proguard-rules.pro`) uklanja `Log.v/d/i` iz cijelog koda, uključujući Firebase Auth SDK (NFR-07). Postavljanje
+pravog Spark projekta, konzole, REST dokaza i ručnog end-to-end testa: `docs/uputstva/pravi_firebase_projekat.md`.
+Lokalni fajlovi sa tajnama (`firebase.local.properties`, service account, POS ključ) se ne commit-uju.
 
 ## Pokretanje
 

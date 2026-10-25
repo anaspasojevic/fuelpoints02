@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -111,14 +112,15 @@ fun EkranNagrada(vm: NagradeViewModel, naIzlaz: (IzlazSaNagrada) -> Unit) {
         is DijalogNagrada.Izdavanje -> AlertDialog(
             onDismissRequest = vm::odustani,
             text = { Text("Izdati voucher: ${dijalog.nagrada.naziv} za ${Prikaz.bodovi(dijalog.nagrada.costPoints)}? Voucher važi 15 minuta.") },
-            confirmButton = { TextButton(vm::potvrdiDijalog) { Text(stringResource(R.string.izdaj)) } },
-            dismissButton = { TextButton(vm::odustani) { Text(stringResource(R.string.odustani)) } },
+            // Dodirna površina ≥ 48 dp (NFR-10); Material3 podrazumijevano daje ~40 dp.
+            confirmButton = { TextButton(onClick = vm::potvrdiDijalog, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.izdaj)) } },
+            dismissButton = { TextButton(onClick = vm::odustani, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.odustani)) } },
         )
         is DijalogNagrada.Otkazivanje -> AlertDialog(
             onDismissRequest = vm::odustani,
             text = { Text(stringResource(R.string.otkazi_dijalog)) },
-            confirmButton = { TextButton(vm::potvrdiDijalog) { Text(stringResource(R.string.otkazi_voucher)) } },
-            dismissButton = { TextButton(vm::odustani) { Text(stringResource(R.string.ne)) } },
+            confirmButton = { TextButton(onClick = vm::potvrdiDijalog, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.otkazi_voucher)) } },
+            dismissButton = { TextButton(onClick = vm::odustani, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.ne)) } },
         )
         null -> Unit
     }
