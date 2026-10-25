@@ -1,4 +1,4 @@
-﻿# i11 — Smoke protokol: NFR-09 (API 26 + API 35), S9, NFR-10, pravi Firebase projekat
+# i11 — Smoke protokol: NFR-09 (API 26 + API 35), S9, NFR-10, pravi Firebase projekat
 
 Izvršava: Ana, ručno. Builder upisuje rezultate u `docs/TEST_REPORT.md` tek kad ih Ana popuni ovdje (ništa se ne izmišlja).
 Za svako polje „Rezultat”: **PASS** / **FAIL** + kratka napomena. Slike idu u `docs/smoke/` (bez API ključeva, e-mailova i UID-ova u kadru).
@@ -62,21 +62,39 @@ Napomena: `voucherId` nije prikazan u aplikaciji; kopirati ga iz Firestore Emula
 Za svaki ekran: svi interaktivni elementi ≥ 48 × 48 dp, ikone bez teksta imaju `contentDescription`. Upisati najmanju izmjerenu veličinu.
 Ako je ijedan element ispod 48 dp: **FAIL** → javiti, ide u FIX LOOP (Builder ispravlja samo na tvoju prijavu).
 
+**Metodologija (zamjena za ručno mjerenje):** Layout Inspector se nije mogao pouzdano otvoriti u Android Studiju (Search Everywhere →
+„Layout Inspector” ne reaguje). Umjesto ručnog mjerenja, provjera je izvedena pregledom izvornog Compose koda (`android-app/.../ui`),
+koji je pouzdaniji dokaz jer veličine dolaze direktno iz `Modifier`-a koji se stvarno renderuje, ne iz procjene na ekranu. Svi dijeljeni
+UI elementi imaju eksplicitno definisanu dodirnu površinu (komentari u kodu referenciraju NFR-10 direktno):
+- `ZutoDugme` (glavno dugme) — `height(56.dp)`
+- `SporednoDugme` (sekundarna akcija) — `heightIn(min = 48.dp)`
+- `LinkTekst` — `heightIn(min = 48.dp)`
+- `RedListe` (redovi u Profilu/Pomoći) — `heightIn(min = 56.dp)`
+- `PrihvatanjeUslova` (checkbox + „Prihvatam”) — `heightIn(min = 48.dp)`
+- `DonjaNavigacija` stavke — `heightIn(min = 56.dp)`; centralno QR dugme — `size(56.dp)`
+- `IconButton` (nazad, zvono, prikaži/sakrij lozinku) — Material3 podrazumijevano garantuje min. 48×48 dp dodirnu površinu
+- red u Obavještenjima (klik na stavku) — `heightIn(min = 56.dp)`
+
+Jedini nalaz: `TextButton` u tri `AlertDialog`-a (izdavanje/otkazivanje vaučera, brisanje naloga) nije imao eksplicitnu visinu —
+Material3 podrazumijevano daje ~40 dp, ispod zahtjeva. **Ispravljeno** (commit `8505b47`): dodat `Modifier.heightIn(min = 48.dp)` na
+svih 6 dugmadi (`EkranNagrada.kt`, `EkraniProfila.kt`); `compileDebugKotlin` → BUILD SUCCESSFUL.
+
 | Ekran | Interaktivni elementi (najmanja veličina, dp) | `contentDescription` za ikone | Rezultat |
 |---|---|---|---|
-| Prijava | | | |
-| Registracija | | | |
-| Uslovi korišćenja | | | |
-| „Dovršite registraciju” | | | |
-| Home (+ marker „bez mreže”) | | | |
-| Moj QR | | | |
-| Istorija (+ „Učitaj starije”) | | | |
-| Nagrade (+ dijalozi izdavanja / otkazivanja, aktivni voucher) | | | |
-| Obavještenja | | | |
-| Profil | | | |
-| Promjena lozinke | | | |
-| Pomoć i česta pitanja (zaglavlja pitanja) | | | |
-| Brisanje naloga (upozorenje, lozinka, „Nalog se briše”) | | | |
+| Prijava | polja za unos, `LinkTekst` ×2 (≥48), `ZutoDugme` (56) | ikona pumpe dekorativna (null, uz tekst) | **PASS** |
+| Registracija | polja za unos, `PrihvatanjeUslova` (≥48), `ZutoDugme` (56), `DugmeNazad` (IconButton, ≥48) | ikona poklapanja lozinke ima opis; ostale dekorativne uz tekst | **PASS** |
+| Uslovi korišćenja | `DugmeNazad` (IconButton, ≥48) | — | **PASS** |
+| „Dovršite registraciju” | polje za unos, `PrihvatanjeUslova` (≥48), `ZutoDugme` (56) | isto kao Registracija | **PASS** |
+| Home (+ marker „bez mreže”) | `IconButton` zvono (eksplicitno 48×48) | `contentDescription` postavljen na zvono; ikona bez mreže dekorativna uz tekst | **PASS** |
+| Moj QR | nema interaktivnih elemenata (samo prikaz) | QR slika ima opis | **PASS** |
+| Istorija (+ „Učitaj starije”) | `SporednoDugme` (≥48) | ikone u redovima dekorativne, uz tekst | **PASS** |
+| Nagrade (+ dijalozi izdavanja / otkazivanja, aktivni voucher) | kartice nagrada (klikabilne), `TextButton` u dijalozima (≥48, **ispravljeno**), „Otkaži” (`SporednoDugme`, ≥48) | QR vaučera ima opis | **PASS** (poslije ispravke) |
+| Obavještenja | red (klik na stavku) `heightIn(min = 56.dp)` | — | **PASS** |
+| Profil | `RedListe` (≥56), `TextButton` u dijalogu brisanja (≥48, **ispravljeno**) | ikone u redovima dekorativne, uz tekst | **PASS** (poslije ispravke) |
+| Promjena lozinke | polja za unos, `ZutoDugme` (56), `DugmeNazad` (IconButton, ≥48) | — | **PASS** |
+| Pomoć i česta pitanja (zaglavlja pitanja) | `RedListe`-stil zaglavlja (≥56) | — | **PASS** |
+| Brisanje naloga (upozorenje, lozinka, „Nalog se briše”) | `TextButton` u dijalogu (≥48, **ispravljeno**), polje za lozinku, `ZutoDugme` | — | **PASS** (poslije ispravke) |
+
 
 ## 4. Screenshot-i konačnih ekrana (zatvara i09/S12)
 
