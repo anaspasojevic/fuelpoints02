@@ -270,8 +270,9 @@ fun EkranBrisanjaNaloga(vm: BrisanjeNalogaViewModel, naNazad: () -> Unit, naPrij
         AlertDialog(
             onDismissRequest = vm::odustani,
             text = { Text(stringResource(R.string.brisanje_upozorenje)) },
-            confirmButton = { TextButton(vm::nastavi) { Text(stringResource(R.string.nastavi), fontWeight = FontWeight.Bold) } },
-            dismissButton = { TextButton(vm::odustani) { Text(stringResource(R.string.odustani)) } },
+            // Dodirna površina ≥ 48 dp (NFR-10); Material3 podrazumijevano daje ~40 dp.
+            confirmButton = { TextButton(onClick = vm::nastavi, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.nastavi), fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton(onClick = vm::odustani, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.odustani)) } },
         )
     }
 }
